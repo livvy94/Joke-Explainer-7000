@@ -9,3 +9,5 @@ TODO: Figure out the new Discord API slash command syntax
 TODO: Search command that uses specific phrases/emoji?
 
 Info about [discord.py](https://discordpy.readthedocs.io/en/latest/)
+
+Art by [smokythrill77](https://twitter.com/smokythrill77)
