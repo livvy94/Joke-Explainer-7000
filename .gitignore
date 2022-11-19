@@ -1,3 +1,6 @@
+secrets.py #your sensitive Discord information
+runtime.txt #idk what this is but it generates it and it does nothing
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
