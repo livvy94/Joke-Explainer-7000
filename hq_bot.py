@@ -121,6 +121,18 @@ async def checks(ctx):
         else:
             await send_embed(ctx, result)
 
+@bot.command(name='count')
+async def count(ctx):
+    pin_list = await ctx.channel.pins()
+    pincount = len(pin_list)
+
+    if (pincount < 1):
+        result = "`* Determination.`"
+    else:
+        result = f"`* {pincount} left."
+
+    await ctx.channel.send(result)
+
 @bot.command(name='help', aliases = ['commands', 'halp', 'test'])
 async def help(ctx):
     async with ctx.channel.typing():
