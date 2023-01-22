@@ -121,27 +121,37 @@ async def checks(ctx):
         else:
             await send_embed(ctx, result)
 
-@bot.command(name='count')
+@bot.command(name='count', brief="counts all pinned rips")
 async def count(ctx):
     pin_list = await ctx.channel.pins()
-    pincount = len(pin_list)
+    pincount = len(pin_list) - 1
 
     if (pincount < 1):
         result = "`* Determination.`"
     else:
-        result = f"`* {pincount} left."
+        result = f"`* {pincount} left.`"
+
+    await ctx.channel.send(result)
+
+@bot.command(name='limitcheck', brief="pin limit checker")
+async def limitcheck(ctx):
+    max_pins = 50
+
+    pin_list = await ctx.channel.pins()
+    pincount = len(pin_list)
+    result = f"You can pin {max_pins - pincount} more rips until hitting Discord's pin limit."
 
     await ctx.channel.send(result)
 
 @bot.command(name='help', aliases = ['commands', 'halp', 'test'])
 async def help(ctx):
     async with ctx.channel.typing():
-        result = "_**YOU ARE NOW QoCING:**_\n`!roundup` " + roundup.brief + "\n`!links` " + links.brief + "\n_**Special lists:**_\n`!mypins` " + mypins.brief + "\n`!checks`\n`!wrenches`\n`!stops`"
+        result = "_**YOU ARE NOW QoCING:**_\n`!roundup` " + roundup.brief + "\n`!links` " + links.brief + "\n_**Special lists:**_\n`!mypins` " + mypins.brief + "\n`!checks`\n`!wrenches`\n`!stops`" + "\n_**Misc. tools**_\n`!count` " + count.brief + "\n`!limitcheck` " + limitcheck.brief
         await send_embed(ctx, result)
 
 @bot.command(name='op')
 async def test(ctx):
-    if channel_is_not_op(ctx): 
+    if channel_is_not_op(ctx):
         await ctx.message.delete()
         print(f"{ctx.message.author.name} opped out of bounds!")
         await ctx.channel.send("#op", delete_after=5)
