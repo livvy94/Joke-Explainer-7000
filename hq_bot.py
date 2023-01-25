@@ -123,25 +123,30 @@ async def checks(ctx):
 
 @bot.command(name='count', brief="counts all pinned rips")
 async def count(ctx):
-    pin_list = await ctx.channel.pins()
-    pincount = len(pin_list) - 1
+    heard_command("count", ctx.message.author.name)
 
-    if (pincount < 1):
-        result = "`* Determination.`"
-    else:
-        result = f"`* {pincount} left.`"
+    async with ctx.channel.typing():
+        pin_list = await ctx.channel.pins()
+        pincount = len(pin_list) - 1
 
-    await ctx.channel.send(result)
+        if (pincount < 1):
+            result = "`* Determination.`"
+        else:
+            result = f"`* {pincount} left.`"
+
+        await ctx.channel.send(result)
 
 @bot.command(name='limitcheck', brief="pin limit checker")
 async def limitcheck(ctx):
+    heard_command("limitcheck", ctx.message.author.name)
     max_pins = 50
 
-    pin_list = await ctx.channel.pins()
-    pincount = len(pin_list)
-    result = f"You can pin {max_pins - pincount} more rips until hitting Discord's pin limit."
+    async with ctx.channel.typing():
+        pin_list = await ctx.channel.pins()
+        pincount = len(pin_list)
+        result = f"You can pin {max_pins - pincount} more rips until hitting Discord's pin limit."
 
-    await ctx.channel.send(result)
+        await ctx.channel.send(result)
 
 @bot.command(name='help', aliases = ['commands', 'halp', 'test'])
 async def help(ctx):
