@@ -1,4 +1,4 @@
-## A high-quality™ Discord bot by Olivia
+## A high-quality™ Discord bot by Eva & Olivia
 
 _For use by SilvaGunner Quality of Control_
 
