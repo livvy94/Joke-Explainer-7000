@@ -80,46 +80,34 @@ async def mypins(ctx):
         else:
             await send_embed(ctx, result)
 
-
-@bot.command(name='wrenches', aliases = ['fix'])
-async def wrenches(ctx):
-    if channel_is_not_qoc(ctx): return
-    heard_command("wrenches", ctx.message.author.name)
+async def react_command(ctx, react, not_found_message): # I've been meaning to simplify this for AGES (7/7/24)
+    if channel_is_not_qoc(ctx):
+        return
+    heard_command(react, ctx.message.author.name)
 
     async with ctx.channel.typing():
-        result = await only_return_messages_with_a_react(ctx, "fix")
+        result = await only_return_messages_with_a_react(ctx, react)
 
-        if result == "":
-            await ctx.channel.send("No wrenches found.")
-        else:
-            await send_embed(ctx, result)
-
+    if result == "":
+        await ctx.channel.send(not_found_message)
+    else:
+        await send_embed(ctx, result)
+        
+@bot.command(name='wrenches', aliases = ['fix'])
+async def wrenches(ctx):
+    await react_command(ctx, 'fix', "No wrenches found.")
 
 @bot.command(name='stops')
 async def stops(ctx):
-    if channel_is_not_qoc(ctx): return
-    heard_command("stops", ctx.message.author.name)
-
-    async with ctx.channel.typing():
-        result = await only_return_messages_with_a_react(ctx, "stop")
-
-        if result == "":
-            await ctx.channel.send("No octagons found.")
-        else:
-            await send_embed(ctx, result)
+    await react_command(ctx, 'stop', "No octogons found.")
 
 @bot.command(name='checks')
 async def checks(ctx):
-    if channel_is_not_qoc(ctx): return
-    heard_command("checks", ctx.message.author.name)
+    await react_command(ctx, 'check', "No checks found.")
 
-    async with ctx.channel.typing():
-        result = await only_return_messages_with_a_react(ctx, "check")
-
-        if result == "":
-            await ctx.channel.send("No checks found.")
-        else:
-            await send_embed(ctx, result)
+@bot.command(name='rejects')
+async def rejects(ctx):
+    await react_command(ctx, 'reject', "No rejected rips found.")
 
 @bot.command(name='count', brief="counts all pinned rips")
 async def count(ctx):
