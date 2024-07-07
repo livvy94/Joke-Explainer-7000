@@ -71,7 +71,6 @@ async def mypins(ctx):
         result = ""
 
         for rip_id, rip_info in all_pins.items():
-            # print(rip_info["PinMiser"] + " =? " + ctx.author.name)
             if rip_info["PinMiser"] == ctx.author.name:
                 result += make_markdown(rip_info, False) # a match!
 
