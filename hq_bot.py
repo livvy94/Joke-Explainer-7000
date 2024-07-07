@@ -126,18 +126,13 @@ async def limitcheck(ctx):
 @bot.command(name='help', aliases = ['commands', 'halp', 'test'])
 async def help(ctx):
     async with ctx.channel.typing():
-        result = "_**YOU ARE NOW QoCING:**_\n`!roundup` " + roundup.brief + "\n`!links` " + links.brief + "\n_**Special lists:**_\n`!mypins` " + mypins.brief + "\n`!checks`\n`!wrenches`\n`!stops`" + "\n_**Misc. tools**_\n`!count` " + count.brief + "\n`!limitcheck` " + limitcheck.brief
+        result = "_**YOU ARE NOW QoCING:**_\n`!roundup` " + roundup.brief + "\n`!links` " + links.brief + "\n_**Special lists:**_\n`!mypins` " + mypins.brief + "\n`!checks`\n`!rejects`\n`!wrenches`\n`!stops`" + "\n_**Misc. tools**_\n`!count` " + count.brief + "\n`!limitcheck` " + limitcheck.brief
         await send_embed(ctx, result)
 
 @bot.command(name='op')
 async def test(ctx):
-    if channel_is_not_op(ctx):
-        await ctx.message.delete()
-        print(f"{ctx.message.author.name} opped out of bounds!")
-        await ctx.channel.send("#op", delete_after=5)
-    else:
-        print(f"op ({ctx.message.author.name})")
-        await ctx.channel.send("op")
+    print(f"op ({ctx.message.author.name})")
+    await ctx.channel.send("op")
 
 # While it might occur to folks in the future that a good command to write would be a rip feedback-sending command, something like that
 # would be way too impersonal imo.
