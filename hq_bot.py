@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 import discord
 from discord.ext import commands
-from secrets import token, server_id, qoc_channelid, op_channelid
+from secrets import token, server_id, roundup_channels, op_channelid
 from datetime import datetime
 
 message_seconds = 2700  # 45 minutes
@@ -80,19 +80,6 @@ async def mypins(ctx):
         else:
             await send_embed(ctx, result)
 
-async def react_command(ctx, react, not_found_message): # I've been meaning to simplify this for AGES (7/7/24)
-    if channel_is_not_qoc(ctx):
-        return
-    heard_command(react, ctx.message.author.name)
-
-    async with ctx.channel.typing():
-        result = await only_return_messages_with_a_react(ctx, react)
-
-    if result == "":
-        await ctx.channel.send(not_found_message)
-    else:
-        await send_embed(ctx, result)
-        
 @bot.command(name='wrenches', aliases = ['fix'])
 async def wrenches(ctx):
     await react_command(ctx, 'fix', "No wrenches found.")
@@ -186,7 +173,7 @@ async def process_pins(ctx, get_reacts):
         # Get the rip title
         # To get around non-standard messages (like fusion collab drafts), do something else if the first line doesn't include "by [ripper]"
         if "by " not in list_of_lines[0].lower() or len(list_of_lines) < 1:
-            rip_title = "`[Unusual Pin Format]`"
+            rip_title = list_of_lines[1] # Just put the whole line as the name. This used to be "Unusual Pin Format" but someone asked for me to move where in the result it shows up
         else:
             # Go through each line in the message and search for the rip title
             for line in list_of_lines:
@@ -199,11 +186,16 @@ async def process_pins(ctx, get_reacts):
                         rip_title = list_of_lines[(index_to_use + 1)]  # use the next line instead
                     break
 
+        rip_title = rip_title.replace('`', '')
+
         # Find the rip's author
         author = list_of_lines[0]
         if 'by me' in author.lower(): # Overwrite it and do something else if the rip's author and the pinner are the same
             cleaned_author = str(pinned_message.author).split('#')[0]
             author += (f' (**{cleaned_author}**)')
+
+        elif "by " not in list_of_lines[0].lower() or len(list_of_lines) < 1:
+            author = author + " [Unusual Pin Format]"
 
         # Get reactions
         reacts = ""
@@ -226,13 +218,25 @@ async def process_pins(ctx, get_reacts):
             'Reacts': reacts,
             'PinMiser': pinned_message.author.name,  # im mister rip christmas, im mister qoc
             'Approved': approved,
-            'Link': f"<https://discordapp.com/channels/{str(server_id)}/{str(qoc_channelid)}/{str(pinned_message.id)}>"
+            'Link': f"<https://discordapp.com/channels/{str(server_id)}/{str(ctx.channel.id)}/{str(pinned_message.id)}>"
         }
         dict_index += 1
 
     return pins_in_message
 
+async def react_command(ctx, react, not_found_message): # I've been meaning to simplify this for AGES (7/7/24)
+    if channel_is_not_qoc(ctx):
+        return
+    heard_command(react, ctx.message.author.name)
 
+    async with ctx.channel.typing():
+        result = await only_return_messages_with_a_react(ctx, react)
+
+    if result == "":
+        await ctx.channel.send(not_found_message)
+    else:
+        await send_embed(ctx, result)
+        
 async def only_return_messages_with_a_react(ctx, react_to_look_for):
     all_pins = await process_pins(ctx, True)
 
@@ -267,7 +271,7 @@ async def send_embed(ctx, message):
         await ctx.channel.send(embed=fancy_message, delete_after=message_seconds)
 
 def channel_is_not_qoc(ctx):
-    return ctx.channel.id != qoc_channelid
+    return ctx.channel.id not in roundup_channels
 
 def channel_is_not_op(ctx):
     return ctx.channel.id != op_channelid
