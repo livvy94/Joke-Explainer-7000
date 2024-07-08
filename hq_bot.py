@@ -33,7 +33,7 @@ async def on_ready():
 #  cmds = await bot.tree.sync()
 #  await ctx.send(f"Synced {len(cmds)} commands globally!")
 
-@bot.command(name='roundup', aliases = ['down_taunt', 'qoc', 'qocparty'], brief='displays all rips in QoC')
+@bot.command(name='roundup', aliases = ['down_taunt', 'qoc', 'qocparty', 'roudnup'], brief='displays all rips in QoC')
 async def roundup(ctx):
     if channel_is_not_qoc(ctx): return
     heard_command("roundup", ctx.message.author.name)
@@ -46,7 +46,7 @@ async def roundup(ctx):
         await send_embed(ctx, result)
 
 
-@bot.command(name='links',aliases = ['list', 'ls'], brief='roundup but quicker')
+@bot.command(name='links', aliases = ['list', 'ls'], brief='roundup but quicker')
 async def links(ctx):
     if channel_is_not_qoc(ctx): return
     heard_command("links", ctx.message.author.name)
@@ -78,6 +78,28 @@ async def mypins(ctx):
             await ctx.channel.send("No rips found.")
         else:
             await send_embed(ctx, result)
+
+@bot.command(name="fresh", aliases = ['blank', 'bald', 'clean', 'noreacts'], brief='rips with no reacts yet')
+async def fresh(ctx):
+    if channel_is_not_qoc(ctx): return
+    heard_command("fresh", ctx.message.author.name)
+    result = ""
+
+    async with ctx.channel.typing():
+        pin_list = await ctx.channel.pins()
+        pin_list.pop(-1) # get rid of a certain post about reading the rules
+
+        for pinned_message in pin_list:
+            mesg = await ctx.channel.fetch_message(pinned_message.id)
+            if len(mesg.reactions) < 1:
+                title = pinned_message.content.split('\n')[1].replace('`', '')
+                link = f"<https://discordapp.com/channels/{str(server_id)}/{str(ctx.channel.id)}/{str(pinned_message.id)}>"
+                result = result + f'**[{title}]({link})**\n'
+
+    if result != "":
+        await send_embed(ctx, result)
+    else:
+        ctx.channel.send("No fresh rips.")
 
 @bot.command(name='wrenches', aliases = ['fix'])
 async def wrenches(ctx):
