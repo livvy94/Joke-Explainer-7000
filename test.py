@@ -85,57 +85,68 @@ class TestBitrate(unittest.TestCase):
     Test suites for the checkBitrate function
     """
     # Helper strings and functions
-    BITRATE_OK_MSG = ":check: Bitrate is OK."
-    BITRATE_LOSSLESS_MSG = ":check: Lossless file is OK."
+    BITRATE_OK_MSG = "Bitrate is OK."
+    BITRATE_LOSSLESS_MSG = "Lossless file is OK."
 
     def BITRATE_LOW_MSG(self, filetype, kbps): 
-        return ":fix: The {} file's bitrate is {}kbps. Please re-render at 320kbps.".format(filetype, kbps)
+        return "The {} file's bitrate is {}kbps. Please re-render at 320kbps.".format(filetype, kbps)
 
     # Lossless
     def testBitrateFLAC(self):
-        msg = checkBitrate(File(TEST_DIR / 'goodQuality.flac'))
+        check, msg = checkBitrate(File(TEST_DIR / 'goodQuality.flac'))
+        self.assertTrue(check)
         self.assertEqual(msg, self.BITRATE_LOSSLESS_MSG)
 
     def testBitrateWAV(self):
-        msg = checkBitrate(File(TEST_DIR / 'goodQuality.wav'))
+        check, msg = checkBitrate(File(TEST_DIR / 'goodQuality.wav'))
+        self.assertTrue(check)
         self.assertEqual(msg, self.BITRATE_LOSSLESS_MSG)
 
     # Bitrate OK
     def testBitrateAIFF(self):
-        msg = checkBitrate(File(TEST_DIR / 'goodQuality.aiff'))
+        check, msg = checkBitrate(File(TEST_DIR / 'goodQuality.aiff'))
+        self.assertTrue(check)
         self.assertEqual(msg, self.BITRATE_OK_MSG)
 
     def testBitrateMP2(self):
-        msg = checkBitrate(File(TEST_DIR / 'goodQuality.mp2'))
+        check, msg = checkBitrate(File(TEST_DIR / 'goodQuality.mp2'))
+        self.assertTrue(check)
         self.assertEqual(msg, self.BITRATE_OK_MSG)
 
     def testBitrateMP3(self):
-        msg = checkBitrate(File(TEST_DIR / 'goodQuality.mp3'))
+        check, msg = checkBitrate(File(TEST_DIR / 'goodQuality.mp3'))
+        self.assertTrue(check)
         self.assertEqual(msg, self.BITRATE_OK_MSG)
 
     def testLowBitrateMP4(self):
-        msg = checkBitrate(File(TEST_DIR / 'goodQuality.mp4'))
+        check, msg = checkBitrate(File(TEST_DIR / 'goodQuality.mp4'))
+        self.assertTrue(check)
         self.assertEqual(msg, self.BITRATE_OK_MSG)
 
     def testBitrateOGG(self):
-        msg = checkBitrate(File(TEST_DIR / 'goodQuality.ogg'))
+        check, msg = checkBitrate(File(TEST_DIR / 'goodQuality.ogg'))
+        self.assertTrue(check)
         self.assertEqual(msg, self.BITRATE_OK_MSG)
 
     # Low bitrate
     def testLowBitrateMP3(self):
-        msg = checkBitrate(File(TEST_DIR / 'lowBitrate.mp3'))
+        check, msg = checkBitrate(File(TEST_DIR / 'lowBitrate.mp3'))
+        self.assertFalse(check)
         self.assertEqual(msg, self.BITRATE_LOW_MSG('MP3', 128))
     
     def testLowBitrateMP4(self):
-        msg = checkBitrate(File(TEST_DIR / 'clipping6lowBitrate.mp4'))
+        check, msg = checkBitrate(File(TEST_DIR / 'clipping6lowBitrate.mp4'))
+        self.assertFalse(check)
         self.assertEqual(msg, self.BITRATE_LOW_MSG('MP4', 192))
     
     def testLowBitrateM4A(self):
-        msg = checkBitrate(File(TEST_DIR / 'lowBitrate.m4a'))
+        check, msg = checkBitrate(File(TEST_DIR / 'lowBitrate.m4a'))
+        self.assertFalse(check)
         self.assertEqual(msg, self.BITRATE_LOW_MSG('MP4', 127))
 
     def testLowBitrateOGG(self):
-        msg = checkBitrate(File(TEST_DIR / 'lowBitrate.ogg'))
+        check, msg = checkBitrate(File(TEST_DIR / 'lowBitrate.ogg'))
+        self.assertFalse(check)
         self.assertEqual(msg, self.BITRATE_LOW_MSG('OggVorbis', 192))
     
 
@@ -144,12 +155,12 @@ class TestClipping(unittest.TestCase):
     Test suites for the checkClipping function
     """
     # Helper strings and functions
-    CLIPPING_OK_MSG = ":check: The rip is not clipping."
-    CLIPPING_HEAVY_MSG = ":fix: The rip is heavily clipping."
+    CLIPPING_OK_MSG = "The rip is not clipping."
+    CLIPPING_HEAVY_MSG = "The rip is heavily clipping."
     CLIPPING_REDUCED_MSG = " Post-render volume reduction detected, please lower the volume before rendering."
 
     def CLIPPING_MSG(self, clips): 
-        return ":fix: The rip is clipping at: " + ", ".join(clips) + "."
+        return "The rip is clipping at: " + ", ".join(clips) + "."
     
     def checkFilepathClipping(self, filepath):
         return checkClipping(File(filepath), filepath)
@@ -159,53 +170,64 @@ class TestClipping(unittest.TestCase):
 
     # No clipping
     def testNoClippingMP3(self):
-        msg = self.checkFilepathClipping(TEST_DIR / 'goodQuality.mp3')
+        check, msg = self.checkFilepathClipping(TEST_DIR / 'goodQuality.mp3')
+        self.assertTrue(check)
         self.assertEqual(msg, self.CLIPPING_OK_MSG)
     
     def testNoClippingFLAC(self):
-        msg = self.checkFilepathClipping(TEST_DIR / 'goodQuality.flac')
+        check, msg = self.checkFilepathClipping(TEST_DIR / 'goodQuality.flac')
+        self.assertTrue(check)
         self.assertEqual(msg, self.CLIPPING_OK_MSG)
     
     def testNoClippingWAV(self):
-        msg = self.checkFilepathClipping(TEST_DIR / 'goodQuality.wav')
+        check, msg = self.checkFilepathClipping(TEST_DIR / 'goodQuality.wav')
+        self.assertTrue(check)
         self.assertEqual(msg, self.CLIPPING_OK_MSG)
 
     def testNoClippingWAVMono(self):
-        msg = self.checkFilepathClipping(TEST_DIR / 'goodQualityMono.wav')
+        check, msg = self.checkFilepathClipping(TEST_DIR / 'goodQualityMono.wav')
+        self.assertTrue(check)
         self.assertEqual(msg, self.CLIPPING_OK_MSG)
 
     def testAlmostClippingMP3(self):
-        msg = self.checkFilepathClipping(TEST_DIR / 'almostClipping.mp3')
+        check, msg = self.checkFilepathClipping(TEST_DIR / 'almostClipping.mp3')
+        self.assertTrue(check)
         self.assertEqual(msg, self.CLIPPING_OK_MSG)
 
     # Clipping
     def testClipping1(self):
-        msg = self.checkFilepathClipping(TEST_DIR / 'clipping1.mp3')
+        check, msg = self.checkFilepathClipping(TEST_DIR / 'clipping1.mp3')
+        self.assertFalse(check)
         self.assertEqual(msg, self.CLIPPING_HEAVY_MSG)
     
     def testClipping2(self):
-        msg = self.checkFilepathClipping(TEST_DIR / 'clipping2.mp3')
+        check, msg = self.checkFilepathClipping(TEST_DIR / 'clipping2.mp3')
+        self.assertFalse(check)
         self.assertEqual(msg, self.CLIPPING_MSG([
             self.clip(12.13, 4), 
             self.clip(13.01, 3),
         ]))
     
     def testClipping2inverted(self):
-        msg = self.checkFilepathClipping(TEST_DIR / 'clipping2inverted.wav')
+        check, msg = self.checkFilepathClipping(TEST_DIR / 'clipping2inverted.wav')
+        self.assertFalse(check)
         self.assertEqual(msg, self.CLIPPING_MSG([
             self.clip(12.13, 3),
         ]))
     
     def testClipping3(self):
-        msg = self.checkFilepathClipping(TEST_DIR / 'clipping3.wav')
+        check, msg = self.checkFilepathClipping(TEST_DIR / 'clipping3.wav')
+        self.assertFalse(check)
         self.assertEqual(msg, self.CLIPPING_HEAVY_MSG + self.CLIPPING_REDUCED_MSG)
 
     def testClipping4(self):
-        msg = self.checkFilepathClipping(TEST_DIR / 'clipping4.wav')
+        check, msg = self.checkFilepathClipping(TEST_DIR / 'clipping4.wav')
+        self.assertFalse(check)
         self.assertEqual(msg, self.CLIPPING_HEAVY_MSG)
 
     def testClipping5(self):
-        msg = self.checkFilepathClipping(TEST_DIR / 'clipping5.ogg')
+        check, msg = self.checkFilepathClipping(TEST_DIR / 'clipping5.ogg')
+        self.assertFalse(check)
         self.assertEqual(msg, self.CLIPPING_MSG([
             self.clip(6.23, 4),
             self.clip(7.18, 5),
@@ -216,19 +238,23 @@ class TestClipping(unittest.TestCase):
         ]))
 
     def testClipping6(self):
-        msg = self.checkFilepathClipping(TEST_DIR / 'clipping6lowBitrate.mp4')
+        check, msg = self.checkFilepathClipping(TEST_DIR / 'clipping6lowBitrate.mp4')
+        self.assertFalse(check)
         self.assertEqual(msg, self.CLIPPING_HEAVY_MSG)
 
     def testClipping24bitFLAC(self):
-        msg = self.checkFilepathClipping(TEST_DIR / 'clipping24bit.flac')
-        self.assertEqual(msg, ":fix: Detected large gradient in 24-bit FLAC file. Please verify clipping in Audacity.")
+        check, msg = self.checkFilepathClipping(TEST_DIR / 'clipping24bit.flac')
+        self.assertFalse(check)
+        self.assertEqual(msg, "Detected large gradient in 24-bit FLAC file. Please verify clipping in Audacity.")
 
     def testClipping24bitWAV(self):
-        msg = self.checkFilepathClipping(TEST_DIR / 'clipping24bit.wav')
+        check, msg = self.checkFilepathClipping(TEST_DIR / 'clipping24bit.wav')
+        self.assertFalse(check)
         self.assertEqual(msg, self.CLIPPING_HEAVY_MSG)
 
     def testClipping32bitWAV(self):
-        msg = self.checkFilepathClipping(TEST_DIR / 'clipping32bitfloat.wav')
+        check, msg = self.checkFilepathClipping(TEST_DIR / 'clipping32bitfloat.wav')
+        self.assertFalse(check)
         self.assertEqual(msg, self.CLIPPING_MSG([
             self.clip(12.99, 6),
             self.clip(12.99, 7),

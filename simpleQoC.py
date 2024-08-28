@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from inspect import getsourcefile
+from typing import Tuple
 import requests
 import cgi
 
@@ -125,22 +126,22 @@ def parseAudio(filepath: str) -> FileType:
 #           BITRATE CHECKING            #
 #=======================================#
 
-def checkBitrate(file: FileType) -> str:
+def checkBitrate(file: FileType) -> Tuple[bool, str]:
     """
     Check the bitrate of a mutagen File.
     Requires either lossless format or the metadata contains bitrate information.
     If not, raises QoCException with the file metadata.
     """
     if isinstance(file, wave.WAVE) or isinstance(file, flac.FLAC):
-        return ":check: Lossless file is OK."
+        return (True, "Lossless file is OK.")
     
     # seems video files show lower bitrate on properties view for some reason, shouldn't be an issue generally
     if hasattr(file.info, 'bitrate'):
         bitrate = file.info.bitrate
         if bitrate < 320000:
-            return ":fix: The {} file's bitrate is {}kbps. Please re-render at 320kbps.".format(type(file).__name__, bitrate // 1000)
+            return (False, "The {} file's bitrate is {}kbps. Please re-render at 320kbps.".format(type(file).__name__, bitrate // 1000))
         else:
-            return ":check: Bitrate is OK."
+            return (True, "Bitrate is OK.")
     
     raise QoCException("ERROR: Unknown bitrate. File metadata: {}".format(file.pprint()))
 
@@ -190,7 +191,7 @@ def channelHasClipping(channel: np.ndarray, max, min, threshold: int) -> list:
     return getClipping(channel, max, threshold) + getClipping(channel, min, threshold)
     
 
-def checkClipping(file: FileType, filepath: str, threshold: int = 3) -> str:
+def checkClipping(file: FileType, filepath: str, threshold: int = 3) -> Tuple[bool, str]:
     wav_filepath = Path(filepath)
     newfile = False
     if not isinstance(file, wave.WAVE):
@@ -222,9 +223,9 @@ def checkClipping(file: FileType, filepath: str, threshold: int = 3) -> str:
         # TODO: fine tune arbitrarily chosen threshold
         # it may be possible to use 'and' since overflow/underflow will create large gradient both ways
         if maxG > 0.8 or minG < -0.8:
-            return ":fix: Detected large gradient in 24-bit FLAC file. Please verify clipping in Audacity."
+            return (False, "Detected large gradient in 24-bit FLAC file. Please verify clipping in Audacity.")
         else:
-            return ":check: The rip is not clipping."
+            return (True, "The rip is not clipping.")
 
     # +1 to min in order to mimic Audacity's Find Clipping algorithm,
     # even though WAV samples can technically go lower
@@ -294,51 +295,55 @@ def checkClipping(file: FileType, filepath: str, threshold: int = 3) -> str:
             msg = " Post-render volume reduction detected, please lower the volume before rendering."
         
         if len(clips) > 10:
-            msg = ":fix: The rip is heavily clipping." + msg
+            msg = "The rip is heavily clipping." + msg
         else:
-            msg = ":fix: The rip is clipping at: " + ", ".join(clips) + "." + msg
+            msg = "The rip is clipping at: " + ", ".join(clips) + "." + msg
         
-        return msg
+        return (False, msg)
     else:
-        return ":check: The rip is not clipping."
+        return (True, "The rip is not clipping.")
 
 
 #=======================================#
 #            Main Function              #
 #=======================================#
 
-def simpleQoC(url: str) -> str:
+def simpleQoC(url: str) -> Tuple[bool, str]:
     if not os.path.exists(DOWNLOAD_DIR):
         os.mkdir(DOWNLOAD_DIR)
     
     filepath = None
+    errors = []
+
     try:
         filepath = downloadAudioFromUrl(url)
-        print("Downloaded audio: " + Path(filepath).name)
+        DEBUG("Downloaded audio: " + Path(filepath).name)
     
     except QoCException as e:
-        print(e.message)
+        errors.append(e.message)
     
     else:
         file = parseAudio(filepath)
-        print("File metadata: " + file.pprint())
+        DEBUG("File metadata: " + file.pprint())
 
         try:
-            print(checkBitrate(file))
+            bitrateCheck, bitrateMsg = checkBitrate(file)
         except QoCException as e:
-            print(e.message)
+            errors.append(e.message)
 
         try:
-            print(checkClipping(file, filepath))
+            clippingCheck, clippingMsg = checkClipping(file, filepath)
         except QoCException as e:
-            print(e.message)
+            errors.append(e.message)
     
     finally:
         if filepath:
             os.remove(filepath)
 
-    # TODO
-    return ""
+    if len(errors) > 0:
+        raise QoCException('\n'.join(errors))
+    
+    return (bitrateCheck and clippingCheck, '- {}\n- {}'.format(bitrateMsg, clippingMsg))
 
 
 #=======================================#
@@ -352,5 +357,7 @@ if __name__ == '__main__':
         DEBUG_MODE = True
     
     url = input('Paste the path of the audio you want to check: ')
-    simpleQoC(url)
+    check, msg = simpleQoC(url)
     
+    print(":check:" if check else ":fix:")
+    print(msg)
