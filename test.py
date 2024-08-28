@@ -32,6 +32,12 @@ class TestDownload(unittest.TestCase):
         if filepath:
             os.remove(filepath)
 
+    def testSuccessSiivaGunnerV3(self):
+        filepath = downloadAudioFromUrl("https://siiva-gunner.com/?id=aWHZuQtx3P")
+        self.assertEqual(filepath, self.DOWNLOAD_DIR / 'video0.mp4')
+        if filepath:
+            os.remove(filepath)
+
     def testSuccessDrive(self):
         filepath = downloadAudioFromUrl("https://drive.google.com/file/d/1ofQMUh1xtItM3a1VXATRovYL9nYVYets/view?usp=sharing")
         self.assertEqual(filepath, self.DOWNLOAD_DIR / 'goodQuality.mp3')
@@ -62,7 +68,12 @@ class TestDownload(unittest.TestCase):
         if filepath:
             os.remove(filepath)
 
-    # TODO: Ask livvy for neocities sample
+    def testSuccessNeocities(self):
+        filepath = downloadAudioFromUrl("https://livvy94.neocities.org/rips/IoG_Fanfare.mp3")
+        self.assertEqual(filepath, self.DOWNLOAD_DIR / 'IoG_Fanfare.mp3')
+        if filepath:
+            os.remove(filepath)
+    
     # TODO: b.catgirlsare.sexy does not work for some reason
     # TODO: Try a large Google Drive link (should work)
 

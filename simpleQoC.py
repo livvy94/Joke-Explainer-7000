@@ -96,15 +96,19 @@ def downloadAudioFromUrl(url: str) -> str:
         session = requests.Session()
         response = session.get(url, stream=True)
 
-        _, params = cgi.parse_header(response.headers['Content-Disposition'])
-        filename = params['filename']
+        try:
+            # apparently cgi is deprecated? may need to change to email.message
+            # https://stackoverflow.com/questions/32330152/how-can-i-parse-the-value-of-content-type-from-an-http-header-response
+            _, params = cgi.parse_header(response.headers['Content-Disposition'])
+            filename = params['filename']
+        except KeyError:
+            if not ('audio' in response.headers['Content-Type'] or 'video' in response.headers['Content-Type']):
+                raise QoCException('Filename cannot be parsed from the URL (it may be an invalid link).')
+            filename = url.split('/')[-1]
+        
         filepath = DOWNLOAD_DIR / filename
 
         save_response_content(response, filepath)
-
-    except KeyError:
-        # If header does not contain Content-Disposition
-        raise QoCException('Filename cannot be parsed from the URL (it may be an invalid link).')
     
     # https://stackoverflow.com/questions/16511337/correct-way-to-try-except-using-python-requests-module
     except requests.exceptions.Timeout:
@@ -138,7 +142,7 @@ def checkBitrate(file: FileType) -> Tuple[bool, str]:
     # seems video files show lower bitrate on properties view for some reason, shouldn't be an issue generally
     if hasattr(file.info, 'bitrate'):
         bitrate = file.info.bitrate
-        if bitrate < 320000:
+        if bitrate < 300000:    # Apparently some weird files can have bitrate at 317kbps or even 319.999kbps. Let's say 300k is good enough
             return (False, "The {} file's bitrate is {}kbps. Please re-render at 320kbps.".format(type(file).__name__, bitrate // 1000))
         else:
             return (True, "Bitrate is OK.")
@@ -263,10 +267,8 @@ def checkClipping(file: FileType, filepath: str, threshold: int = 3) -> Tuple[bo
     for c in range(maxVals.size):
         samples = channelHasClipping(data[:, c], maxVals[c], minVals[c], threshold)
         for s in samples:
-            if data[s[0], c] == maxVals[c]:
-                upperClip[c] = True
-            if data[s[0], c] == minVals[c]:
-                lowerClip[c] = True
+            upperClip[c] = upperClip[c] or (data[s[0], c] == maxVals[c])
+            lowerClip[c] = lowerClip[c] or (data[s[0], c] == minVals[c])
             debugClipSamples.append((s[0] / framerate, data[s[0]:s[1], 0]))
         clipSamples.extend(samples)
 
