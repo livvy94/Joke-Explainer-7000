@@ -4,6 +4,7 @@ from inspect import getsourcefile
 from typing import Tuple
 import requests
 import cgi
+import re
 
 from mutagen import File, FileType, flac, wave
 from scipy.io import wavfile
@@ -103,7 +104,12 @@ def downloadAudioFromUrl(url: str) -> str:
             filename = params['filename']
         except KeyError:
             if not ('audio' in response.headers['Content-Type'] or 'video' in response.headers['Content-Type']):
-                raise QoCException('Filename cannot be parsed from the URL (it may be an invalid link).')
+                if 'html' in response.headers['Content-Type']:
+                    text = response.text
+                    title = re.search('<\W*title\W*(.*)</title', text, re.IGNORECASE).group(1)
+                    raise QoCException('Filename cannot be parsed from the URL (server response: {}).'.format(title))
+                else:
+                    raise QoCException('Unknown error trying to parse filename.')
             filename = url.split('/')[-1]
         
         filepath = DOWNLOAD_DIR / filename
