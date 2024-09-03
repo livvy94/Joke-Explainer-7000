@@ -292,12 +292,7 @@ def checkClipping(file: FileType, filepath: str, threshold: int = 3) -> Tuple[bo
         msg = ""
 
         # Detect if volume was reduced post-render
-        if newfile or data.dtype == np.float32:
-            formatMax = 1.0
-            formatMin = -1.0
-        else:
-            formatMax = limits[file.info.bits_per_sample][1]
-            formatMin = limits[file.info.bits_per_sample][0]
+        formatMin, formatMax = (-1.0, 1.0) if data.dtype == np.float32 else limits[wavFile.info.bits_per_sample]
 
         if np.any(np.logical_and(upperClip, maxVals < formatMax)) or np.any(np.logical_and(lowerClip, minVals > formatMin)):
             msg = " Post-render volume reduction detected, please lower the volume before rendering."
