@@ -5,6 +5,7 @@ from typing import Tuple
 import requests
 import cgi
 import re
+import json
 
 from mutagen import File, FileType, flac, wave
 from scipy.io import wavfile
@@ -34,6 +35,52 @@ class QoCException(Exception):
         # allow users initialize misc. arguments as any other builtin Error
         super(QoCException, self).__init__(message, *args) 
 
+
+#=======================================#
+#           FFMPEG / FFPROBE            #
+#=======================================#
+
+def ffprobeUrl(validUrl: str):
+    """
+    Retrives file metadata from URL using ffprobe.
+    """
+    try:
+        probeOutput = subprocess.check_output([
+            'ffprobe',
+            '-v', 'quiet',
+            '-select_streams', 'a:0',
+            '-print_format', 'json',
+            '-show_format',
+            '-show_streams',
+            # '-of', 'default=noprint_wrappers=1:nokey=1',
+            '-i', validUrl,
+        ])
+    except FileNotFoundError:
+        raise QoCException("ERROR: ffprobe failed to run (make sure the command 'ffprobe' can run).")
+    
+    return json.loads(probeOutput)
+
+
+def ffmpegToWAV(filepath: str, wav_filepath: str):
+    """
+    Runs ffmpeg to create a WAV file from the provided audio filepath or URL.
+    - **filepath**: Path to local file, or URL to file
+    - **wav_filepath**: Path to WAV file to be generated
+    """
+    try:
+        subprocess.call([
+            'ffmpeg',
+            '-hide_banner',
+            '-loglevel', 'error',
+            '-i', filepath,
+            '-c:a', 'pcm_f32le',
+            wav_filepath,
+        ])
+    except FileNotFoundError:
+        raise QoCException("ERROR: ffmpeg failed to run (make sure the command 'ffmpeg' can run).")
+    
+    if not os.path.exists(wav_filepath):
+        raise QoCException("ERROR: ffmpeg failed to generate .wav file.")
 
 #=======================================#
 #           URL DOWNLOADING             #
@@ -89,13 +136,28 @@ def save_response_content(response, destination):
                 f.write(chunk)
 
 
-def downloadAudioFromUrl(url: str) -> str:
-    url = parseUrl(url)
+def getHeadFromUrl(validUrl: str):
+    try:
+        session = requests.Session()
+        response = session.head(validUrl, stream=True)
+
+        return response.headers
+    
+    # https://stackoverflow.com/questions/16511337/correct-way-to-try-except-using-python-requests-module
+    except requests.exceptions.Timeout:
+        raise QoCException('Request timed out.')
+    except requests.exceptions.TooManyRedirects:
+        raise QoCException('Bad URL.')
+    except requests.exceptions.RequestException as e: # Other errors
+        raise QoCException('Unknown URL error. {}'.format(e.strerror))
+
+
+def downloadAudioFromUrl(validUrl: str) -> str:
     filepath = None
 
     try:
         session = requests.Session()
-        response = session.get(url, stream=True)
+        response = session.get(validUrl, stream=True)
 
         try:
             # apparently cgi is deprecated? may need to change to email.message
@@ -110,7 +172,7 @@ def downloadAudioFromUrl(url: str) -> str:
                     raise QoCException('Filename cannot be parsed from the URL (server response: {}).'.format(title))
                 else:
                     raise QoCException('Unknown error trying to parse filename.')
-            filename = url.split('/')[-1]
+            filename = validUrl.split('/')[-1]
         
         filepath = DOWNLOAD_DIR / filename
 
@@ -136,7 +198,7 @@ def parseAudio(filepath: str) -> FileType:
 #           BITRATE CHECKING            #
 #=======================================#
 
-def checkBitrate(file: FileType) -> Tuple[bool, str]:
+def checkBitrateFromFile(file: FileType) -> Tuple[bool, str]:
     """
     Check the bitrate of a mutagen File.
     Requires either lossless format or the metadata contains bitrate information.
@@ -156,29 +218,39 @@ def checkBitrate(file: FileType) -> Tuple[bool, str]:
     raise QoCException("ERROR: Unknown bitrate. File metadata: {}".format(file.pprint()))
 
 
+def checkBitrateFromUrl(validUrl: str) -> Tuple[bool, str]:
+    """
+    Check the bitrate of an URL by first finding the type of media
+    If media is wav or flac, no need to do anything further.
+    Otherwise, use ffprobe to download and check bitrate.
+    """
+    contentType = getHeadFromUrl(validUrl)['Content-Type'].lower()
+    if 'wav' in contentType or 'flac' in contentType:
+        return (True, "Lossless file is OK.")
+    
+    try:
+        probeOutput = ffprobeUrl(validUrl)
+        bitrate = int(probeOutput['streams'][0]['bit_rate'])
+    except KeyError:
+        # seems FLAC does not contain this info but it should have been skipped anyway
+        raise QoCException("ERROR: Bitrate cannot be detected from ffprobe output:\n{}".format(probeOutput))
+    except ValueError:
+        raise QoCException("ERROR: Bitrate cannot be parsed from ffprobe output:\n{}".format(probeOutput))
+
+    try:
+        filetype = probeOutput['format']['format_name'].upper()
+    except KeyError:
+        filetype = "[TYPE UNKNOWN]"
+
+    if bitrate < 300000:    # Apparently some weird files can have bitrate at 317kbps or even 319.999kbps. Let's say 300k is good enough
+        return (False, "The {} file's bitrate is {}kbps. Please re-render at 320kbps.".format(filetype, bitrate // 1000))
+    else:
+        return (True, "Bitrate is OK.")
+
+
 #=======================================#
 #           CLIPPING CHECKING           #
 #=======================================#
-
-def convertToWAV(filepath: str, wav_filepath: str):
-    """
-    Runs ffmpeg to create a WAV file from the provided audio filepath
-    """
-    try:
-        subprocess.call([
-            'ffmpeg',
-            '-hide_banner',
-            '-loglevel', 'error',
-            '-i', Path(filepath),
-            '-c:a', 'pcm_f32le',
-            wav_filepath,
-        ], shell=True)
-    except FileNotFoundError:
-        raise QoCException("ERROR: ffmpeg failed to run (make sure the command 'ffmpeg' can run).")
-    
-    if not os.path.exists(wav_filepath):
-        raise QoCException("ERROR: ffmpeg failed to generate .wav file.")
-
 
 # https://stackoverflow.com/a/24892274
 def sameValueRuns(arr: np.ndarray, value) -> np.ndarray:
@@ -201,30 +273,21 @@ def channelHasClipping(channel: np.ndarray, max, min, threshold: int) -> list:
     return getClipping(channel, max, threshold) + getClipping(channel, min, threshold)
     
 
-def checkClipping(file: FileType, filepath: str, threshold: int = 3) -> Tuple[bool, str]:
-    wav_filepath = Path(filepath)
-    newfile = False
-    if not isinstance(file, wave.WAVE):
-        newfile = True
-        wav_filepath = "{}_temp.wav".format(Path.joinpath(wav_filepath.parent, wav_filepath.stem))
-    else:
-        DEBUG('Bits per sample: {}'.format(file.info.bits_per_sample))
-        
-    if not os.path.exists(wav_filepath):
-        convertToWAV(filepath, wav_filepath)
-    
-    DEBUG('Wav file: {}'.format(wav_filepath))
-    wavFile: wave.WAVE = parseAudio(wav_filepath)
-    DEBUG('Metadata: {}'.format(wavFile.pprint()))
+def checkClipping(wav_filepath: Path, threshold: int, doGradientAnalysis: bool) -> Tuple[bool, str]:
+    """
+    Checks whether a WAV file is clipping (waveform contains "flat" peaks).
+    - **wav_filepath**: Path to a local WAV file.
+    - **threshold**: How many consecutive samples to look for. Recommended value: 3.
+    - **doGradientAnalysis**: Set to True if the waveform may contain overflows.
+    """
+    wavFile = parseAudio(wav_filepath)
 
     clips = []
     framerate, data = wavfile.read(wav_filepath)
 
     # Special case: 24-bit FLACs can go over sample limit and cause overflow/underflow,
     # apply specialized algorithm to check for clicking instead.
-    # TODO: what about other bit depths?
-    if isinstance(file, flac.FLAC) and file.info.bits_per_sample == 24:
-        DEBUG("Input file is detected as 24-bit FLAC. Recommend verifing clipping in Audacity.")
+    if doGradientAnalysis:
         data_deriv = np.gradient(data, axis=0)
         maxG = np.max(data_deriv)
         minG = np.min(data_deriv)
@@ -233,7 +296,7 @@ def checkClipping(file: FileType, filepath: str, threshold: int = 3) -> Tuple[bo
         # TODO: fine tune arbitrarily chosen threshold
         # it may be possible to use 'and' since overflow/underflow will create large gradient both ways
         if maxG > 0.8 or minG < -0.8:
-            return (False, "Detected large gradient in 24-bit FLAC file. Please verify clipping in Audacity.")
+            return (False, "Detected large gradient. Please verify clipping in Audacity.")
         else:
             return (True, "The rip is not clipping.")
 
@@ -284,9 +347,6 @@ def checkClipping(file: FileType, filepath: str, threshold: int = 3) -> Tuple[bo
     clipSamples.sort(key = lambda x: (x[0], x[1])) # Sort by time for viewing purpose
     for clipSample in clipSamples:
         clips.append('{:.2f} sec ({} samples)'.format(clipSample[0] / framerate, clipSample[1] - clipSample[0]))
-
-    if newfile and not isinstance(file, wave.WAVE):
-        os.remove(wav_filepath)
     
     if len(clips) > 0:
         msg = ""
@@ -307,11 +367,74 @@ def checkClipping(file: FileType, filepath: str, threshold: int = 3) -> Tuple[bo
         return (True, "The rip is not clipping.")
 
 
+def checkClippingFromFile(file: FileType, filepath: str, threshold: int = 3) -> Tuple[bool, str]:
+    """
+    Checks whether a mutagen File is clipping.
+    Requires the file having been downloaded locally.
+    """
+    wav_filepath = Path(filepath)
+    newfile = False
+    if not isinstance(file, wave.WAVE):
+        newfile = True
+        wav_filepath = "{}_temp.wav".format(Path.joinpath(wav_filepath.parent, wav_filepath.stem))
+    else:
+        DEBUG('Bits per sample: {}'.format(file.info.bits_per_sample))
+        
+    if not os.path.exists(wav_filepath):
+        ffmpegToWAV(filepath, wav_filepath)
+
+    # do gradient analysis if file is 24-bit FLAC
+    if isinstance(file, flac.FLAC) and file.info.bits_per_sample == 24:
+        DEBUG("Input file is detected as 24-bit FLAC. Recommend verifing clipping in Audacity.")
+        check, msg = checkClipping(wav_filepath, threshold, True)
+    else:
+        check, msg = checkClipping(wav_filepath, threshold, False)
+
+    if newfile:
+        os.remove(wav_filepath)
+
+    return (check, msg)
+
+
+def checkClippingFromUrl(validUrl: str, threshold: int = 3) -> Tuple[bool, str]:
+    """
+    Checks whether a URL media is clipping.
+    Will only download locally if the URL contains WAV; otherwise convert to local WAV file directly.
+    """
+    contentType = getHeadFromUrl(validUrl)['Content-Type'].lower()
+    wav_filepath = DOWNLOAD_DIR / 'temp.wav'
+    if 'wav' in contentType:
+        wav_filepath = downloadAudioFromUrl(validUrl)
+    else:
+        ffmpegToWAV(validUrl, wav_filepath)
+        
+    # do gradient analysis if file is 24-bit FLAC
+    is24bitFLAC = False
+    try:
+        probeOutput = ffprobeUrl(validUrl)
+        is24bitFLAC = ('flac' in probeOutput['format']['format_name']) and (int(probeOutput['streams'][0]['bits_per_raw_sample']) == 24)
+    except (KeyError, ValueError):
+        pass
+
+    if is24bitFLAC:
+        DEBUG("Input file is detected as 24-bit FLAC. Recommend verifing clipping in Audacity.")
+        check, msg = checkClipping(wav_filepath, threshold, True)
+    else:
+        check, msg = checkClipping(wav_filepath, threshold, False)
+
+    os.remove(wav_filepath)
+
+    return (check, msg)
+
 #=======================================#
 #            Main Function              #
 #=======================================#
 
-def simpleQoC(url: str) -> Tuple[bool, str]:
+def performQoC(url: str) -> Tuple[bool, str]:
+    """
+    Version 1: Download file from URL then process metadata and waveform
+    """
+    downloadableUrl = parseUrl(url)
     if not os.path.exists(DOWNLOAD_DIR):
         os.mkdir(DOWNLOAD_DIR)
     
@@ -319,7 +442,7 @@ def simpleQoC(url: str) -> Tuple[bool, str]:
     errors = []
 
     try:
-        filepath = downloadAudioFromUrl(url)
+        filepath = downloadAudioFromUrl(downloadableUrl)
         DEBUG("Downloaded audio: " + Path(filepath).name)
     
     except QoCException as e:
@@ -330,18 +453,46 @@ def simpleQoC(url: str) -> Tuple[bool, str]:
         DEBUG("File metadata: " + file.pprint())
 
         try:
-            bitrateCheck, bitrateMsg = checkBitrate(file)
+            bitrateCheck, bitrateMsg = checkBitrateFromFile(file)
         except QoCException as e:
             errors.append(e.message)
 
         try:
-            clippingCheck, clippingMsg = checkClipping(file, filepath)
+            clippingCheck, clippingMsg = checkClippingFromFile(file, filepath)
         except QoCException as e:
             errors.append(e.message)
     
     finally:
         if filepath:
             os.remove(filepath)
+
+    if len(errors) > 0:
+        raise QoCException('\n'.join(errors))
+    
+    return (bitrateCheck and clippingCheck, '- {}\n- {}'.format(bitrateMsg, clippingMsg))
+
+
+def performQoCWithoutDL(url: str) -> Tuple[bool, str]:
+    """
+    Version 2: Use HTTP head, ffprobe and ffmpeg to reduce temporary files
+
+    TODO: slow afffff
+    """
+    downloadableUrl = parseUrl(url)
+    if not os.path.exists(DOWNLOAD_DIR):
+        os.mkdir(DOWNLOAD_DIR)
+    
+    errors = []
+
+    try:
+        bitrateCheck, bitrateMsg = checkBitrateFromUrl(downloadableUrl)
+    except QoCException as e:
+        errors.append(e.message)
+
+    try:
+        clippingCheck, clippingMsg = checkClippingFromUrl(downloadableUrl)
+    except QoCException as e:
+        errors.append(e.message)
 
     if len(errors) > 0:
         raise QoCException('\n'.join(errors))
@@ -360,7 +511,7 @@ if __name__ == '__main__':
         DEBUG_MODE = True
     
     url = input('Paste the path of the audio you want to check: ')
-    check, msg = simpleQoC(url)
+    check, msg = performQoC(url)
     
     print(":check:" if check else ":fix:")
     print(msg)

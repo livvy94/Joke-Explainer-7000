@@ -1,2 +1,6 @@
+# Important
+- Add DS clipping check (non-maximum value runs)
+
+# Not important
 - AVI is not supported by mutagen
 - Move messages to a separate function?

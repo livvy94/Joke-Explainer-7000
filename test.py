@@ -4,9 +4,41 @@ from pathlib import Path
 from inspect import getsourcefile
 from mutagen import File
 
-from simpleQoC import downloadAudioFromUrl, checkBitrate, checkClipping, QoCException
+from simpleQoC import parseUrl, downloadAudioFromUrl, checkBitrateFromFile, checkClippingFromFile, \
+                    checkBitrateFromUrl, checkClippingFromUrl, QoCException
 
 TEST_DIR = Path(os.path.abspath(getsourcefile(lambda:0))).parent / 'tests'
+
+TEST_URLS = {
+    'almostClipping.mp3': "https://drive.google.com/file/d/1wI6ZGaTmWpYD07kG8lK8jZ-XIBL-Xm3e/view?usp=drive_link",
+    'clipping1.mp3': "https://drive.google.com/file/d/159dl-ot3nee6dSE3geaE_e8acpQ0sbCM/view?usp=drive_link",
+    'clipping2.mp3': "https://drive.google.com/file/d/1pDDCBzYbdjQYjLLgEAiXZ-0B6ABKqNXP/view?usp=drive_link",
+    'clipping2inverted.wav': "https://drive.google.com/file/d/1Vi9CadpCogR-2JfhmVLsrAXVohYlRhm6/view?usp=drive_link",
+    'clipping3.wav': "https://drive.google.com/file/d/1IYrnLtZciOZDoISlMBEVBjk-L9kWNOGM/view?usp=drive_link",
+    'clipping4.wav': "https://drive.google.com/file/d/1Gb_vDqn4vM38hPfFqnpVakp5lXLLNcl0/view?usp=drive_link",
+    'clipping5.ogg': "https://drive.google.com/file/d/17_8MPvNYP5Ky21wtCww7X2WUKs1gd1_P/view?usp=drive_link",
+    'clipping6lowBitrate.mp4': "https://drive.google.com/file/d/1Af5Y8mgS92J89gdYBZeoQLQwnxcQ4W7n/view?usp=drive_link",
+    'clipping16bit.flac': "https://drive.google.com/file/d/13S5B4z7GZ7gACe6eo7z7oOBX2cLbmGNk/view?usp=drive_link",
+    'clipping24bit.flac': "https://drive.google.com/file/d/1WUIsi_Rl9gyeJUangq6wwe9sx1S08jMj/view?usp=drive_link",
+    'clipping24bit.wav': "https://drive.google.com/file/d/1q2TNMA4d3BMQvtrrtx3ed2DbU66kR0dq/view?usp=drive_link",
+    'clipping32bitfloat.wav': "https://drive.google.com/file/d/1Old48cHuVGglh6VZ_7XsJCTJxNnSwR0Q/view?usp=drive_link",
+    'goodQuality.aiff': "https://drive.google.com/file/d/1tC2cr9klMVmUVGLWClIlRJfctuLFCqEc/view?usp=drive_link",
+    'goodQuality.flac': "https://drive.google.com/file/d/1_k0I7mYstvXwMPQMf8CKlo8D5hdAiqkV/view?usp=drive_link",
+    'goodQuality.mp2': "https://drive.google.com/file/d/1o139UD9e2sONqbS_WGMbuipnFrrDP6cq/view?usp=drive_link",
+    'goodQuality.mp3': "https://drive.google.com/file/d/1ofQMUh1xtItM3a1VXATRovYL9nYVYets/view?usp=drive_link",
+    'goodQuality.mp4': "https://drive.google.com/file/d/1-gGaLjie2lDfQVNMJOSuM1IfuythDr8i/view?usp=drive_link",
+    'goodQuality.ogg': "https://drive.google.com/file/d/1bDrs-HE-OI9OoZEKD6CjNuK0K5mswNz-/view?usp=drive_link",
+    'goodQuality.wav': "https://drive.google.com/file/d/1wF-YR1agyAmJASR5moE2PzjdLGY2XovV/view?usp=drive_link",
+    'goodQuality.wmv': "https://drive.google.com/file/d/1J7keq03mIDVZ-LyOUIwucFMcINQBwZqi/view?usp=drive_link",
+    'goodQualityMono.wav': "https://drive.google.com/file/d/1577f0dfDalMAlRe402u4v1tHol_dMwYt/view?usp=drive_link",
+    'lowBitrate.m4a': "https://drive.google.com/file/d/1Uei3_qiWgglRXj-z2nfPPkc_aY9oH4VV/view?usp=drive_link",
+    'lowBitrate.mp3': "https://drive.google.com/file/d/1LSDF5AY2JcS5_QjsHmWBKWCuABXxySOd/view?usp=drive_link",
+    'lowBitrate.ogg': "https://drive.google.com/file/d/18IC3fwYRIH8Iwf_lFmTp_lKIx7vpGcHK/view?usp=drive_link",
+}
+
+#=======================================#
+#           URL DOWNLOADING             #
+#=======================================#
 
 class TestDownload(unittest.TestCase):
     """
@@ -19,57 +51,60 @@ class TestDownload(unittest.TestCase):
         if not os.path.exists(self.DOWNLOAD_DIR):
             os.mkdir(self.DOWNLOAD_DIR)
 
+    def parseAndDownload(self, url):
+        return downloadAudioFromUrl(parseUrl(url))
+
     # Successful downloads
     def testSuccessSiivaGunner(self):
-        filepath = downloadAudioFromUrl("https://siiva-gunner.com/?id=vnrufKKnxu")
+        filepath = self.parseAndDownload("https://siiva-gunner.com/?id=vnrufKKnxu")
         self.assertEqual(filepath, self.DOWNLOAD_DIR / 'goodQuality.mp3')
         if filepath:
             os.remove(filepath)
 
     def testSuccessSiivaGunnerV2(self):
-        filepath = downloadAudioFromUrl("https://185.142.239.147/?id=vnrufKKnxu")
+        filepath = self.parseAndDownload("https://185.142.239.147/?id=vnrufKKnxu")
         self.assertEqual(filepath, self.DOWNLOAD_DIR / 'goodQuality.mp3')
         if filepath:
             os.remove(filepath)
 
     def testSuccessSiivaGunnerV3(self):
-        filepath = downloadAudioFromUrl("https://siiva-gunner.com/?id=aWHZuQtx3P")
+        filepath = self.parseAndDownload("https://siiva-gunner.com/?id=aWHZuQtx3P")
         self.assertEqual(filepath, self.DOWNLOAD_DIR / 'video0.mp4')
         if filepath:
             os.remove(filepath)
 
     def testSuccessDrive(self):
-        filepath = downloadAudioFromUrl("https://drive.google.com/file/d/1ofQMUh1xtItM3a1VXATRovYL9nYVYets/view?usp=sharing")
+        filepath = self.parseAndDownload("https://drive.google.com/file/d/1ofQMUh1xtItM3a1VXATRovYL9nYVYets/view?usp=sharing")
         self.assertEqual(filepath, self.DOWNLOAD_DIR / 'goodQuality.mp3')
         if filepath:
             os.remove(filepath)
 
     def testSuccessDriveV2(self):
-        filepath = downloadAudioFromUrl("https://drive.google.com/file/d/1ofQMUh1xtItM3a1VXATRovYL9nYVYets")
+        filepath = self.parseAndDownload("https://drive.google.com/file/d/1ofQMUh1xtItM3a1VXATRovYL9nYVYets")
         self.assertEqual(filepath, self.DOWNLOAD_DIR / 'goodQuality.mp3')
         if filepath:
             os.remove(filepath)
 
     def testSuccessDriveV3(self):
-        filepath = downloadAudioFromUrl("https://drive.google.com/open?id=1ofQMUh1xtItM3a1VXATRovYL9nYVYets")
+        filepath = self.parseAndDownload("https://drive.google.com/open?id=1ofQMUh1xtItM3a1VXATRovYL9nYVYets")
         self.assertEqual(filepath, self.DOWNLOAD_DIR / 'goodQuality.mp3')
         if filepath:
             os.remove(filepath)
 
     def testSuccessDriveV4(self):
-        filepath = downloadAudioFromUrl("https://drive.google.com/uc?id=1ofQMUh1xtItM3a1VXATRovYL9nYVYets&export=download")
+        filepath = self.parseAndDownload("https://drive.google.com/uc?id=1ofQMUh1xtItM3a1VXATRovYL9nYVYets&export=download")
         self.assertEqual(filepath, self.DOWNLOAD_DIR / 'goodQuality.mp3')
         if filepath:
             os.remove(filepath)
 
     def testSuccessDropbox(self):
-        filepath = downloadAudioFromUrl("https://www.dropbox.com/scl/fi/stkgm8qtw6m9oq5dbeg76/goodQuality.mp3?rlkey=wxhi0wu55a4d4tsppe6buu5by&st=vi8io7zw&dl=0")
+        filepath = self.parseAndDownload("https://www.dropbox.com/scl/fi/stkgm8qtw6m9oq5dbeg76/goodQuality.mp3?rlkey=wxhi0wu55a4d4tsppe6buu5by&st=vi8io7zw&dl=0")
         self.assertEqual(filepath, self.DOWNLOAD_DIR / 'goodQuality.mp3')
         if filepath:
             os.remove(filepath)
 
     def testSuccessNeocities(self):
-        filepath = downloadAudioFromUrl("https://livvy94.neocities.org/rips/IoG_Fanfare.mp3")
+        filepath = self.parseAndDownload("https://livvy94.neocities.org/rips/IoG_Fanfare.mp3")
         self.assertEqual(filepath, self.DOWNLOAD_DIR / 'IoG_Fanfare.mp3')
         if filepath:
             os.remove(filepath)
@@ -80,90 +115,106 @@ class TestDownload(unittest.TestCase):
     # Failed downloads
     def testFailureSiivaGunner(self):
         with self.assertRaises(QoCException):
-            filepath = downloadAudioFromUrl("https://siiva-gunner.com/?id=vnrufKKnx")
+            filepath = self.parseAndDownload("https://siiva-gunner.com/?id=vnrufKKnx")
             if filepath:
                 os.remove(filepath)
 
     def testFailureDrive(self):
         with self.assertRaises(QoCException):
-            filepath = downloadAudioFromUrl("https://drive.google.com/file/d/1ofQMUh1xtItM3a1VXATRovYL9nYVYet/view?usp=sharing")
+            filepath = self.parseAndDownload("https://drive.google.com/file/d/1ofQMUh1xtItM3a1VXATRovYL9nYVYet/view?usp=sharing")
             if filepath:
                 os.remove(filepath)
 
+#=======================================#
+#           BITRATE CHECKING            #
+#=======================================#
 
-class TestBitrate(unittest.TestCase):
+class BaseTestBitrate:
     """
-    Test suites for the checkBitrate function
+    Test suites for the checkBitrate functions
     """
     # Helper strings and functions
     BITRATE_OK_MSG = "Bitrate is OK."
     BITRATE_LOSSLESS_MSG = "Lossless file is OK."
+    BITRATE_LOW_MSG = "Please re-render at 320kbps."
 
-    def BITRATE_LOW_MSG(self, filetype, kbps): 
-        return "The {} file's bitrate is {}kbps. Please re-render at 320kbps.".format(filetype, kbps)
+    def checkBitrate(self, filename: str):
+        pass
 
     # Lossless
     def testBitrateFLAC(self):
-        check, msg = checkBitrate(File(TEST_DIR / 'goodQuality.flac'))
+        check, msg = self.checkBitrate('goodQuality.flac')
         self.assertTrue(check)
         self.assertEqual(msg, self.BITRATE_LOSSLESS_MSG)
 
     def testBitrateWAV(self):
-        check, msg = checkBitrate(File(TEST_DIR / 'goodQuality.wav'))
+        check, msg = self.checkBitrate('goodQuality.wav')
         self.assertTrue(check)
         self.assertEqual(msg, self.BITRATE_LOSSLESS_MSG)
 
     # Bitrate OK
     def testBitrateAIFF(self):
-        check, msg = checkBitrate(File(TEST_DIR / 'goodQuality.aiff'))
+        check, msg = self.checkBitrate('goodQuality.aiff')
         self.assertTrue(check)
         self.assertEqual(msg, self.BITRATE_OK_MSG)
 
     def testBitrateMP2(self):
-        check, msg = checkBitrate(File(TEST_DIR / 'goodQuality.mp2'))
+        check, msg = self.checkBitrate('goodQuality.mp2')
         self.assertTrue(check)
         self.assertEqual(msg, self.BITRATE_OK_MSG)
 
     def testBitrateMP3(self):
-        check, msg = checkBitrate(File(TEST_DIR / 'goodQuality.mp3'))
+        check, msg = self.checkBitrate('goodQuality.mp3')
         self.assertTrue(check)
         self.assertEqual(msg, self.BITRATE_OK_MSG)
 
     def testLowBitrateMP4(self):
-        check, msg = checkBitrate(File(TEST_DIR / 'goodQuality.mp4'))
+        check, msg = self.checkBitrate('goodQuality.mp4')
         self.assertTrue(check)
         self.assertEqual(msg, self.BITRATE_OK_MSG)
 
     def testBitrateOGG(self):
-        check, msg = checkBitrate(File(TEST_DIR / 'goodQuality.ogg'))
+        check, msg = self.checkBitrate('goodQuality.ogg')
         self.assertTrue(check)
         self.assertEqual(msg, self.BITRATE_OK_MSG)
 
     # Low bitrate
     def testLowBitrateMP3(self):
-        check, msg = checkBitrate(File(TEST_DIR / 'lowBitrate.mp3'))
+        check, msg = self.checkBitrate('lowBitrate.mp3')
         self.assertFalse(check)
-        self.assertEqual(msg, self.BITRATE_LOW_MSG('MP3', 128))
+        self.assertIn(self.BITRATE_LOW_MSG, msg)
     
     def testLowBitrateMP4(self):
-        check, msg = checkBitrate(File(TEST_DIR / 'clipping6lowBitrate.mp4'))
+        check, msg = self.checkBitrate('clipping6lowBitrate.mp4')
         self.assertFalse(check)
-        self.assertEqual(msg, self.BITRATE_LOW_MSG('MP4', 192))
+        self.assertIn(self.BITRATE_LOW_MSG, msg)
     
     def testLowBitrateM4A(self):
-        check, msg = checkBitrate(File(TEST_DIR / 'lowBitrate.m4a'))
+        check, msg = self.checkBitrate('lowBitrate.m4a')
         self.assertFalse(check)
-        self.assertEqual(msg, self.BITRATE_LOW_MSG('MP4', 127))
+        self.assertIn(self.BITRATE_LOW_MSG, msg)
 
     def testLowBitrateOGG(self):
-        check, msg = checkBitrate(File(TEST_DIR / 'lowBitrate.ogg'))
+        check, msg = self.checkBitrate('lowBitrate.ogg')
         self.assertFalse(check)
-        self.assertEqual(msg, self.BITRATE_LOW_MSG('OggVorbis', 192))
-    
+        self.assertIn(self.BITRATE_LOW_MSG, msg)
 
-class TestClipping(unittest.TestCase):
+# Use inheritance to reuse the same test functions
+class TestBitrateFromFile(unittest.TestCase, BaseTestBitrate):
+    def checkBitrate(self, filename: str):
+        return checkBitrateFromFile(File(TEST_DIR / filename))
+
+class TestBitrateFromUrl(unittest.TestCase, BaseTestBitrate):
+    def checkBitrate(self, filename: str):
+        return checkBitrateFromUrl(parseUrl(TEST_URLS[filename]))
+
+#=======================================#
+#           CLIPPING CHECKING           #
+#=======================================#
+
+class BaseTestClipping:
     """
-    Test suites for the checkClipping function
+    Test suites for the checkClipping functions
     """
     # Helper strings and functions
     CLIPPING_OK_MSG = "The rip is not clipping."
@@ -173,46 +224,46 @@ class TestClipping(unittest.TestCase):
     def CLIPPING_MSG(self, clips): 
         return "The rip is clipping at: " + ", ".join(clips) + "."
     
-    def checkFilepathClipping(self, filepath):
-        return checkClipping(File(filepath), filepath)
+    def checkClipping(self, filename: str):
+        pass
     
     def clip(self, t, n):
         return '{:.2f} sec ({} samples)'.format(t, n)
 
     # No clipping
     def testNoClippingMP3(self):
-        check, msg = self.checkFilepathClipping(TEST_DIR / 'goodQuality.mp3')
+        check, msg = self.checkClipping('goodQuality.mp3')
         self.assertTrue(check)
         self.assertEqual(msg, self.CLIPPING_OK_MSG)
     
     def testNoClippingFLAC(self):
-        check, msg = self.checkFilepathClipping(TEST_DIR / 'goodQuality.flac')
+        check, msg = self.checkClipping('goodQuality.flac')
         self.assertTrue(check)
         self.assertEqual(msg, self.CLIPPING_OK_MSG)
     
     def testNoClippingWAV(self):
-        check, msg = self.checkFilepathClipping(TEST_DIR / 'goodQuality.wav')
+        check, msg = self.checkClipping('goodQuality.wav')
         self.assertTrue(check)
         self.assertEqual(msg, self.CLIPPING_OK_MSG)
 
     def testNoClippingWAVMono(self):
-        check, msg = self.checkFilepathClipping(TEST_DIR / 'goodQualityMono.wav')
+        check, msg = self.checkClipping('goodQualityMono.wav')
         self.assertTrue(check)
         self.assertEqual(msg, self.CLIPPING_OK_MSG)
 
     def testAlmostClippingMP3(self):
-        check, msg = self.checkFilepathClipping(TEST_DIR / 'almostClipping.mp3')
+        check, msg = self.checkClipping('almostClipping.mp3')
         self.assertTrue(check)
         self.assertEqual(msg, self.CLIPPING_OK_MSG)
 
     # Clipping
     def testClipping1(self):
-        check, msg = self.checkFilepathClipping(TEST_DIR / 'clipping1.mp3')
+        check, msg = self.checkClipping('clipping1.mp3')
         self.assertFalse(check)
         self.assertEqual(msg, self.CLIPPING_HEAVY_MSG)
     
     def testClipping2(self):
-        check, msg = self.checkFilepathClipping(TEST_DIR / 'clipping2.mp3')
+        check, msg = self.checkClipping('clipping2.mp3')
         self.assertFalse(check)
         self.assertEqual(msg, self.CLIPPING_MSG([
             self.clip(12.13, 4), 
@@ -220,24 +271,24 @@ class TestClipping(unittest.TestCase):
         ]))
     
     def testClipping2inverted(self):
-        check, msg = self.checkFilepathClipping(TEST_DIR / 'clipping2inverted.wav')
+        check, msg = self.checkClipping('clipping2inverted.wav')
         self.assertFalse(check)
         self.assertEqual(msg, self.CLIPPING_MSG([
             self.clip(12.13, 3),
         ]))
     
     def testClipping3(self):
-        check, msg = self.checkFilepathClipping(TEST_DIR / 'clipping3.wav')
+        check, msg = self.checkClipping('clipping3.wav')
         self.assertFalse(check)
         self.assertEqual(msg, self.CLIPPING_HEAVY_MSG + self.CLIPPING_REDUCED_MSG)
 
     def testClipping4(self):
-        check, msg = self.checkFilepathClipping(TEST_DIR / 'clipping4.wav')
+        check, msg = self.checkClipping('clipping4.wav')
         self.assertFalse(check)
         self.assertEqual(msg, self.CLIPPING_HEAVY_MSG)
 
     def testClipping5(self):
-        check, msg = self.checkFilepathClipping(TEST_DIR / 'clipping5.ogg')
+        check, msg = self.checkClipping('clipping5.ogg')
         self.assertFalse(check)
         self.assertEqual(msg, self.CLIPPING_MSG([
             self.clip(6.23, 4),
@@ -249,22 +300,22 @@ class TestClipping(unittest.TestCase):
         ]))
 
     def testClipping6(self):
-        check, msg = self.checkFilepathClipping(TEST_DIR / 'clipping6lowBitrate.mp4')
+        check, msg = self.checkClipping('clipping6lowBitrate.mp4')
         self.assertFalse(check)
         self.assertEqual(msg, self.CLIPPING_HEAVY_MSG)
 
     def testClipping24bitFLAC(self):
-        check, msg = self.checkFilepathClipping(TEST_DIR / 'clipping24bit.flac')
+        check, msg = self.checkClipping('clipping24bit.flac')
         self.assertFalse(check)
-        self.assertEqual(msg, "Detected large gradient in 24-bit FLAC file. Please verify clipping in Audacity.")
+        self.assertEqual(msg, "Detected large gradient. Please verify clipping in Audacity.")
 
     def testClipping24bitWAV(self):
-        check, msg = self.checkFilepathClipping(TEST_DIR / 'clipping24bit.wav')
+        check, msg = self.checkClipping('clipping24bit.wav')
         self.assertFalse(check)
         self.assertEqual(msg, self.CLIPPING_HEAVY_MSG)
 
     def testClipping32bitWAV(self):
-        check, msg = self.checkFilepathClipping(TEST_DIR / 'clipping32bitfloat.wav')
+        check, msg = self.checkClipping('clipping32bitfloat.wav')
         self.assertFalse(check)
         self.assertEqual(msg, self.CLIPPING_MSG([
             self.clip(12.99, 6),
@@ -275,6 +326,49 @@ class TestClipping(unittest.TestCase):
             self.clip(13.01, 4), 
             self.clip(13.02, 10),
         ]))
+
+# Use inheritance to reuse the same test functions
+class TestClippingFromFile(unittest.TestCase, BaseTestClipping):
+    def checkClipping(self, filename: str):
+        return checkClippingFromFile(File(TEST_DIR / filename), TEST_DIR / filename)
+
+class TestClippingFromUrl(unittest.TestCase, BaseTestClipping):
+    def checkClipping(self, filename: str):
+        return checkClippingFromUrl(parseUrl(TEST_URLS[filename]))
+
+#=======================================#
+#            Main Function              #
+#=======================================#
+
+from simpleQoC import performQoC
+
+class TestOverall(unittest.TestCase):
+    """
+    A few test cases to make sure all functions work together fine
+    """
+    def testOverall(self):
+        check, msg = performQoC("https://siiva-gunner.com/?id=vnrufKKnxu")
+        self.assertTrue(check)
+        self.assertEqual(msg, "- Bitrate is OK.\n- The rip is not clipping.")
+
+    def testOverallV2(self):
+        check, msg = performQoC(TEST_URLS['clipping5.ogg'])
+        self.assertFalse(check)
+        self.assertIn("Please re-render at 320kbps", msg)
+        self.assertIn("The rip is clipping", msg)
+
+    def testOverallV3(self):
+        check, msg = performQoC(TEST_URLS['clipping3.wav'])
+        self.assertFalse(check)
+        self.assertIn("Lossless file is OK", msg)
+        self.assertIn("The rip is heavily clipping. Post-render volume reduction detected, please lower the volume before rendering.", msg)
+
+    def testOverallV4(self):
+        check, msg = performQoC(TEST_URLS['lowBitrate.mp3'])
+        self.assertFalse(check)
+        self.assertIn("Please re-render at 320kbps", msg)
+        self.assertIn("The rip is not clipping", msg)
+
 
 import simpleQoC
 import sys
