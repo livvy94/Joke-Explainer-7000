@@ -14,6 +14,9 @@ import numpy as np
 
 DOWNLOAD_DIR = Path(os.path.abspath(getsourcefile(lambda:0))).parent / 'audioDownloads'
 
+DEFAULT_CLIPPING_THRESHOLD = 3
+DEFAULT_DS_CLIPPING_THRESHOLD = 5
+
 #=======================================#
 #               DEBUGGING               #
 #=======================================#
@@ -302,9 +305,7 @@ def checkClipping(wav_filepath: Path, threshold: int, doGradientAnalysis: bool) 
 
     # +1 to min in order to mimic Audacity's Find Clipping algorithm,
     # even though WAV samples can technically go lower
-    # TODO: 8bit not tested yet
     limits = {
-        8:  ( 0         +1,     255         ),
         16: (-2**15     +1,     2**15-1     ),
         24: (-2**31     +1,     2147483392  ),
         32: (-2**31     +1,     2**31-1     ),
@@ -367,7 +368,7 @@ def checkClipping(wav_filepath: Path, threshold: int, doGradientAnalysis: bool) 
         return (True, "The rip is not clipping.")
 
 
-def checkClippingFromFile(file: FileType, filepath: str, threshold: int = 3) -> Tuple[bool, str]:
+def checkClippingFromFile(file: FileType, filepath: str, threshold: int = DEFAULT_CLIPPING_THRESHOLD) -> Tuple[bool, str]:
     """
     Checks whether a mutagen File is clipping.
     Requires the file having been downloaded locally.
@@ -396,7 +397,7 @@ def checkClippingFromFile(file: FileType, filepath: str, threshold: int = 3) -> 
     return (check, msg)
 
 
-def checkClippingFromUrl(validUrl: str, threshold: int = 3) -> Tuple[bool, str]:
+def checkClippingFromUrl(validUrl: str, threshold: int = DEFAULT_CLIPPING_THRESHOLD) -> Tuple[bool, str]:
     """
     Checks whether a URL media is clipping.
     Will only download locally if the URL contains WAV; otherwise convert to local WAV file directly.
@@ -425,6 +426,157 @@ def checkClippingFromUrl(validUrl: str, threshold: int = 3) -> Tuple[bool, str]:
     os.remove(wav_filepath)
 
     return (check, msg)
+
+
+#=======================================#
+#         DLS CLIPPING CHECKING          #
+#=======================================#
+"""
+Same idea behind checking clipping, but not limited to min/max values.
+We assume that DLS clipping will create non-peaking flat lines in the waveform that causes distortion.
+"""
+
+def getConsecutiveRuns(channel: np.ndarray, threshold: int) -> list:
+    # ensure array
+    if channel.ndim != 1:
+        raise ValueError('Only 1D array supported')
+    
+    consRun = np.append(np.equal(channel[:-1], channel[1:]).astype(np.int16), 0)
+    consSamples = []
+
+    runs = sameValueRuns(consRun, 1)
+    for run in runs:
+        # Each streak of 1 in consRun correspond to a streak in the channel array with 1 fewer sample
+        # since each individual sample is a consecutive run of length 1
+        if run[1] - run[0] >= threshold-1:
+            consSamples.append((channel[run[0]], run))
+    
+    return consSamples
+
+
+def checkDLSClipping(wav_filepath: Path, threshold: int) -> Tuple[bool, str]:
+    """
+    Checks whether a WAV file might have DLS clipping (waveform contains non-zero "flat" samples).
+    - **wav_filepath**: Path to a local WAV file.
+    - **threshold**: How many consecutive samples to look for. Recommended value: 5.
+    """
+    wavFile = parseAudio(wav_filepath)
+
+    cons = []
+    framerate, data = wavfile.read(wav_filepath)
+
+    # +1 to min in order to mimic Audacity's Find Clipping algorithm,
+    # even though WAV samples can technically go lower
+    limits = {
+        16: (-2**15     +1,     2**15-1     ),
+        24: (-2**31     +1,     2147483392  ),
+        32: (-2**31     +1,     2**31-1     ),
+    }
+
+    # Apparently WAV 32-bit float can go over +-1.0
+    if data.dtype == np.float32:
+        data.clip(-1.0, 1.0, out=data)
+    else:
+        data.clip(limits[wavFile.info.bits_per_sample][0], limits[wavFile.info.bits_per_sample][1], out=data)
+
+    # If audio is mono, reshape data for consistency
+    if data.ndim == 1:
+        data = data[:,None]
+
+    # Find max and min values
+    maxVals = data.max(axis=0)
+    minVals = data.min(axis=0)
+
+    DEBUG('Data type: {}'.format(data.dtype))
+    DEBUG('Max: {}'.format(maxVals))
+    DEBUG('Min: {}'.format(minVals))
+
+    formatMin, formatMax = (-1.0, 1.0) if data.dtype == np.float32 else limits[wavFile.info.bits_per_sample]
+    maxClip = False
+    minClip = False
+    dlsClip = False
+
+    consSamples = []
+    for c in range(maxVals.size):
+        samples = getConsecutiveRuns(data[:, c], threshold)
+        for s in samples:
+            if s[0] == maxVals[c]:
+                if maxVals[c] < formatMax:
+                    maxClip = True
+            elif s[0] == minVals[c]:
+                if minVals[c] < formatMin:
+                    minClip = True
+            elif abs(s[0]) / formatMax > 1e-3: # this needs to be changed if unsigned WAVs will be used
+                dlsClip = True
+        
+        consSamples.extend(samples)
+
+    consSamples.sort(key = lambda x: (x[1][0], x[1][1])) # Sort by time for viewing purpose
+    for s in consSamples:
+        if s[0] == formatMax or s[0] == formatMin or s[0] in maxVals or s[0] in minVals or abs(s[0]) / formatMax < 1e-3:
+            continue
+        cons.append('{:.2f} sec ({} samples, value: {})'.format(s[1][0] / framerate, s[1][1] - s[1][0] + 1, s[0]))
+        
+    if len(cons) > 0:
+        msg = ""
+
+        if dlsClip:
+            msg = "DLS clipping detected"
+            if len(cons) > 10:
+                msg = msg + " at many samples."
+            else:
+                msg = msg + " at: " + ", ".join(cons) + "."
+        elif maxClip or minClip:
+            msg = "No DLS clipping detected, but post-render volume reduction clipping detected"
+        else:
+            msg = "No DLS clipping detected, but clipping detected"
+        
+        return (False, msg)
+    else:
+        return (True, "The rip has no DLS clipping.")
+
+
+def checkDLSClippingFromFile(file: FileType, filepath: str, threshold: int = DEFAULT_DS_CLIPPING_THRESHOLD) -> Tuple[bool, str]:
+    """
+    Checks whether a mutagen File has DLS clipping.
+    Requires the file having been downloaded locally.
+    """
+    wav_filepath = Path(filepath)
+    newfile = False
+    if not isinstance(file, wave.WAVE):
+        newfile = True
+        wav_filepath = "{}_temp.wav".format(Path.joinpath(wav_filepath.parent, wav_filepath.stem))
+    else:
+        DEBUG('Bits per sample: {}'.format(file.info.bits_per_sample))
+        
+    if not os.path.exists(wav_filepath):
+        ffmpegToWAV(filepath, wav_filepath)
+
+    check, msg = checkDLSClipping(wav_filepath, threshold)
+
+    if newfile:
+        os.remove(wav_filepath)
+
+    return (check, msg)
+
+def checkDLSClippingFromUrl(validUrl: str, threshold: int = DEFAULT_DS_CLIPPING_THRESHOLD) -> Tuple[bool, str]:
+    """
+    Checks whether a URL media has DLS clipping.
+    Will only download locally if the URL contains WAV; otherwise convert to local WAV file directly.
+    """
+    contentType = getHeadFromUrl(validUrl)['Content-Type'].lower()
+    wav_filepath = DOWNLOAD_DIR / 'temp.wav'
+    if 'wav' in contentType:
+        wav_filepath = downloadAudioFromUrl(validUrl)
+    else:
+        ffmpegToWAV(validUrl, wav_filepath)
+
+    check, msg = checkDLSClipping(wav_filepath, threshold)
+
+    os.remove(wav_filepath)
+
+    return (check, msg)
+
 
 #=======================================#
 #            Main Function              #
