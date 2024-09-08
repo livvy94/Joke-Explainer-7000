@@ -127,6 +127,9 @@ def parseUrl(url: str) -> str:
     if url.find('dropbox.com') != -1:
         return url.replace('&dl=0', '&dl=1')
 
+    if url.find('catgirlsare.sexy') != -1:
+        return url.replace('catgirlsare.sexy', 'cgas.io')
+
     return url
 
 # https://stackoverflow.com/questions/38511444/python-download-files-from-google-drive-using-url
