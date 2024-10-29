@@ -62,7 +62,7 @@ class TestDownload(unittest.TestCase):
             os.remove(filepath)
 
     def testSuccessSiivaGunnerV2(self):
-        filepath = self.parseAndDownload("https://185.142.239.147/?id=vnrufKKnxu")
+        filepath = self.parseAndDownload("https://11.22.33.44/?id=vnrufKKnxu")
         self.assertEqual(filepath, self.DOWNLOAD_DIR / 'goodQuality.mp3')
         if filepath:
             os.remove(filepath)
@@ -348,26 +348,30 @@ class TestOverall(unittest.TestCase):
     """
     def testOverall(self):
         check, msg = performQoC("https://siiva-gunner.com/?id=vnrufKKnxu")
-        self.assertTrue(check)
+        self.assertEqual(check, 0)
         self.assertEqual(msg, "- Bitrate is OK.\n- The rip is not clipping.")
 
     def testOverallV2(self):
         check, msg = performQoC(TEST_URLS['clipping5.ogg'])
-        self.assertFalse(check)
+        self.assertEqual(check, 1)
         self.assertIn("Please re-render at 320kbps", msg)
         self.assertIn("The rip is clipping", msg)
 
     def testOverallV3(self):
         check, msg = performQoC(TEST_URLS['clipping3.wav'])
-        self.assertFalse(check)
+        self.assertEqual(check, 1)
         self.assertIn("Lossless file is OK", msg)
         self.assertIn("The rip is heavily clipping. Post-render volume reduction detected, please lower the volume before rendering.", msg)
 
     def testOverallV4(self):
         check, msg = performQoC(TEST_URLS['lowBitrate.mp3'])
-        self.assertFalse(check)
+        self.assertEqual(check, 1)
         self.assertIn("Please re-render at 320kbps", msg)
         self.assertIn("The rip is not clipping", msg)
+
+    def testOverallV5(self):
+        check, msg = performQoC("https://siiva-gunner.com/?id=vnrufKKnx")
+        self.assertEqual(check, -1)
 
 
 import simpleQoC

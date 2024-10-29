@@ -98,9 +98,9 @@ def parseUrl(url: str) -> str:
     if url.find('siiva-gunner.com/?id=') != -1:
         return url.replace('?id=', 'api/v2/file/')
     
-    if url.find('185.142.239.147/?id=') != -1:
+    if re.search(r'(?:\d{1,3}\.){3}\d{1,3}/\?id=', url):
         # probably don't wanna deal with SSL certificate stuff
-        return url.replace('185.142.239.147/?id=', 'siiva-gunner.com/api/v2/file/')
+        return 'https://siiva-gunner.com/api/v2/file/' + url.split('?id=')[1]
     
     if url.find('drive.google.com') != -1:
         """
@@ -582,10 +582,25 @@ def checkDLSClippingFromUrl(validUrl: str, threshold: int = DEFAULT_DS_CLIPPING_
 
 
 #=======================================#
+#                Utility                #
+#=======================================#
+"""
+Utility functions to parse the message returned by QoC functions
+"""
+def msgContainsBitrateFix(msg: str) -> bool:
+    return msg.find("Please re-render at 320kbps") != -1
+
+def msgContainsClippingFix(msg: str) -> bool:
+    return (msg.find("The rip is clipping") != -1) or (msg.find("The rip is heavily clipping") != -1)
+
+def msgContainsPRVRClippingFix(msg: str) -> bool:
+    return msg.find("Post-render volume reduction detected") != -1
+
+#=======================================#
 #            Main Function              #
 #=======================================#
 
-def performQoC(url: str) -> Tuple[bool, str]:
+def performQoC(url: str) -> Tuple[int, str]:
     """
     Version 1: Download file from URL then process metadata and waveform
     """
@@ -622,37 +637,39 @@ def performQoC(url: str) -> Tuple[bool, str]:
             os.remove(filepath)
 
     if len(errors) > 0:
-        raise QoCException('\n'.join(errors))
+        return (-1, '\n'.join(errors))
     
-    return (bitrateCheck and clippingCheck, '- {}\n- {}'.format(bitrateMsg, clippingMsg))
+    return (0 if (bitrateCheck and clippingCheck) else 1, '- {}\n- {}'.format(bitrateMsg, clippingMsg))
 
+"""
+Commented this out to work on it later
+"""
+# def performQoCWithoutDL(url: str) -> Tuple[bool, str]:
+#     """
+#     Version 2: Use HTTP head, ffprobe and ffmpeg to reduce temporary files
 
-def performQoCWithoutDL(url: str) -> Tuple[bool, str]:
-    """
-    Version 2: Use HTTP head, ffprobe and ffmpeg to reduce temporary files
-
-    TODO: slow afffff
-    """
-    downloadableUrl = parseUrl(url)
-    if not os.path.exists(DOWNLOAD_DIR):
-        os.mkdir(DOWNLOAD_DIR)
+#     TODO: slow afffff
+#     """
+#     downloadableUrl = parseUrl(url)
+#     if not os.path.exists(DOWNLOAD_DIR):
+#         os.mkdir(DOWNLOAD_DIR)
     
-    errors = []
+#     errors = []
 
-    try:
-        bitrateCheck, bitrateMsg = checkBitrateFromUrl(downloadableUrl)
-    except QoCException as e:
-        errors.append(e.message)
+#     try:
+#         bitrateCheck, bitrateMsg = checkBitrateFromUrl(downloadableUrl)
+#     except QoCException as e:
+#         errors.append(e.message)
 
-    try:
-        clippingCheck, clippingMsg = checkClippingFromUrl(downloadableUrl)
-    except QoCException as e:
-        errors.append(e.message)
+#     try:
+#         clippingCheck, clippingMsg = checkClippingFromUrl(downloadableUrl)
+#     except QoCException as e:
+#         errors.append(e.message)
 
-    if len(errors) > 0:
-        raise QoCException('\n'.join(errors))
+#     if len(errors) > 0:
+#         raise QoCException('\n'.join(errors))
     
-    return (bitrateCheck and clippingCheck, '- {}\n- {}'.format(bitrateMsg, clippingMsg))
+#     return (bitrateCheck and clippingCheck, '- {}\n- {}'.format(bitrateMsg, clippingMsg))
 
 
 #=======================================#
@@ -666,7 +683,16 @@ if __name__ == '__main__':
         DEBUG_MODE = True
     
     url = input('Paste the path of the audio you want to check: ')
-    check, msg = performQoC(url)
+    code, msg = performQoC(url)
+
+    code2emoji = {
+        -1: ":link:",
+        0: ":check:",
+        1: ":fix:",
+    }
     
-    print(":check:" if check else ":fix:")
+    print(code2emoji[code] 
+          + (" :1234:" if msgContainsBitrateFix(msg) else "") 
+          + (" :loud_sound:" if msgContainsClippingFix(msg) else "")
+    )
     print(msg)
