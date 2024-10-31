@@ -1,4 +1,5 @@
 secrets.py #your sensitive Discord information
+bot_secrets.py
 runtime.txt #idk what this is but it generates it and it does nothing
 
 # Byte-compiled / optimized / DLL files

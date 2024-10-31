@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 import discord
 from discord.ext import commands
-from secrets import token, server_id, roundup_channels, op_channelid
+from bot_secrets import token, server_id, roundup_channels, op_channelid
 from datetime import datetime
 
 message_seconds = 2700  # 45 minutes
