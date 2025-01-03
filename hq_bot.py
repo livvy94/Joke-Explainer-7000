@@ -322,6 +322,7 @@ async def vet(ctx):
         result = ""
         for rip_id, rip_info in all_pins.items():
             result += make_markdown(rip_info, True)
+        result += "\nLEGEND:\n🔗: Link cannot be parsed\n✅: Rip is OK\n🔧: Rip has potential issues, see below\n🔢: Bitrate is not 320kbps\n📢: Clipping"
         await send_embed(ctx, result)
 
 @bot.command(name='roundupv2', brief='roundup version 2')
