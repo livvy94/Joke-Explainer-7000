@@ -322,7 +322,7 @@ async def vet(ctx):
         result = ""
         for rip_id, rip_info in all_pins.items():
             result += make_markdown(rip_info, True)
-        result += "\nLEGEND:\n🔗: Link cannot be parsed\n✅: Rip is OK\n🔧: Rip has potential issues, see below\n🔢: Bitrate is not 320kbps\n📢: Clipping"
+        result += "```\nLEGEND:\n🔗: Link cannot be parsed\n✅: Rip is OK\n🔧: Rip has potential issues, see below\n🔢: Bitrate is not 320kbps\n📢: Clipping```"
         await send_embed(ctx, result)
 
 @bot.command(name='roundupv2', brief='roundup version 2')
@@ -331,7 +331,7 @@ async def roundupv2(ctx):
     heard_command("roundupv2", ctx.message.author.name)
 
     async with ctx.channel.typing():
-        all_pins = await process_pins_v2(ctx)
+        all_pins = await process_pins_v2(ctx, True)
         result = ""
         for rip_id, rip_info in all_pins.items():
             result += make_markdown(rip_info, True)
@@ -367,7 +367,7 @@ async def get_pinned_msgs_and_react(ctx, react_func = None):
         if len(list_of_lines) <= 1:
             # If pin has a single line then it is very much an unusual pin format
             rip_title = "`[Unusual Pin Format]`"
-        elif "by " not in list_of_lines[0].lower():
+        elif len(re.findall(r'\bby\b', list_of_lines[0].lower())) == 0:
             # Just put the whole line as the name.
             rip_title = list_of_lines[1]
         else:
@@ -386,12 +386,12 @@ async def get_pinned_msgs_and_react(ctx, react_func = None):
 
         # Find the rip's author
         author = list_of_lines[0]
-        if 'by me' in author.lower(): # Overwrite it and do something else if the rip's author and the pinner are the same
+        if len(list_of_lines) < 1 or len(re.findall(r'\bby\b', author.lower())) == 0:
+            author = author + " [Unusual Pin Format]"
+
+        elif len(re.findall(r'\bby me\b', author.lower())) > 0: # Overwrite it and do something else if the rip's author and the pinner are the same
             cleaned_author = str(pinned_message.author).split('#')[0]
             author += (f' (**{cleaned_author}**)')
-
-        elif "by " not in list_of_lines[0].lower() or len(list_of_lines) < 1:
-            author = author + " [Unusual Pin Format]"
 
         # Get reactions
         if react_func is not None:
