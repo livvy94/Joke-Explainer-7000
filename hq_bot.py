@@ -346,6 +346,48 @@ async def roundupv2(ctx):
             result += make_markdown(rip_info, True)
         await send_embed(ctx, result)
 
+@bot.command(name='vet_msg', brief='vet a single message link')
+async def vet_msg(ctx, msg_link):
+    if channel_is_not_qoc(ctx): return
+    heard_command("vet_msg", ctx.message.author.name)
+
+    async with ctx.channel.typing():
+        # https://stackoverflow.com/a/63212069
+        ids = msg_link.split('/')
+        server_id = int(ids[4])
+        channel_id = int(ids[5])
+        msg_id = int(ids[6])
+        server = bot.get_guild(server_id)
+        channel = server.get_channel(channel_id)
+        message = await channel.fetch_message(msg_id)
+
+        url = extract_first_link(message.content)
+        code, msg = await run_blocking(performQoC, url)
+        rip_title = get_rip_title(message)
+        verdict = {
+            -1: '🔗',
+            0: '✅',
+            1: '🔧',
+        }[code]
+
+        await ctx.channel.send("**Rip**: {}\n**Verdict**: {}\n**Comments**: {}".format(rip_title, verdict, msg))
+
+@bot.command(name='vet_url', brief='vet a single url')
+async def vet_url(ctx, url):
+    if channel_is_not_qoc(ctx): return
+    heard_command("vet_url", ctx.message.author.name)
+
+    async with ctx.channel.typing():
+        code, msg = await run_blocking(performQoC, url)
+        verdict = {
+            -1: '🔗',
+            0: '✅',
+            1: '🔧',
+        }[code]
+
+        await ctx.channel.send("**Verdict**: {}\n**Comments**: {}".format(verdict, msg))
+
+# HELPER functions
 # thanks chatgpt
 def extract_first_link(text):
     # Regular expression to match links that start with "http"
@@ -357,6 +399,31 @@ def extract_first_link(text):
         if "youtu" not in match:
             return match  # Return the first valid link
     return None  # Return None if no valid links are found
+
+def get_rip_title(message):
+    list_of_lines = message.content.split('\n')
+
+    # To get around non-standard messages (like fusion collab drafts), do something else if the first line doesn't include "by [ripper]"
+    if len(list_of_lines) <= 1:
+        # If pin has a single line then it is very much an unusual pin format
+        rip_title = "`[Unusual Pin Format]`"
+    elif len(re.findall(r'\bby\b', list_of_lines[0].lower())) == 0:
+        # Just put the whole line as the name.
+        rip_title = list_of_lines[1]
+    else:
+        # Go through each line in the message and search for the rip title
+        for line in list_of_lines:
+            if "```" in line:
+                stripped_title = line.strip("```").strip("**")
+                if stripped_title != "":  # if line has title on it, make stripped version title
+                    rip_title = stripped_title
+                elif stripped_title == "":
+                    index_to_use = list_of_lines.index(line)
+                    rip_title = list_of_lines[(index_to_use + 1)]  # use the next line instead
+                break
+
+    rip_title = rip_title.replace('`', '')
+    return rip_title
 
 # Move pin parsing to a separate function
 # Calls react_func to get an emoji list for each pinned message
@@ -372,26 +439,7 @@ async def get_pinned_msgs_and_react(ctx, react_func = None):
         list_of_lines = pinned_message.content.split('\n')
 
         # Get the rip title
-        # To get around non-standard messages (like fusion collab drafts), do something else if the first line doesn't include "by [ripper]"
-        if len(list_of_lines) <= 1:
-            # If pin has a single line then it is very much an unusual pin format
-            rip_title = "`[Unusual Pin Format]`"
-        elif len(re.findall(r'\bby\b', list_of_lines[0].lower())) == 0:
-            # Just put the whole line as the name.
-            rip_title = list_of_lines[1]
-        else:
-            # Go through each line in the message and search for the rip title
-            for line in list_of_lines:
-                if "```" in line:
-                    stripped_title = line.strip("```").strip("**")
-                    if stripped_title != "":  # if line has title on it, make stripped version title
-                        rip_title = stripped_title
-                    elif stripped_title == "":
-                        index_to_use = list_of_lines.index(line)
-                        rip_title = list_of_lines[(index_to_use + 1)]  # use the next line instead
-                    break
-
-        rip_title = rip_title.replace('`', '')
+        rip_title = get_rip_title(pinned_message)
 
         # Find the rip's author
         author = list_of_lines[0]
@@ -441,9 +489,10 @@ async def get_reactions(ctx, pinned_message):
 async def process_pins_v2(ctx, get_reacts):
     return await get_pinned_msgs_and_react(ctx, get_reactions if get_reacts else None)
 
-# Vet pinned messages
-async def vet_msg(ctx, pinned_message):
-    url = extract_first_link(pinned_message.content)
+# Vet a single message
+async def vet_message(ctx, message):
+    url = extract_first_link(message.content)
+    reacts = ""
     if url is not None:
         code, msg = await run_blocking(performQoC, url)
         # TODO: use server reaction?
@@ -457,11 +506,15 @@ async def vet_msg(ctx, pinned_message):
                 reacts += ' 🔢'
             if msgContainsClippingFix(msg):
                 reacts += ' 📢'
+        
+        # debug
+        if code == -1:
+            print("Message: {}\n\nURL: {}\n\nError: {}".format(message.content, url, msg))
 
     return reacts, False
 
 async def vet_pins(ctx):
-    return await get_pinned_msgs_and_react(ctx, vet_msg)
+    return await get_pinned_msgs_and_react(ctx, vet_message)
 
 
 # Now that everything's defined, run the dang thing
