@@ -449,6 +449,8 @@ async def vet_msg(ctx, pinned_message):
             if msgContainsClippingFix(msg):
                 reacts += ' 📢'
 
+    return reacts, False
+
 async def vet_pins(ctx):
     return await get_pinned_msgs_and_react(ctx, vet_msg)
 
