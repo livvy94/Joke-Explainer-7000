@@ -309,7 +309,7 @@ async def cat(ctx):
     print(f"cat ({ctx.message.author.name})")
     await ctx.channel.send("meow!")
 
-from simpleQoC.simpleQoC import performQoC, msgContainsBitrateFix, msgContainsClippingFix
+from simpleQoC.qoc import performQoC, msgContainsBitrateFix, msgContainsClippingFix
 import re
 import functools
 import typing

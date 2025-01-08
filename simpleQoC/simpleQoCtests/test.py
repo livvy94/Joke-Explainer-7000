@@ -4,10 +4,10 @@ from pathlib import Path
 from inspect import getsourcefile
 from mutagen import File
 
-from simpleQoC import parseUrl, downloadAudioFromUrl, checkBitrateFromFile, checkClippingFromFile, \
-                    checkBitrateFromUrl, checkClippingFromUrl, QoCException
+from simpleQoC.qoc import parseUrl, downloadAudioFromUrl, checkBitrateFromFile, checkClippingFromFile, \
+                    checkBitrateFromUrl, checkClippingFromUrl, QoCException, DOWNLOAD_DIR
 
-TEST_DIR = Path(os.path.abspath(getsourcefile(lambda:0))).parent / 'tests'
+TEST_DIR = Path(os.path.abspath(getsourcefile(lambda:0))).parent
 
 TEST_URLS = {
     'almostClipping.mp3': "https://drive.google.com/file/d/1wI6ZGaTmWpYD07kG8lK8jZ-XIBL-Xm3e/view?usp=drive_link",
@@ -44,12 +44,11 @@ class TestDownload(unittest.TestCase):
     """
     Test suites for the downloadAudioFromUrl function
     """
-    DOWNLOAD_DIR = Path(os.path.abspath(getsourcefile(lambda:0))).parent / 'audioDownloads'
 
     def __init__(self, *args, **kwargs):
         super(TestDownload, self).__init__(*args, **kwargs)
-        if not os.path.exists(self.DOWNLOAD_DIR):
-            os.mkdir(self.DOWNLOAD_DIR)
+        if not os.path.exists(DOWNLOAD_DIR):
+            os.mkdir(DOWNLOAD_DIR)
 
     def parseAndDownload(self, url):
         return downloadAudioFromUrl(parseUrl(url))
@@ -57,59 +56,58 @@ class TestDownload(unittest.TestCase):
     # Successful downloads
     def testSuccessSiivaGunner(self):
         filepath = self.parseAndDownload("https://siiva-gunner.com/?id=vnrufKKnxu")
-        self.assertEqual(filepath, self.DOWNLOAD_DIR / 'goodQuality.mp3')
+        self.assertEqual(filepath, DOWNLOAD_DIR / 'goodQuality.mp3')
         if filepath:
             os.remove(filepath)
 
     def testSuccessSiivaGunnerV2(self):
         filepath = self.parseAndDownload("https://11.22.33.44/?id=vnrufKKnxu")
-        self.assertEqual(filepath, self.DOWNLOAD_DIR / 'goodQuality.mp3')
+        self.assertEqual(filepath, DOWNLOAD_DIR / 'goodQuality.mp3')
         if filepath:
             os.remove(filepath)
 
     def testSuccessSiivaGunnerV3(self):
         filepath = self.parseAndDownload("https://siiva-gunner.com/?id=aWHZuQtx3P")
-        self.assertEqual(filepath, self.DOWNLOAD_DIR / 'video0.mp4')
+        self.assertEqual(filepath, DOWNLOAD_DIR / 'video0.mp4')
         if filepath:
             os.remove(filepath)
 
     def testSuccessDrive(self):
         filepath = self.parseAndDownload("https://drive.google.com/file/d/1ofQMUh1xtItM3a1VXATRovYL9nYVYets/view?usp=sharing")
-        self.assertEqual(filepath, self.DOWNLOAD_DIR / 'goodQuality.mp3')
+        self.assertEqual(filepath, DOWNLOAD_DIR / 'goodQuality.mp3')
         if filepath:
             os.remove(filepath)
 
     def testSuccessDriveV2(self):
         filepath = self.parseAndDownload("https://drive.google.com/file/d/1ofQMUh1xtItM3a1VXATRovYL9nYVYets")
-        self.assertEqual(filepath, self.DOWNLOAD_DIR / 'goodQuality.mp3')
+        self.assertEqual(filepath, DOWNLOAD_DIR / 'goodQuality.mp3')
         if filepath:
             os.remove(filepath)
 
     def testSuccessDriveV3(self):
         filepath = self.parseAndDownload("https://drive.google.com/open?id=1ofQMUh1xtItM3a1VXATRovYL9nYVYets")
-        self.assertEqual(filepath, self.DOWNLOAD_DIR / 'goodQuality.mp3')
+        self.assertEqual(filepath, DOWNLOAD_DIR / 'goodQuality.mp3')
         if filepath:
             os.remove(filepath)
 
     def testSuccessDriveV4(self):
         filepath = self.parseAndDownload("https://drive.google.com/uc?id=1ofQMUh1xtItM3a1VXATRovYL9nYVYets&export=download")
-        self.assertEqual(filepath, self.DOWNLOAD_DIR / 'goodQuality.mp3')
+        self.assertEqual(filepath, DOWNLOAD_DIR / 'goodQuality.mp3')
         if filepath:
             os.remove(filepath)
 
     def testSuccessDropbox(self):
         filepath = self.parseAndDownload("https://www.dropbox.com/scl/fi/stkgm8qtw6m9oq5dbeg76/goodQuality.mp3?rlkey=wxhi0wu55a4d4tsppe6buu5by&st=vi8io7zw&dl=0")
-        self.assertEqual(filepath, self.DOWNLOAD_DIR / 'goodQuality.mp3')
+        self.assertEqual(filepath, DOWNLOAD_DIR / 'goodQuality.mp3')
         if filepath:
             os.remove(filepath)
 
     def testSuccessNeocities(self):
         filepath = self.parseAndDownload("https://livvy94.neocities.org/rips/IoG_Fanfare.mp3")
-        self.assertEqual(filepath, self.DOWNLOAD_DIR / 'IoG_Fanfare.mp3')
+        self.assertEqual(filepath, DOWNLOAD_DIR / 'IoG_Fanfare.mp3')
         if filepath:
             os.remove(filepath)
     
-    # TODO: b.catgirlsare.sexy does not work for some reason
     # TODO: Try a large Google Drive link (should work)
 
     # Failed downloads
@@ -340,7 +338,7 @@ class TestClippingFromUrl(unittest.TestCase, BaseTestClipping):
 #            Main Function              #
 #=======================================#
 
-from simpleQoC import performQoC
+from simpleQoC.qoc import performQoC
 
 class TestOverall(unittest.TestCase):
     """
