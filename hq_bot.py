@@ -445,7 +445,7 @@ async def process_pins_v2(ctx, get_reacts):
 async def vet_msg(ctx, pinned_message):
     url = extract_first_link(pinned_message.content)
     if url is not None:
-        code, msg = run_blocking(performQoC, url)
+        code, msg = await run_blocking(performQoC, url)
         # TODO: use server reaction?
         reacts = {
             -1: '🔗',
