@@ -311,6 +311,15 @@ async def cat(ctx):
 
 from simpleQoC.simpleQoC import performQoC, msgContainsBitrateFix, msgContainsClippingFix
 import re
+import functools
+import typing
+
+# https://stackoverflow.com/a/65882269
+async def run_blocking(blocking_func: typing.Callable, *args, **kwargs) -> typing.Any:
+    """Runs a blocking function in a non-blocking way"""
+    func = functools.partial(blocking_func, *args, **kwargs) # `run_in_executor` doesn't support kwargs, `functools.partial` does
+    return await bot.loop.run_in_executor(None, func)
+
 
 @bot.command(name='vet', brief='scan pinned messages for bitrate and clipping issues')
 async def vet(ctx):
@@ -436,7 +445,7 @@ async def process_pins_v2(ctx, get_reacts):
 async def vet_msg(ctx, pinned_message):
     url = extract_first_link(pinned_message.content)
     if url is not None:
-        code, msg = performQoC(url)
+        code, msg = run_blocking(performQoC, url)
         # TODO: use server reaction?
         reacts = {
             -1: '🔗',
