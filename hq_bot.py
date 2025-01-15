@@ -153,7 +153,8 @@ async def help(ctx):
             + "\n`!checks`\n`!rejects`\n`!wrenches`\n`!stops`" \
             + "\n_**Misc. tools**_\n`!count` " + count.brief \
             + "\n`!limitcheck` " + limitcheck.brief \
-            # TODO
+            + "\n_**Auto QoC tools**_\n`!vet` " + vet.brief \
+            + "\n`!vet_msg` " + vet_msg.brief + "\n`!vet_url` " + vet_url.brief
         await send_embed(ctx, result)
 
 @bot.command(name='op')
