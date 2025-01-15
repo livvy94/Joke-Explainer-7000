@@ -604,7 +604,11 @@ def performQoC(url: str) -> Tuple[int, str]:
     """
     Version 1: Download file from URL then process metadata and waveform
     """
-    downloadableUrl = parseUrl(url)
+    try:
+        downloadableUrl = parseUrl(url)
+    except QoCException as e:
+        return (-1, e.message)
+    
     if not os.path.exists(DOWNLOAD_DIR):
         os.mkdir(DOWNLOAD_DIR)
     
