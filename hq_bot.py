@@ -129,28 +129,28 @@ async def wrenches(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) with :fix: reactions.
     """
-    await react_command(ctx, 'fix', ['fix', 'wrench'], "No wrenches found.")
+    await react_command(ctx, 'fix', ['fix', 'wrench', '🔧'], "No wrenches found.")
 
 @bot.command(name='stops')
 async def stops(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) with :stop: reactions.
     """
-    await react_command(ctx, 'stop', ['stop', 'octagonal'], "No octogons found.")
+    await react_command(ctx, 'stop', ['stop', 'octagonal', '🛑'], "No octogons found.")
 
 @bot.command(name='checks')
 async def checks(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) with :check: reactions.
     """
-    await react_command(ctx, 'check', ['check'], "No checks found.")
+    await react_command(ctx, 'check', ['check', '✅'], "No checks found.")
 
 @bot.command(name='rejects')
 async def rejects(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) with :reject: reactions.
     """
-    await react_command(ctx, 'reject', ['reject'], "No rejected rips found.")
+    await react_command(ctx, 'reject', ['reject', '❌'], "No rejected rips found.")
 
 
 # ============ Pin count commands ============== #
