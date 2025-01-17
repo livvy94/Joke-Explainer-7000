@@ -128,31 +128,29 @@ async def fresh(ctx: Context):
 async def wrenches(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) with :fix: reactions.
-    TODO: add :wrench:
     """
-    await react_command(ctx, 'fix', "No wrenches found.")
+    await react_command(ctx, 'fix', ['fix', 'wrench'], "No wrenches found.")
 
 @bot.command(name='stops')
 async def stops(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) with :stop: reactions.
-    TODO: add :stop_sign:?
     """
-    await react_command(ctx, 'stop', "No octogons found.")
+    await react_command(ctx, 'stop', ['stop', 'octagonal'], "No octogons found.")
 
 @bot.command(name='checks')
 async def checks(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) with :check: reactions.
     """
-    await react_command(ctx, 'check', "No checks found.")
+    await react_command(ctx, 'check', ['check'], "No checks found.")
 
 @bot.command(name='rejects')
 async def rejects(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) with :reject: reactions.
     """
-    await react_command(ctx, 'reject', "No rejected rips found.")
+    await react_command(ctx, 'reject', ['reject'], "No rejected rips found.")
 
 
 # ============ Pin count commands ============== #
@@ -282,7 +280,7 @@ async def test(ctx: Context):
     print(f"op ({ctx.message.author.name})")
     await ctx.channel.send("op")
 
-@bot.command(name='cat', brief='cat')
+@bot.command(name='cat', aliases = ['meow'], brief='cat')
 async def cat(ctx: Context):
     print(f"cat ({ctx.message.author.name})")
     await ctx.channel.send("meow!")
@@ -313,11 +311,9 @@ def make_markdown(rip_info: dict, display_reacts: bool) -> str:
     return result
 
 
-async def react_command(ctx: Context, react: str, not_found_message: str): # I've been meaning to simplify this for AGES (7/7/24)
+async def react_command(ctx: Context, react: str, valid_react_names: list[str], not_found_message: str): # I've been meaning to simplify this for AGES (7/7/24)
     """
     Unified command to only return messages with specific reactions.
-    TODO: support list of reacts
-    TODO: verify merging 2 functions worked
     """
     if channel_is_not_qoc(ctx):
         return
@@ -327,7 +323,7 @@ async def react_command(ctx: Context, react: str, not_found_message: str): # I'v
         all_pins = await process_pins(ctx, True)
         result = ""
         for rip_id, rip_info in all_pins.items():
-            if react in rip_info["Reacts"]: # TODO
+            if any([r in rip_info["Reacts"] for r in valid_react_names]):
                 result += make_markdown(rip_info, True)
 
         if result == "":
