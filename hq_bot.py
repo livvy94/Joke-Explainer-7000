@@ -220,10 +220,13 @@ async def vet(ctx: Context):
                     verdict += ' 🔢'
                 if msgContainsClippingFix(msg):
                     verdict += ' 📢'
-                await ctx.channel.send("**Rip**: {}\n**Verdict**: {}\n**Comments**: {}".format(rip_title, verdict, msg))
+                link = f"<https://discordapp.com/channels/{str(server_id)}/{str(ctx.channel.id)}/{str(pinned_message.id)}>"
+                await ctx.channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}".format(rip_title, link, verdict, msg))
 
         if len(pin_list) == 0:
             ctx.channel.send("No rips found.")
+        else:
+            ctx.channel.send("Finished QoC-ing. Please note that these are only automated detections - you should verify the issues in Audacity and react manually.")
 
 
 @bot.command(name='vet_all', brief='vet all pinned messages and show summary')
@@ -271,7 +274,7 @@ async def vet_msg(ctx: Context, msg_link: str):
             1: '🔧',
         }[code]
 
-        await ctx.channel.send("**Rip**: {}\n**Verdict**: {}\n**Comments**: {}".format(rip_title, verdict, msg))
+        await ctx.channel.send("**Rip**: {}\n**Verdict**: {}\n**Comments**:\n{}".format(rip_title, verdict, msg))
 
 
 @bot.command(name='vet_url', brief='vet a single url')
