@@ -118,10 +118,10 @@ async def fresh(ctx: Context):
                 link = f"<https://discordapp.com/channels/{str(server_id)}/{str(ctx.channel.id)}/{str(pinned_message.id)}>"
                 result = result + f'**[{title}]({link})**\n'
 
-    if result != "":
-        await send_embed(ctx, result)
-    else:
-        ctx.channel.send("No fresh rips.")
+        if result != "":
+            await send_embed(ctx, result)
+        else:
+            ctx.channel.send("No fresh rips.")
 
 
 @bot.command(name='wrenches', aliases = ['fix'])
@@ -195,11 +195,44 @@ async def limitcheck(ctx: Context):
 @bot.command(name='vet', brief='scan pinned messages for bitrate and clipping issues')
 async def vet(ctx: Context):
     """
-    Retrieve all pinned messages (except the first one) and perform basic QoC, giving emoji labels.
-    TODO: only show problematic messages?
+    Find rips in pinned messages with bitrate/clipping issues and show their details
     """
     if channel_is_not_qoc(ctx): return
     heard_command("vet", ctx.message.author.name)
+
+    async with ctx.channel.typing():
+        pin_list = await ctx.channel.pins()
+        pin_list.pop(-1) # get rid of a certain post about reading the rules
+
+        for pinned_message in pin_list:
+            message = await ctx.channel.fetch_message(pinned_message.id)
+            url = extract_first_link(message.content)
+            code, msg = await run_blocking(performQoC, url)
+            rip_title = get_rip_title(message)
+            verdict = {
+                -1: '🔗',
+                0: '✅',
+                1: '🔧',
+            }[code]
+
+            if code != 0:
+                if msgContainsBitrateFix(msg):
+                    verdict += ' 🔢'
+                if msgContainsClippingFix(msg):
+                    verdict += ' 📢'
+                await ctx.channel.send("**Rip**: {}\n**Verdict**: {}\n**Comments**: {}".format(rip_title, verdict, msg))
+
+        if len(pin_list) == 0:
+            ctx.channel.send("No rips found.")
+
+
+@bot.command(name='vet_all', brief='vet all pinned messages and show summary')
+async def vet_all(ctx: Context):
+    """
+    Retrieve all pinned messages (except the first one) and perform basic QoC, giving emoji labels.
+    """
+    if channel_is_not_qoc(ctx): return
+    heard_command("vet_all", ctx.message.author.name)
 
     async with ctx.channel.typing():
         all_pins = await vet_pins(ctx)
@@ -271,7 +304,7 @@ async def help(ctx: Context):
             + "\n`!checks`\n`!rejects`\n`!wrenches`\n`!stops`" \
             + "\n_**Misc. tools**_\n`!count` " + count.brief \
             + "\n`!limitcheck` " + limitcheck.brief \
-            + "\n_**Auto QoC tools**_\n`!vet` " + vet.brief \
+            + "\n_**Auto QoC tools**_\n`!vet` " + vet.brief + "\n`!vet_all` " + vet_all.brief \
             + "\n`!vet_msg` " + vet_msg.brief + "\n`!vet_url` " + vet_url.brief
         await send_embed(ctx, result)
 
