@@ -460,6 +460,12 @@ def get_rip_title(message: discord.Message) -> str:
                 break
 
     rip_title = rip_title.replace('`', '')
+
+    # new: if || is detected at the beginning of rip title, add || to the end to make it spoiler correctly
+    # TODO: maybe should check the entire message?
+    if '||' in rip_title[:2]:
+        rip_title = rip_title + '||'
+
     return rip_title
 
 
