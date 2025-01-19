@@ -464,7 +464,7 @@ def get_rip_title(message: discord.Message) -> str:
     # new: if || is detected at the beginning of rip title, add || to the end to make it spoiler correctly
     # TODO: maybe should check the entire message?
     if '||' in rip_title[:2]:
-        rip_title = rip_title + '||'
+        rip_title = "`[Rip Contains Spoiler]`"
 
     return rip_title
 
