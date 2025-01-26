@@ -121,7 +121,7 @@ async def fresh(ctx: Context):
         if result != "":
             await send_embed(ctx, result)
         else:
-            ctx.channel.send("No fresh rips.")
+            await ctx.channel.send("No fresh rips.")
 
 
 @bot.command(name='wrenches', aliases = ['fix'])
@@ -224,9 +224,9 @@ async def vet(ctx: Context):
                 await ctx.channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}".format(rip_title, link, verdict, msg))
 
         if len(pin_list) == 0:
-            ctx.channel.send("No rips found.")
+            await ctx.channel.send("No rips found.")
         else:
-            ctx.channel.send("Finished QoC-ing. Please note that these are only automated detections - you should verify the issues in Audacity and react manually.")
+            await ctx.channel.send("Finished QoC-ing. Please note that these are only automated detections - you should verify the issues in Audacity and react manually.")
 
 
 @bot.command(name='vet_all', brief='vet all pinned messages and show summary')
