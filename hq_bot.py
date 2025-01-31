@@ -1,11 +1,12 @@
 #!/usr/bin/python3
 import discord
+from discord import Message
+from discord.abc import MessageableChannel
 from discord.ext import commands
 from discord.ext.commands import Context
-from bot_secrets import token, server_id, roundup_channels, op_channelid
+from bot_secrets import token, server_id, roundup_channels, discussion_channels, op_channelid
 from datetime import datetime
 
-import discord.ext
 from simpleQoC.qoc import performQoC, msgContainsBitrateFix, msgContainsClippingFix
 import re
 import functools
@@ -55,7 +56,7 @@ async def roundup(ctx: Context):
     heard_command("roundup", ctx.message.author.name)
 
     async with ctx.channel.typing():
-        all_pins = await process_pins(ctx, True)
+        all_pins = await process_pins(ctx.channel, True)
         result = ""
         for rip_id, rip_info in all_pins.items():
             result += make_markdown(rip_info, True)
@@ -71,7 +72,7 @@ async def links(ctx: Context):
     heard_command("links", ctx.message.author.name)
 
     async with ctx.channel.typing():
-        all_pins = await process_pins(ctx, False)
+        all_pins = await process_pins(ctx.channel, False)
         result = ""
         for rip_id, rip_info in all_pins.items():
             result += make_markdown(rip_info, False)
@@ -87,7 +88,7 @@ async def mypins(ctx: Context):
     heard_command("mypins", ctx.message.author.name)
 
     async with ctx.channel.typing():
-        all_pins = await process_pins(ctx, False)
+        all_pins = await process_pins(ctx.channel, False)
         result = ""
         for rip_id, rip_info in all_pins.items():
             if rip_info["PinMiser"] == ctx.author.name:
@@ -151,6 +152,25 @@ async def rejects(ctx: Context):
     Retrieve all pinned messages (except the first one) with :reject: reactions.
     """
     await react_command(ctx, 'reject', ['reject', '❌'], "No rejected rips found.")
+
+
+@bot.command(name='qoc_roundup', brief='view rips in QoC in the discussion channel')
+async def qoc_roundup(ctx: Context):
+    """
+    Same as roundup, but to be run in a different channel for viewing conveniece
+    """
+    if channel_is_not_discussion(ctx): return
+    heard_command("qoc_roundup", ctx.message.author.name)
+
+    # Hardcode the channel to fetch pins from to be the first in the roundup_channels list
+    channel = bot.get_channel(roundup_channels[0])
+
+    async with ctx.channel.typing():
+        all_pins = await process_pins(channel, True)
+        result = ""
+        for rip_id, rip_info in all_pins.items():
+            result += make_markdown(rip_info, True)
+        await send_embed(ctx, result)
 
 
 # ============ Pin count commands ============== #
@@ -238,7 +258,7 @@ async def vet_all(ctx: Context):
     heard_command("vet_all", ctx.message.author.name)
 
     async with ctx.channel.typing():
-        all_pins = await vet_pins(ctx)
+        all_pins = await vet_pins(ctx.channel)
         result = ""
         for rip_id, rip_info in all_pins.items():
             result += make_markdown(rip_info, True)
@@ -303,6 +323,7 @@ async def help(ctx: Context):
     async with ctx.channel.typing():
         result = "_**YOU ARE NOW QoCING:**_\n`!roundup` " + roundup.brief \
             + "\n`!links` " + links.brief \
+            + "\n`!qoc_roundup` " + qoc_roundup.brief \
             + "\n_**Special lists:**_\n`!mypins` " + mypins.brief \
             + "\n`!checks`\n`!rejects`\n`!wrenches`\n`!stops`" \
             + "\n_**Misc. tools**_\n`!count` " + count.brief \
@@ -356,7 +377,7 @@ async def react_command(ctx: Context, react: str, valid_react_names: list[str], 
     heard_command(react, ctx.message.author.name)
 
     async with ctx.channel.typing():
-        all_pins = await process_pins(ctx, True)
+        all_pins = await process_pins(ctx.channel, True)
         result = ""
         for rip_id, rip_info in all_pins.items():
             if any([r in rip_info["Reacts"] for r in valid_react_names]):
@@ -400,6 +421,9 @@ async def send_embed(ctx: Context, message: str):
 def channel_is_not_qoc(ctx: Context):
     return ctx.channel.id not in roundup_channels
 
+def channel_is_not_discussion(ctx: Context):
+    return ctx.channel.id not in discussion_channels
+
 def channel_is_not_op(ctx: Context):
     return ctx.channel.id != op_channelid
 
@@ -433,7 +457,7 @@ def extract_first_link(text: str) -> str | None:
     return None  # Return None if no valid links are found
 
 
-def get_rip_title(message: discord.Message) -> str:
+def get_rip_title(message: Message) -> str:
     """
     Return the rip title line of a Discord message.
     Assumes the message follows the format where the rip title is on the 2nd line.
@@ -469,14 +493,14 @@ def get_rip_title(message: discord.Message) -> str:
     return rip_title
 
 
-async def get_pinned_msgs_and_react(ctx: Context, react_func: typing.Callable | None = None) -> dict:
+async def get_pinned_msgs_and_react(channel: MessageableChannel, react_func: typing.Callable | None = None) -> dict:
     """
-    Unified function to retrieve all pinned messages (except the first one) and give corresponding emojis.
-    - react_func: A function in the form of fn(Context, discord.Message) that returns some emojis for a message. If None, show no emojis.
+    Unified function to retrieve all pinned messages (except the first one) from a channel and give corresponding emojis.
+    - react_func: A function in the form of fn(MessageableChannel, Message) that returns some emojis for a message. If None, show no emojis.
     
     Returns a dictionary of pinned messages.
     """
-    pin_list = await ctx.channel.pins()
+    pin_list = await channel.pins()
 
     pin_list.pop(-1) # get rid of a certain post about reading the rules
 
@@ -500,7 +524,7 @@ async def get_pinned_msgs_and_react(ctx: Context, react_func: typing.Callable | 
 
         # Get reactions
         if react_func is not None:
-            reacts, approved = await react_func(ctx, pinned_message)
+            reacts, approved = await react_func(channel, pinned_message)
         else:
             reacts, approved = "", False
 
@@ -514,21 +538,21 @@ async def get_pinned_msgs_and_react(ctx: Context, react_func: typing.Callable | 
             'Reacts': reacts,
             'PinMiser': pinned_message.author.name,  # im mister rip christmas, im mister qoc
             'Approved': approved,
-            'Link': f"<https://discordapp.com/channels/{str(server_id)}/{str(ctx.channel.id)}/{str(pinned_message.id)}>"
+            'Link': f"<https://discordapp.com/channels/{str(server_id)}/{str(channel.id)}/{str(pinned_message.id)}>"
         }
         dict_index += 1
 
     return pins_in_message
 
 
-async def get_reactions(ctx: Context, message: discord.Message):
+async def get_reactions(channel: MessageableChannel, message: Message):
     """
     Return the reactions of a message.
     """
     reacts = ""
     approved = False
     
-    mesg = await ctx.channel.fetch_message(message.id)
+    mesg = await channel.fetch_message(message.id)
     for react in mesg.reactions:
         if ":check:" in str(react.emoji): # keep track of how many checks there are so we can add an indicator if there's more than three
             approved = react.count >= 3 # react.count is how many times this react was made on this message
@@ -537,15 +561,15 @@ async def get_reactions(ctx: Context, message: discord.Message):
     
     return reacts, approved
 
-async def process_pins(ctx: Context, get_reacts: bool):
+async def process_pins(channel: MessageableChannel, get_reacts: bool):
     """
-    Retrieve all pinned messages (except the first one).
+    Retrieve all pinned messages (except the first one) from a channel.
     - get_reacts: Whether to show messages' reactions as emojis
     """
-    return await get_pinned_msgs_and_react(ctx, get_reactions if get_reacts else None)
+    return await get_pinned_msgs_and_react(channel, get_reactions if get_reacts else None)
 
 
-async def vet_message(ctx: Context, message: discord.Message):
+async def vet_message(channel: MessageableChannel, message: Message):
     """
     Return the QoC verdict of a message as emoji reactions.
     """
@@ -571,11 +595,11 @@ async def vet_message(ctx: Context, message: discord.Message):
 
     return reacts, False
 
-async def vet_pins(ctx):
+async def vet_pins(channel: MessageableChannel):
     """
-    Retrieve all pinned messages (except the first one) and perform basic QoC, showing verdicts as emojis.
+    Retrieve all pinned messages (except the first one) from a channel and perform basic QoC, showing verdicts as emojis.
     """
-    return await get_pinned_msgs_and_react(ctx, vet_message)
+    return await get_pinned_msgs_and_react(channel, vet_message)
 
 
 # Now that everything's defined, run the dang thing
