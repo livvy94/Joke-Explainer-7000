@@ -12,10 +12,10 @@ import re
 import functools
 import typing
 
-message_seconds = 2700  # 45 minutes
-discord_character_limit = 4000 # Lower this to 2000 if we lose boosts
-embedColor = 0x481761
-approved_indicator = "🔥"
+MESSAGE_SECONDS = 2700  # 45 minutes
+DISCORD_CHARACTER_LIMIT = 4000 # Lower this to 2000 if we lose boosts
+EMBED_COLOR = 0x481761
+APPROVED_INDICATOR = "🔥"
 
 bot = commands.Bot(
     command_prefix='!',
@@ -170,7 +170,10 @@ async def qoc_roundup(ctx: Context):
         result = ""
         for rip_id, rip_info in all_pins.items():
             result += make_markdown(rip_info, True)
-        await send_embed(ctx, result)
+        
+        # Assuming this command is meant to be run in a not-very-active channel
+        # Set to expire after 12 hours
+        await send_embed(ctx, result, 60*60*12)
 
 
 # ============ Pin count commands ============== #
@@ -357,7 +360,7 @@ def make_markdown(rip_info: dict, display_reacts: bool) -> str:
     result = ""
 
     if rip_info["Approved"] == True:
-        base_message = f'{approved_indicator} **[{rip_info["Title"]}]({rip_info["Link"]})** {approved_indicator}\n{rip_info["Author"]}'
+        base_message = f'{APPROVED_INDICATOR} **[{rip_info["Title"]}]({rip_info["Link"]})** {APPROVED_INDICATOR}\n{rip_info["Author"]}'
 
     if display_reacts:
         result = base_message + f' | {rip_info["Reacts"]}\n'
@@ -399,7 +402,7 @@ def split_long_message(a_message: str) -> list[str]:  # avoid Discord's characte
     for line in all_lines:
         line = line.replace('@', '')  # no more pings lol
         next_length = len(wall_of_text) + len(line)
-        if next_length > discord_character_limit:
+        if next_length > DISCORD_CHARACTER_LIMIT:
             result.append(wall_of_text[:-1])  # append and get rid of the last newline
             wall_of_text = line + '\n'
         else:
@@ -409,14 +412,17 @@ def split_long_message(a_message: str) -> list[str]:  # avoid Discord's characte
     return result
 
 
-async def send_embed(ctx: Context, message: str):
+async def send_embed(ctx: Context, message: str, delete_after: float = MESSAGE_SECONDS):
     """
     Send a long message as embed.
+
+    - message: Text to send as embed
+    - delete_after: Number of seconds to automatically remove the message. Defaults to constant at the beginning of file. If set to None, message will not delete.
     """
     long_message = split_long_message(message)
     for line in long_message:
-        fancy_message = discord.Embed(description=line, color=embedColor)
-        await ctx.channel.send(embed=fancy_message, delete_after=message_seconds)
+        fancy_message = discord.Embed(description=line, color=EMBED_COLOR)
+        await ctx.channel.send(embed=fancy_message, delete_after=delete_after)
 
 def channel_is_not_qoc(ctx: Context):
     return ctx.channel.id not in roundup_channels
