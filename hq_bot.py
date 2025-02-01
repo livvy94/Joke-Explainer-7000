@@ -486,6 +486,26 @@ def get_rip_title(message: Message) -> str:
     return rip_title
 
 
+def get_rip_author(message: Message) -> str:
+    """
+    Return the rip author line of a Discord message.
+    If the line contains "by me", append the message sender's name to the author line.
+    Assumes the message follows the format where the rip author is before the first instance of ```
+    """
+    author = message.content.split("```")[0]
+    
+    if len(re.findall(r'\bby\b', author.lower())) == 0:
+        # If "by" is not found, notify that the "author line" might be unusual
+        author = author + " [Unusual Pin Format]"
+
+    elif len(re.findall(r'\bby me\b', author.lower())) > 0: 
+        # Overwrite it and do something else if the rip's author and the pinner are the same
+        cleaned_author = str(message.author).split('#')[0]
+        author += (f' (**{cleaned_author}**)')
+
+    return author
+
+
 async def get_pinned_msgs_and_react(channel: Messageable, react_func: typing.Callable | None = None) -> dict:
     """
     Unified function to retrieve all pinned messages (except the first one) from a channel and give corresponding emojis.
@@ -501,19 +521,11 @@ async def get_pinned_msgs_and_react(channel: Messageable, react_func: typing.Cal
     pins_in_message = {}  # make a dict for everything
 
     for pinned_message in pin_list:
-        list_of_lines = pinned_message.content.split('\n')
-
         # Get the rip title
         rip_title = get_rip_title(pinned_message)
 
         # Find the rip's author
-        author = list_of_lines[0]
-        if len(list_of_lines) < 1 or len(re.findall(r'\bby\b', author.lower())) == 0:
-            author = author + " [Unusual Pin Format]"
-
-        elif len(re.findall(r'\bby me\b', author.lower())) > 0: # Overwrite it and do something else if the rip's author and the pinner are the same
-            cleaned_author = str(pinned_message.author).split('#')[0]
-            author += (f' (**{cleaned_author}**)')
+        author = get_rip_author(pinned_message)        
 
         # Get reactions
         if react_func is not None:
