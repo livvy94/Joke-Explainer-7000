@@ -466,34 +466,21 @@ def extract_first_link(text: str) -> str | None:
 def get_rip_title(message: Message) -> str:
     """
     Return the rip title line of a Discord message.
-    Assumes the message follows the format where the rip title is on the 2nd line.
+    Assumes the message follows the format where the rip title is after the first instance of ```
     """
-    list_of_lines = message.content.split('\n')
+    # Update: now use regex to find the first instance of "```[\n][text][\n]"
+    pattern = r'\`\`\`\n*.*\n'
+    rip_title = re.search(pattern, message.content)
+    if rip_title is None:
+        return "`[Unusual Pin Format]"
 
-    # To get around non-standard messages (like fusion collab drafts), do something else if the first line doesn't include "by [ripper]"
-    if len(list_of_lines) <= 1:
-        # If pin has a single line then it is very much an unusual pin format
-        rip_title = "`[Unusual Pin Format]`"
-    elif len(re.findall(r'\bby\b', list_of_lines[0].lower())) == 0:
-        # Just put the whole line as the name.
-        rip_title = list_of_lines[1]
-    else:
-        # Go through each line in the message and search for the rip title
-        for line in list_of_lines:
-            if "```" in line:
-                stripped_title = line.strip("```").strip("**")
-                if stripped_title != "":  # if line has title on it, make stripped version title
-                    rip_title = stripped_title
-                elif stripped_title == "":
-                    index_to_use = list_of_lines.index(line)
-                    rip_title = list_of_lines[(index_to_use + 1)]  # use the next line instead
-                break
-
+    rip_title = rip_title.group(0)
     rip_title = rip_title.replace('`', '')
+    rip_title = rip_title.replace('\n', '')
 
-    # new: if || is detected at the beginning of rip title, add || to the end to make it spoiler correctly
-    # TODO: maybe should check the entire message?
-    if '||' in rip_title[:2]:
+    # if || is detected in the message before the first ```, make the rip title into spoiler
+    splits = message.content.split('```')
+    if '||' in splits[0]:
         rip_title = "`[Rip Contains Spoiler]`"
 
     return rip_title
