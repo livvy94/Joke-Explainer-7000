@@ -493,6 +493,7 @@ def get_rip_author(message: Message) -> str:
     Assumes the message follows the format where the rip author is before the first instance of ```
     """
     author = message.content.split("```")[0]
+    author = author.replace('\n', '')
     
     if len(re.findall(r'\bby\b', author.lower())) == 0:
         # If "by" is not found, notify that the "author line" might be unusual
