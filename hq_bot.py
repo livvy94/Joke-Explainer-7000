@@ -4,7 +4,7 @@ from discord import Message, Thread
 from discord.abc import Messageable
 from discord.ext import commands
 from discord.ext.commands import Context
-from bot_secrets import token, server_id, roundup_channels, discussion_channels, op_channelid
+from bot_secrets import token, server_id, roundup_channels, discussion_channels, submission_channel, op_channelid
 from datetime import datetime
 
 from simpleQoC.qoc import performQoC, msgContainsBitrateFix, msgContainsClippingFix
@@ -157,7 +157,7 @@ async def rejects(ctx: Context):
 @bot.command(name='qoc_roundup', brief='view rips in QoC in the discussion channel')
 async def qoc_roundup(ctx: Context):
     """
-    Same as roundup, but to be run in a different channel for viewing conveniece
+    Same as roundup, but to be run in a different channel for viewing convenience
     """
     if channel_is_not_discussion(ctx): return
     heard_command("qoc_roundup", ctx.message.author.name)
@@ -331,6 +331,7 @@ async def help(ctx: Context):
             + "\n`!checks`\n`!rejects`\n`!wrenches`\n`!stops`" \
             + "\n_**Misc. tools**_\n`!count` " + count.brief \
             + "\n`!limitcheck` " + limitcheck.brief \
+            + "\n`!count_subs` " + count_subs.brief \
             + "\n_**Auto QoC tools**_\n`!vet` " + vet.brief + "\n`!vet_all` " + vet_all.brief \
             + "\n`!vet_msg` " + vet_msg.brief + "\n`!vet_url` " + vet_url.brief
         await send_embed(ctx, result)
@@ -346,24 +347,19 @@ async def cat(ctx: Context):
     await ctx.channel.send("meow!")
 
 
-@bot.command(name='count_subs', brief='count number of submissions')
-async def count_subs(ctx: Context, channel_link: str):
+@bot.command(name='count_subs', brief='count number of remaining submissions')
+async def count_subs(ctx: Context):
     """
-    Experimental function to count number of messages in a channel (e.g. submissions).
+    Count number of messages in a channel (e.g. submissions).
     Retrieve the entire history of a channel and count the number of messages not in threads.
-    Supposedly will take a while to run.
-    For now will need the channel link as an argument.
+    Turns out to be pretty fast for channels with not a lot of messages or conversations.
     """
     if channel_is_not_qoc(ctx): return
     heard_command("count_subs", ctx.message.author.name)
 
     async with ctx.channel.typing():
-        # https://stackoverflow.com/a/63212069
-        ids = channel_link.split('/')
-        server_id = int(ids[4])
-        channel_id = int(ids[5])
-        server = bot.get_guild(server_id)
-        channel = server.get_channel(channel_id)
+        server = ctx.guild
+        channel = server.get_channel(submission_channel)
 
         count = 0
         async for message in channel.history(limit = None):
