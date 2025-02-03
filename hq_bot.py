@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 import discord
-from discord import Message
+from discord import Message, Thread
 from discord.abc import Messageable
 from discord.ext import commands
 from discord.ext.commands import Context
@@ -344,6 +344,38 @@ async def test(ctx: Context):
 async def cat(ctx: Context):
     print(f"cat ({ctx.message.author.name})")
     await ctx.channel.send("meow!")
+
+
+@bot.command(name='count_subs', brief='count number of submissions')
+async def count_subs(ctx: Context, channel_link: str):
+    """
+    Experimental function to count number of messages in a channel (e.g. submissions).
+    Retrieve the entire history of a channel and count the number of messages not in threads.
+    Supposedly will take a while to run.
+    For now will need the channel link as an argument.
+    """
+    if channel_is_not_qoc(ctx): return
+    heard_command("count_subs", ctx.message.author.name)
+
+    async with ctx.channel.typing():
+        # https://stackoverflow.com/a/63212069
+        ids = channel_link.split('/')
+        server_id = int(ids[4])
+        channel_id = int(ids[5])
+        server = bot.get_guild(server_id)
+        channel = server.get_channel(channel_id)
+
+        count = 0
+        async for message in channel.history(limit = None):
+            if not (message.channel is Thread):
+                count = count + 1
+
+        if (count < 1):
+            result = "```ansi\n\u001b[0;31m* Determination.\u001b[0;0m```"
+        else:
+            result = f"```ansi\n\u001b[0;31m* {count} left.\u001b[0;0m```"
+
+        await ctx.channel.send(result)
 
 # While it might occur to folks in the future that a good command to write would be a rip feedback-sending command, something like that
 # would be way too impersonal imo.
