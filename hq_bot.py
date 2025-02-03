@@ -522,6 +522,7 @@ def get_rip_author(message: Message) -> str:
     """
     author = message.content.split("```")[0]
     author = author.replace('\n', '')
+    author = author.replace('||', '') # in case of spoilered rips
     
     if len(re.findall(r'\bby\b', author.lower())) == 0:
         # If "by" is not found, notify that the "author line" might be unusual
