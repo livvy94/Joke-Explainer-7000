@@ -4,7 +4,7 @@ from discord import Message, Thread
 from discord.abc import Messageable
 from discord.ext import commands
 from discord.ext.commands import Context
-from bot_secrets import token, server_id, roundup_channels, discussion_channels, submission_channel, op_channelid
+from bot_secrets import token, roundup_channels, discussion_channels, submission_channel, op_channelid
 from datetime import datetime
 
 from simpleQoC.qoc import performQoC, msgContainsBitrateFix, msgContainsClippingFix
@@ -116,7 +116,7 @@ async def fresh(ctx: Context):
             mesg = await ctx.channel.fetch_message(pinned_message.id)
             if len(mesg.reactions) < 1:
                 title = pinned_message.content.split('\n')[1].replace('`', '')
-                link = f"<https://discordapp.com/channels/{str(server_id)}/{str(ctx.channel.id)}/{str(pinned_message.id)}>"
+                link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(ctx.channel.id)}/{str(pinned_message.id)}>"
                 result = result + f'**[{title}]({link})**\n'
 
         if result != "":
@@ -243,7 +243,7 @@ async def vet(ctx: Context):
                     verdict += ' 🔢'
                 if msgContainsClippingFix(msg):
                     verdict += ' 📢'
-                link = f"<https://discordapp.com/channels/{str(server_id)}/{str(ctx.channel.id)}/{str(pinned_message.id)}>"
+                link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(ctx.channel.id)}/{str(pinned_message.id)}>"
                 await ctx.channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}".format(rip_title, link, verdict, msg))
 
         if len(pin_list) == 0:
@@ -572,7 +572,7 @@ async def get_pinned_msgs_and_react(channel: Messageable, react_func: typing.Cal
             'Reacts': reacts,
             'PinMiser': pinned_message.author.name,  # im mister rip christmas, im mister qoc
             'Approved': approved,
-            'Link': f"<https://discordapp.com/channels/{str(server_id)}/{str(channel.id)}/{str(pinned_message.id)}>"
+            'Link': f"<https://discordapp.com/channels/{str(channel.guild.id)}/{str(channel.id)}/{str(pinned_message.id)}>"
         }
         dict_index += 1
 
