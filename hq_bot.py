@@ -5,7 +5,7 @@ from discord.abc import Messageable, GuildChannel
 from discord.ext import commands
 from discord.ext.commands import Context
 from bot_secrets import token, roundup_channels, discussion_channels, submission_channel, op_channelid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from simpleQoC.qoc import performQoC, msgContainsBitrateFix, msgContainsClippingFix
 import re
@@ -16,6 +16,8 @@ MESSAGE_SECONDS = 2700  # 45 minutes
 DISCORD_CHARACTER_LIMIT = 4000 # Lower this to 2000 if we lose boosts
 EMBED_COLOR = 0x481761
 APPROVED_INDICATOR = "🔥"
+
+latest_pin_time = None # Keeps track of the last pinned message's time to distinguish between pins and unpins. To be updated on ready.
 
 bot = commands.Bot(
     command_prefix='!',
@@ -32,6 +34,8 @@ bot.remove_command('help') # get rid of the dumb default !help command
 async def on_ready():
     print(f'Logged in as {bot.user.name}')
     print('#################################')
+    global latest_pin_time
+    latest_pin_time = datetime.now(timezone.utc)
 
 # This thing here is for when I start attempting slash commands again. Until then, this should be unused.
 # Thank you to cibere on the Digiwind server for having the patience of a saint.
@@ -46,7 +50,33 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
     if channel_is_not_qoc(channel):
         return
     
-    print(last_pin)
+    global latest_pin_time
+    if last_pin <= latest_pin_time:
+        print("Seems to be a message being unpinned")
+    else:
+        print("Message pinned, do smth")
+
+        pin_list = await channel.pins()
+        latest_msg = pin_list[0]
+
+        url = extract_first_link(latest_msg.content)
+        code, msg = await run_blocking(performQoC, url)
+        rip_title = get_rip_title(latest_msg)
+        verdict = {
+            -1: '🔗',
+            0: '✅',
+            1: '🔧',
+        }[code]
+
+        if code != 0:
+            if msgContainsBitrateFix(msg):
+                verdict += ' 🔢'
+            if msgContainsClippingFix(msg):
+                verdict += ' 📢'
+            link = f"<https://discordapp.com/channels/{str(channel.guild.id)}/{str(channel.id)}/{str(latest_msg.id)}>"
+            await channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}".format(rip_title, link, verdict, msg))
+
+        latest_pin_time = last_pin
 
 #===============================================#
 #                   COMMANDS                    #
