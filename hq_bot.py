@@ -43,7 +43,7 @@ async def on_ready():
 
 @bot.event
 async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Thread], last_pin: datetime):
-    if channel_is_not_qoc(channel.id):
+    if channel_is_not_qoc(channel):
         return
     
     print(last_pin)
@@ -59,7 +59,7 @@ async def roundup(ctx: Context):
     """
     Roundup command. Retrieve all pinned messages (except the first one) and their reactions.
     """
-    if channel_is_not_qoc(ctx): return
+    if channel_is_not_qoc(ctx.channel): return
     heard_command("roundup", ctx.message.author.name)
 
     async with ctx.channel.typing():
@@ -75,7 +75,7 @@ async def links(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) without showing reactions.
     """
-    if channel_is_not_qoc(ctx): return
+    if channel_is_not_qoc(ctx.channel): return
     heard_command("links", ctx.message.author.name)
 
     async with ctx.channel.typing():
@@ -91,7 +91,7 @@ async def mypins(ctx: Context):
     """
     Retrieve all messages pinned by the command author.
     """
-    if channel_is_not_qoc(ctx): return
+    if channel_is_not_qoc(ctx.channel): return
     heard_command("mypins", ctx.message.author.name)
 
     async with ctx.channel.typing():
@@ -111,7 +111,7 @@ async def fresh(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) with 0 reactions.
     """
-    if channel_is_not_qoc(ctx): return
+    if channel_is_not_qoc(ctx.channel): return
     heard_command("fresh", ctx.message.author.name)
     result = ""
 
@@ -166,7 +166,7 @@ async def qoc_roundup(ctx: Context):
     """
     Same as roundup, but to be run in a different channel for viewing convenience
     """
-    if channel_is_not_discussion(ctx): return
+    if channel_is_not_discussion(ctx.channel): return
     heard_command("qoc_roundup", ctx.message.author.name)
 
     # Hardcode the channel to fetch pins from to be the first in the roundup_channels list
@@ -227,7 +227,7 @@ async def vet(ctx: Context):
     """
     Find rips in pinned messages with bitrate/clipping issues and show their details
     """
-    if channel_is_not_qoc(ctx): return
+    if channel_is_not_qoc(ctx.channel): return
     heard_command("vet", ctx.message.author.name)
 
     async with ctx.channel.typing():
@@ -264,7 +264,7 @@ async def vet_all(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) and perform basic QoC, giving emoji labels.
     """
-    if channel_is_not_qoc(ctx): return
+    if channel_is_not_qoc(ctx.channel): return
     heard_command("vet_all", ctx.message.author.name)
 
     async with ctx.channel.typing():
@@ -282,7 +282,7 @@ async def vet_msg(ctx: Context, msg_link: str):
     Perform basic QoC on a linked message.
     The first non-YouTube link found in the message is treated as the rip URL.
     """
-    if channel_is_not_qoc(ctx): return
+    if channel_is_not_qoc(ctx.channel): return
     heard_command("vet_msg", ctx.message.author.name)
 
     async with ctx.channel.typing():
@@ -312,7 +312,7 @@ async def vet_url(ctx: Context, url: str):
     """
     Perform basic QoC on an URL.
     """
-    if channel_is_not_qoc(ctx): return
+    if channel_is_not_qoc(ctx.channel): return
     heard_command("vet_url", ctx.message.author.name)
 
     async with ctx.channel.typing():
@@ -361,7 +361,7 @@ async def count_subs(ctx: Context):
     Retrieve the entire history of a channel and count the number of messages not in threads.
     Turns out to be pretty fast for channels with not a lot of messages or conversations.
     """
-    if channel_is_not_qoc(ctx): return
+    if channel_is_not_qoc(ctx.channel): return
     heard_command("count_subs", ctx.message.author.name)
 
     async with ctx.channel.typing():
@@ -410,7 +410,7 @@ async def react_command(ctx: Context, react: str, valid_react_names: list[str], 
     """
     Unified command to only return messages with specific reactions.
     """
-    if channel_is_not_qoc(ctx):
+    if channel_is_not_qoc(ctx.channel):
         return
     heard_command(react, ctx.message.author.name)
 
@@ -459,14 +459,14 @@ async def send_embed(ctx: Context, message: str, delete_after: float = MESSAGE_S
         fancy_message = discord.Embed(description=line, color=EMBED_COLOR)
         await ctx.channel.send(embed=fancy_message, delete_after=delete_after)
 
-def channel_is_not_qoc(ctx: Context):
-    return ctx.channel.id not in roundup_channels
+def channel_is_not_qoc(channel: Messageable):
+    return channel.id not in roundup_channels
 
-def channel_is_not_discussion(ctx: Context):
-    return ctx.channel.id not in discussion_channels
+def channel_is_not_discussion(channel: Messageable):
+    return channel.id not in discussion_channels
 
-def channel_is_not_op(ctx: Context):
-    return ctx.channel.id != op_channelid
+def channel_is_not_op(channel: Messageable):
+    return channel.id != op_channelid
 
 def heard_command(command_name: str, user: str):
     today = datetime.now() # Technically not useful, but it looks gorgeous on my CRT monitor
