@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 import discord
 from discord import Message, Thread
-from discord.abc import Messageable
+from discord.abc import Messageable, GuildChannel
 from discord.ext import commands
 from discord.ext.commands import Context
 from bot_secrets import token, roundup_channels, discussion_channels, submission_channel, op_channelid
@@ -40,6 +40,13 @@ async def on_ready():
 #async def sync(ctx):
 #  cmds = await bot.tree.sync()
 #  await ctx.send(f"Synced {len(cmds)} commands globally!")
+
+@bot.event
+async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Thread], last_pin: datetime):
+    if channel_is_not_qoc(channel.id):
+        return
+    
+    print(last_pin)
 
 #===============================================#
 #                   COMMANDS                    #
