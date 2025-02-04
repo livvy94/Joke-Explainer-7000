@@ -265,10 +265,9 @@ async def vet(ctx: Context):
         pin_list.pop(-1) # get rid of a certain post about reading the rules
 
         for pinned_message in pin_list:
-            message = await ctx.channel.fetch_message(pinned_message.id)
-            url = extract_first_link(message.content)
+            url = extract_first_link(pinned_message.content)
             code, msg = await run_blocking(performQoC, url)
-            rip_title = get_rip_title(message)
+            rip_title = get_rip_title(pinned_message)
             verdict = {
                 -1: '🔗',
                 0: '✅',
