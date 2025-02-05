@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 import discord
-from discord import Message, Thread, TextChannel, Reaction
+from discord import Message, Thread, TextChannel, Reaction, PartialEmoji
 from discord.abc import GuildChannel
 from discord.ext import commands
 from discord.ext.commands import Context
@@ -640,17 +640,48 @@ def react_is_number(react: Reaction) -> bool:
 async def get_reactions(channel: TextChannel, message: Message) -> typing.Tuple[str, bool]:
     """
     Return the reactions of a message.
+    Set 'approved' to True if the reactions indicate that the rip is approved.
+    Requirements for approval:
+    - At least 3 more checks than rejects
+    - No fixes or alerts
+    - If stop is present, number of goldchecks must be at least the numerical react (if any), or 1 (default)
+    - If checkreq is present, change 3 to the corresponding value
     """
     reacts = ""
     approved = False
+
+    num_checks = 0
+    num_rejects = 0
+    num_goldchecks = 0
+    specs_required = 1
+    checks_required = 3
+    specs_needed = False
+    fix_or_alert = False
     
     mesg = await channel.fetch_message(message.id)
     for react in mesg.reactions:
-        if ":check:" in str(react.emoji): # keep track of how many checks there are so we can add an indicator if there's more than three
-            approved = react.count >= 3 # react.count is how many times this react was made on this message
-        for x in range(react.count):  # add ALL of them. If you don't use count it just spits out one even if there's multiple checks
-            reacts += f"{react.emoji} "  # make a nice string of all of them with a space
+        if react_is_goldcheck(react): num_goldchecks += react.count
+        elif react_is_check(react): num_checks += react.count
+        elif react_is_reject(react): num_rejects += react.count
+        elif react_is_fix(react) or react_is_alert(react): fix_or_alert = True
+        elif react_is_stop(react): specs_needed = True
+        elif react_is_checkreq(react):
+            # TODO
+            pass
+        elif react_is_number(react):
+            # TODO
+            pass
+        
+        if react.emoji.name in [e.name for e in channel.guild.emojis]:
+            for e in channel.guild.emojis:
+                if e.name == react.emoji.name:
+                    reacts += f"{e} " * react.count
+                    break
+        else:
+            reacts += f"{react.emoji} " * react.count
     
+    approved = (num_checks - num_rejects > checks_required) and not fix_or_alert and (not specs_needed or num_goldchecks > specs_required)
+
     return reacts, approved
 
 async def process_pins(channel: TextChannel, get_reacts: bool):
