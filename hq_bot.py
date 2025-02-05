@@ -175,28 +175,28 @@ async def wrenches(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) with :fix: reactions.
     """
-    await react_command(ctx, 'fix', ['fix', 'wrench', DEFAULT_FIX], "No wrenches found.")
+    await react_command(ctx, 'fix', react_is_fix, "No wrenches found.")
 
 @bot.command(name='stops')
 async def stops(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) with :stop: reactions.
     """
-    await react_command(ctx, 'stop', ['stop', 'octagonal', DEFAULT_STOP], "No octogons found.")
+    await react_command(ctx, 'stop', react_is_stop, "No octogons found.")
 
 @bot.command(name='checks')
 async def checks(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) with :check: reactions.
     """
-    await react_command(ctx, 'check', ['check', DEFAULT_CHECK], "No checks found.")
+    await react_command(ctx, 'check', react_is_check, "No checks found.")
 
 @bot.command(name='rejects')
 async def rejects(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) with :reject: reactions.
     """
-    await react_command(ctx, 'reject', ['reject', DEFAULT_REJECT], "No rejected rips found.")
+    await react_command(ctx, 'reject', react_is_reject, "No rejected rips found.")
 
 
 @bot.command(name='qoc_roundup', brief='view rips in QoC in the discussion channel')
@@ -427,20 +427,21 @@ def make_markdown(rip_info: dict, display_reacts: bool) -> str:
     return result
 
 
-async def react_command(ctx: Context, react: str, valid_react_names: list[str], not_found_message: str): # I've been meaning to simplify this for AGES (7/7/24)
+async def react_command(ctx: Context, react: str, check_func: typing.Callable, not_found_message: str): # I've been meaning to simplify this for AGES (7/7/24)
     """
     Unified command to only return messages with specific reactions.
+    Uses the react_is_ABC helper functions to filter reacts.
     """
     if channel_is_not_qoc(ctx.channel):
         return
     heard_command(react, ctx.message.author.name)
 
-    async with ctx.channel.typing():
-        all_pins = await process_pins(ctx.channel, True)
+    async with ctx.channel.typing():        
+        filtered_pins = await get_pinned_msgs_and_react(ctx.channel, lambda _, m: (any([check_func(r) for r in m.reactions]), False))
+        
         result = ""
-        for rip_id, rip_info in all_pins.items():
-            if any([r in rip_info["Reacts"] for r in valid_react_names]):
-                result += make_markdown(rip_info, True)
+        for rip_id, rip_info in filtered_pins.items():
+            result += make_markdown(rip_info, True)
 
         if result == "":
             await ctx.channel.send(not_found_message)
@@ -608,7 +609,35 @@ async def get_pinned_msgs_and_react(channel: TextChannel, react_func: typing.Cal
     return pins_in_message
 
 
-async def get_reactions(channel: TextChannel, message: Message):
+# A bunch of functions to check if react is of specific types
+def react_is_goldcheck(react: Reaction) -> bool:
+    return any([r in react.emoji.name for r in ["goldcheck", DEFAULT_GOLDCHECK]])
+
+def react_is_check(react: Reaction) -> bool:
+    return not react_is_goldcheck(react) and any([r in react.emoji.name for r in ["check", DEFAULT_CHECK]])
+
+def react_is_fix(react: Reaction) -> bool:
+    return any([r in react.emoji.name for r in ["fix", "wrench", DEFAULT_FIX]])
+
+def react_is_reject(react: Reaction) -> bool:
+    return any([r in react.emoji.name for r in ["reject", DEFAULT_REJECT]])
+
+def react_is_stop(react: Reaction) -> bool:
+    return any([r in react.emoji.name for r in ["stop", "octagonal", DEFAULT_STOP]])
+
+def react_is_alert(react: Reaction) -> bool:
+    return any([r in react.emoji.name for r in ["alert", DEFAULT_ALERT]])
+
+def react_is_checkreq(react: Reaction) -> bool:
+    # TBA
+    return False
+
+def react_is_number(react: Reaction) -> bool:
+    # TBA
+    return False
+
+
+async def get_reactions(channel: TextChannel, message: Message) -> typing.Tuple[str, bool]:
     """
     Return the reactions of a message.
     """
@@ -632,7 +661,7 @@ async def process_pins(channel: TextChannel, get_reacts: bool):
     return await get_pinned_msgs_and_react(channel, get_reactions if get_reacts else None)
 
 
-async def vet_message(channel: TextChannel, message: Message):
+async def vet_message(channel: TextChannel, message: Message) -> typing.Tuple[str, bool]:
     """
     Return the QoC verdict of a message as emoji reactions.
     """
