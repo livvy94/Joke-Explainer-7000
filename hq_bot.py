@@ -436,8 +436,11 @@ async def react_command(ctx: Context, react: str, check_func: typing.Callable, n
         return
     heard_command(react, ctx.message.author.name)
 
-    async with ctx.channel.typing():        
-        filtered_pins = await get_pinned_msgs_and_react(ctx.channel, lambda _, m: (any([check_func(r) for r in m.reactions]), False))
+    async with ctx.channel.typing():
+        async def filter_reacts(channel: TextChannel, message: Message):
+            return any([check_func(r) for r in message.reactions]), False
+
+        filtered_pins = await get_pinned_msgs_and_react(ctx.channel, filter_reacts)
         
         result = ""
         for rip_id, rip_info in filtered_pins.items():
