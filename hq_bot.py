@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 import discord
-from discord import Message, Thread, TextChannel
+from discord import Message, Thread, TextChannel, Reaction
 from discord.abc import GuildChannel
 from discord.ext import commands
 from discord.ext.commands import Context
@@ -15,7 +15,21 @@ import typing
 MESSAGE_SECONDS = 2700  # 45 minutes
 DISCORD_CHARACTER_LIMIT = 4000 # Lower this to 2000 if we lose boosts
 EMBED_COLOR = 0x481761
-APPROVED_INDICATOR = "🔥"
+
+# Emoji definitions
+APPROVED_INDICATOR = '🔥'
+AWAITING_SPECIALIST_INDICATOR = '♨️'
+
+DEFAULT_CHECK = '✅'
+DEFAULT_FIX = '🔧'
+DEFAULT_STOP = '🛑'
+DEFAULT_GOLDCHECK = '🎉'
+DEFAULT_REJECT = '❌'
+DEFAULT_ALERT = '❗'
+
+QOC_DEFAULT_LINKERR = '🔗'
+QOC_DEFAULT_BITRATE = '🔢'
+QOC_DEFAULT_CLIPPING = '📢'
 
 latest_pin_time = None # Keeps track of the last pinned message's time to distinguish between pins and unpins. To be updated on ready.
 
@@ -61,17 +75,9 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
         url = extract_first_link(latest_msg.content)
         code, msg = await run_blocking(performQoC, url)
         rip_title = get_rip_title(latest_msg)
-        verdict = {
-            -1: '🔗',
-            0: '✅',
-            1: '🔧',
-        }[code]
+        verdict = code_to_verdict(code, msg)
 
         if code == 1:
-            if msgContainsBitrateFix(msg):
-                verdict += ' 🔢'
-            if msgContainsClippingFix(msg):
-                verdict += ' 📢'
             link = f"<https://discordapp.com/channels/{str(channel.guild.id)}/{str(channel.id)}/{str(latest_msg.id)}>"
             await channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}".format(rip_title, link, verdict, msg))
 
@@ -169,28 +175,28 @@ async def wrenches(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) with :fix: reactions.
     """
-    await react_command(ctx, 'fix', ['fix', 'wrench', '🔧'], "No wrenches found.")
+    await react_command(ctx, 'fix', ['fix', 'wrench', DEFAULT_FIX], "No wrenches found.")
 
 @bot.command(name='stops')
 async def stops(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) with :stop: reactions.
     """
-    await react_command(ctx, 'stop', ['stop', 'octagonal', '🛑'], "No octogons found.")
+    await react_command(ctx, 'stop', ['stop', 'octagonal', DEFAULT_STOP], "No octogons found.")
 
 @bot.command(name='checks')
 async def checks(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) with :check: reactions.
     """
-    await react_command(ctx, 'check', ['check', '✅'], "No checks found.")
+    await react_command(ctx, 'check', ['check', DEFAULT_CHECK], "No checks found.")
 
 @bot.command(name='rejects')
 async def rejects(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) with :reject: reactions.
     """
-    await react_command(ctx, 'reject', ['reject', '❌'], "No rejected rips found.")
+    await react_command(ctx, 'reject', ['reject', DEFAULT_REJECT], "No rejected rips found.")
 
 
 @bot.command(name='qoc_roundup', brief='view rips in QoC in the discussion channel')
@@ -270,17 +276,9 @@ async def vet(ctx: Context):
             url = extract_first_link(pinned_message.content)
             code, msg = await run_blocking(performQoC, url)
             rip_title = get_rip_title(pinned_message)
-            verdict = {
-                -1: '🔗',
-                0: '✅',
-                1: '🔧',
-            }[code]
+            verdict = code_to_verdict(code, msg)
 
             if code != 0:
-                if msgContainsBitrateFix(msg):
-                    verdict += ' 🔢'
-                if msgContainsClippingFix(msg):
-                    verdict += ' 📢'
                 link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(ctx.channel.id)}/{str(pinned_message.id)}>"
                 await ctx.channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}".format(rip_title, link, verdict, msg))
 
@@ -303,7 +301,7 @@ async def vet_all(ctx: Context):
         result = ""
         for rip_id, rip_info in all_pins.items():
             result += make_markdown(rip_info, True)
-        result += "```\nLEGEND:\n🔗: Link cannot be parsed\n✅: Rip is OK\n🔧: Rip has potential issues, see below\n🔢: Bitrate is not 320kbps\n📢: Clipping```"
+        result += f"```\nLEGEND:\n{QOC_DEFAULT_LINKERR}: Link cannot be parsed\n{DEFAULT_CHECK}: Rip is OK\n{DEFAULT_FIX}: Rip has potential issues, see below\n{QOC_DEFAULT_BITRATE}: Bitrate is not 320kbps\n{QOC_DEFAULT_CLIPPING}: Clipping```"
         await send_embed(ctx, result)
 
 
@@ -329,11 +327,7 @@ async def vet_msg(ctx: Context, msg_link: str):
         url = extract_first_link(message.content)
         code, msg = await run_blocking(performQoC, url)
         rip_title = get_rip_title(message)
-        verdict = {
-            -1: '🔗',
-            0: '✅',
-            1: '🔧',
-        }[code]
+        verdict = code_to_verdict(code, msg)
 
         await ctx.channel.send("**Rip**: {}\n**Verdict**: {}\n**Comments**:\n{}".format(rip_title, verdict, msg))
 
@@ -348,11 +342,7 @@ async def vet_url(ctx: Context, url: str):
 
     async with ctx.channel.typing():
         code, msg = await run_blocking(performQoC, url)
-        verdict = {
-            -1: '🔗',
-            0: '✅',
-            1: '🔧',
-        }[code]
+        verdict = code_to_verdict(code, msg)
 
         await ctx.channel.send("**Verdict**: {}\n**Comments**: {}".format(verdict, msg))
 
@@ -650,17 +640,7 @@ async def vet_message(channel: TextChannel, message: Message):
     reacts = ""
     if url is not None:
         code, msg = await run_blocking(performQoC, url)
-        # TODO: use server reaction?
-        reacts = {
-            -1: '🔗',
-            0: '✅',
-            1: '🔧',
-        }[code]
-        if code == 1:
-            if msgContainsBitrateFix(msg):
-                reacts += ' 🔢'
-            if msgContainsClippingFix(msg):
-                reacts += ' 📢'
+        reacts = code_to_verdict(code, msg)
         
         # debug
         if code == -1:
@@ -673,6 +653,24 @@ async def vet_pins(channel: TextChannel):
     Retrieve all pinned messages (except the first one) from a channel and perform basic QoC, showing verdicts as emojis.
     """
     return await get_pinned_msgs_and_react(channel, vet_message)
+
+
+def code_to_verdict(code: int, msg: str) -> str:
+    """
+    Helper function to convert performQoC code output to emoji
+    """
+    # TODO: use server reaction?
+    verdict = {
+        -1: QOC_DEFAULT_LINKERR,
+        0: DEFAULT_CHECK,
+        1: DEFAULT_FIX,
+    }[code]
+    if code == 1:
+        if msgContainsBitrateFix(msg):
+            verdict += ' ' + QOC_DEFAULT_BITRATE
+        if msgContainsClippingFix(msg):
+            verdict += ' ' + QOC_DEFAULT_CLIPPING
+    return verdict
 
 
 # Now that everything's defined, run the dang thing
