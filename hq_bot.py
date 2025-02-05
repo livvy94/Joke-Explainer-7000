@@ -438,13 +438,17 @@ async def react_command(ctx: Context, react: str, check_func: typing.Callable, n
 
     async with ctx.channel.typing():
         async def filter_reacts(channel: TextChannel, message: Message):
-            return any([check_func(r) for r in message.reactions]), False
+            if any([check_func(r) for r in message.reactions]):
+                return (await get_reactions(channel, message)[0], False)
+            # if not, return an indication string to skip from markdown
+            return "FILTERED", False
 
         filtered_pins = await get_pinned_msgs_and_react(ctx.channel, filter_reacts)
         
         result = ""
         for rip_id, rip_info in filtered_pins.items():
-            result += make_markdown(rip_info, True)
+            if rip_info["Reacts"] != "FILTERED":
+                result += make_markdown(rip_info, True)
 
         if result == "":
             await ctx.channel.send(not_found_message)
@@ -613,23 +617,27 @@ async def get_pinned_msgs_and_react(channel: TextChannel, react_func: typing.Cal
 
 
 # A bunch of functions to check if react is of specific types
+def react_name(react: Reaction) -> str:
+    if hasattr(react.emoji, "name"): return react.emoji.name
+    else: return react.emoji
+
 def react_is_goldcheck(react: Reaction) -> bool:
-    return any([r in react.emoji.name for r in ["goldcheck", DEFAULT_GOLDCHECK]])
+    return any([r in react_name(react) for r in ["goldcheck", DEFAULT_GOLDCHECK]])
 
 def react_is_check(react: Reaction) -> bool:
-    return not react_is_goldcheck(react) and any([r in react.emoji.name for r in ["check", DEFAULT_CHECK]])
+    return not react_is_goldcheck(react) and any([r in react_name(react) for r in ["check", DEFAULT_CHECK]])
 
 def react_is_fix(react: Reaction) -> bool:
-    return any([r in react.emoji.name for r in ["fix", "wrench", DEFAULT_FIX]])
+    return any([r in react_name(react) for r in ["fix", "wrench", DEFAULT_FIX]])
 
 def react_is_reject(react: Reaction) -> bool:
-    return any([r in react.emoji.name for r in ["reject", DEFAULT_REJECT]])
+    return any([r in react_name(react) for r in ["reject", DEFAULT_REJECT]])
 
 def react_is_stop(react: Reaction) -> bool:
-    return any([r in react.emoji.name for r in ["stop", "octagonal", DEFAULT_STOP]])
+    return any([r in react_name(react) for r in ["stop", "octagonal", DEFAULT_STOP]])
 
 def react_is_alert(react: Reaction) -> bool:
-    return any([r in react.emoji.name for r in ["alert", DEFAULT_ALERT]])
+    return any([r in react_name(react) for r in ["alert", DEFAULT_ALERT]])
 
 def react_is_checkreq(react: Reaction) -> bool:
     # TBA
@@ -675,9 +683,9 @@ async def get_reactions(channel: TextChannel, message: Message) -> typing.Tuple[
             # TODO
             pass
         
-        if react.emoji.name in [e.name for e in channel.guild.emojis]:
+        if react_name(react) in [e.name for e in channel.guild.emojis]:
             for e in channel.guild.emojis:
-                if e.name == react.emoji.name:
+                if e.name == react_name(react):
                     reacts += f"{e} " * react.count
                     break
         else:
