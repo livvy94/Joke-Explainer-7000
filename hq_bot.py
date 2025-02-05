@@ -694,7 +694,7 @@ async def get_reactions(channel: TextChannel, message: Message) -> typing.Tuple[
         else:
             reacts += f"{react.emoji} " * react.count
     
-    approved = (num_checks - num_rejects > checks_required) and not fix_or_alert and (not specs_needed or num_goldchecks > specs_required)
+    approved = (num_checks - num_rejects >= checks_required) and not fix_or_alert and (not specs_needed or num_goldchecks >= specs_required)
 
     return reacts, approved
 
