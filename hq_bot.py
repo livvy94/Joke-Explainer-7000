@@ -439,7 +439,7 @@ async def react_command(ctx: Context, react: str, check_func: typing.Callable, n
     async with ctx.channel.typing():
         async def filter_reacts(channel: TextChannel, message: Message):
             if any([check_func(r) for r in message.reactions]):
-                return (await get_reactions(channel, message)[0], False)
+                return await get_reactions(channel, message)
             # if not, return an indication string to skip from markdown
             return "FILTERED", False
 
@@ -595,7 +595,8 @@ async def get_pinned_msgs_and_react(channel: TextChannel, react_func: typing.Cal
 
         # Get reactions
         if react_func is not None:
-            reacts, approved = await react_func(channel, pinned_message)
+            message = await channel.fetch_message(pinned_message.id)
+            reacts, approved = await react_func(channel, message)
         else:
             reacts, approved = "", False
 
@@ -651,6 +652,7 @@ def react_is_number(react: Reaction) -> bool:
 async def get_reactions(channel: TextChannel, message: Message) -> typing.Tuple[str, bool]:
     """
     Return the reactions of a message.
+    The message should contain the full reactions information.
     Set 'approved' to True if the reactions indicate that the rip is approved.
     Requirements for approval:
     - At least 3 more checks than rejects
@@ -669,8 +671,9 @@ async def get_reactions(channel: TextChannel, message: Message) -> typing.Tuple[
     specs_needed = False
     fix_or_alert = False
     
-    mesg = await channel.fetch_message(message.id)
-    for react in mesg.reactions:
+    emote_names = [e.name for e in channel.guild.emojis]
+
+    for react in message.reactions:
         if react_is_goldcheck(react): num_goldchecks += react.count
         elif react_is_check(react): num_checks += react.count
         elif react_is_reject(react): num_rejects += react.count
@@ -683,7 +686,7 @@ async def get_reactions(channel: TextChannel, message: Message) -> typing.Tuple[
             # TODO
             pass
         
-        if react_name(react) in [e.name for e in channel.guild.emojis]:
+        if react_name(react) in emote_names:
             for e in channel.guild.emojis:
                 if e.name == react_name(react):
                     reacts += f"{e} " * react.count
