@@ -514,7 +514,7 @@ async def run_blocking(blocking_func: typing.Callable, *args, **kwargs) -> typin
     return await bot.loop.run_in_executor(None, func)
 
 
-def extract_first_link(text: str) -> str | None:
+def extract_first_link(text: str) -> str:
     """
     Extract the first non-YouTube link from a text.
     """
@@ -526,7 +526,7 @@ def extract_first_link(text: str) -> str | None:
     for match in matches:
         if "youtu" not in match:
             return match  # Return the first valid link
-    return None  # Return None if no valid links are found
+    return ""  # Return empty string if no valid links are found
 
 
 def get_rip_title(message: Message) -> str:
