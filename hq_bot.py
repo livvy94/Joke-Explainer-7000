@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 import discord
-from discord import Message, Thread
-from discord.abc import Messageable, GuildChannel
+from discord import Message, Thread, TextChannel
+from discord.abc import GuildChannel
 from discord.ext import commands
 from discord.ext.commands import Context
 from bot_secrets import token, roundup_channels, discussion_channels, submission_channel, op_channelid
@@ -490,13 +490,13 @@ async def send_embed(ctx: Context, message: str, delete_after: float = MESSAGE_S
         fancy_message = discord.Embed(description=line, color=EMBED_COLOR)
         await ctx.channel.send(embed=fancy_message, delete_after=delete_after)
 
-def channel_is_not_qoc(channel: Messageable):
+def channel_is_not_qoc(channel: TextChannel):
     return channel.id not in roundup_channels
 
-def channel_is_not_discussion(channel: Messageable):
+def channel_is_not_discussion(channel: TextChannel):
     return channel.id not in discussion_channels
 
-def channel_is_not_op(channel: Messageable):
+def channel_is_not_op(channel: TextChannel):
     return channel.id != op_channelid
 
 def heard_command(command_name: str, user: str):
@@ -574,10 +574,10 @@ def get_rip_author(message: Message) -> str:
     return author
 
 
-async def get_pinned_msgs_and_react(channel: Messageable, react_func: typing.Callable | None = None) -> dict:
+async def get_pinned_msgs_and_react(channel: TextChannel, react_func: typing.Callable | None = None) -> dict:
     """
     Unified function to retrieve all pinned messages (except the first one) from a channel and give corresponding emojis.
-    - react_func: A function in the form of fn(Messageable, Message) that returns some emojis for a message. If None, show no emojis.
+    - react_func: A function in the form of fn(TextChannel, Message) that returns some emojis for a message. If None, show no emojis.
     
     Returns a dictionary of pinned messages.
     """
@@ -618,7 +618,7 @@ async def get_pinned_msgs_and_react(channel: Messageable, react_func: typing.Cal
     return pins_in_message
 
 
-async def get_reactions(channel: Messageable, message: Message):
+async def get_reactions(channel: TextChannel, message: Message):
     """
     Return the reactions of a message.
     """
@@ -634,7 +634,7 @@ async def get_reactions(channel: Messageable, message: Message):
     
     return reacts, approved
 
-async def process_pins(channel: Messageable, get_reacts: bool):
+async def process_pins(channel: TextChannel, get_reacts: bool):
     """
     Retrieve all pinned messages (except the first one) from a channel.
     - get_reacts: Whether to show messages' reactions as emojis
@@ -642,7 +642,7 @@ async def process_pins(channel: Messageable, get_reacts: bool):
     return await get_pinned_msgs_and_react(channel, get_reactions if get_reacts else None)
 
 
-async def vet_message(channel: Messageable, message: Message):
+async def vet_message(channel: TextChannel, message: Message):
     """
     Return the QoC verdict of a message as emoji reactions.
     """
@@ -668,7 +668,7 @@ async def vet_message(channel: Messageable, message: Message):
 
     return reacts, False
 
-async def vet_pins(channel: Messageable):
+async def vet_pins(channel: TextChannel):
     """
     Retrieve all pinned messages (except the first one) from a channel and perform basic QoC, showing verdicts as emojis.
     """
