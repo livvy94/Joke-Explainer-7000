@@ -644,9 +644,9 @@ def react_is_checkreq(react: Reaction) -> bool:
     # TBA
     return False
 
+KEYCAP_EMOJIS = {'2️⃣': 2, '3️⃣': 3, '4️⃣': 4, '5️⃣': 5, '6️⃣': 6, '7️⃣': 7, '8️⃣': 8, '9️⃣': 9, '🔟': 10}
 def react_is_number(react: Reaction) -> bool:
-    # TBA
-    return False
+    return react_name(react) in KEYCAP_EMOJIS
 
 
 async def get_reactions(channel: TextChannel, message: Message) -> typing.Tuple[str, bool]:
@@ -683,8 +683,7 @@ async def get_reactions(channel: TextChannel, message: Message) -> typing.Tuple[
             # TODO
             pass
         elif react_is_number(react):
-            # TODO
-            pass
+            specs_required = KEYCAP_EMOJIS[react_name(react)]
         
         if react_name(react) in emote_names:
             for e in channel.guild.emojis:
