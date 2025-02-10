@@ -600,9 +600,11 @@ def msgContainsPRVRClippingFix(msg: str) -> bool:
 #            Main Function              #
 #=======================================#
 
-def performQoC(url: str) -> Tuple[int, str]:
+def performQoC(url: str, fullFeedback: bool = True) -> Tuple[int, str]:
     """
-    Version 1: Download file from URL then process metadata and waveform
+    Performs QoC on the given URL.
+    
+    - fullFeedback: Default True. If False, do not return "is OK" messages
     """
     try:
         downloadableUrl = parseUrl(url)
@@ -643,7 +645,13 @@ def performQoC(url: str) -> Tuple[int, str]:
     if len(errors) > 0:
         return (-1, '\n'.join(errors))
     
-    return (0 if (bitrateCheck and clippingCheck) else 1, '- {}\n- {}'.format(bitrateMsg, clippingMsg))
+    message = ""
+    if fullFeedback or not bitrateCheck: 
+        message += "- {}".format(bitrateMsg)
+    if fullFeedback or not clippingCheck: 
+        message += "- {}".format(clippingMsg)
+
+    return (0 if (bitrateCheck and clippingCheck) else 1, message)
 
 """
 Commented this out to work on it later

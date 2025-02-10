@@ -73,7 +73,7 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
         latest_msg = pin_list[0]
 
         url = extract_first_link(latest_msg.content)
-        code, msg = await run_blocking(performQoC, url)
+        code, msg = await run_blocking(performQoC, url, False)
         rip_title = get_rip_title(latest_msg)
         verdict = code_to_verdict(code, msg)
 
@@ -274,7 +274,7 @@ async def vet(ctx: Context):
 
         for pinned_message in pin_list:
             url = extract_first_link(pinned_message.content)
-            code, msg = await run_blocking(performQoC, url)
+            code, msg = await run_blocking(performQoC, url, False)
             rip_title = get_rip_title(pinned_message)
             verdict = code_to_verdict(code, msg)
 
