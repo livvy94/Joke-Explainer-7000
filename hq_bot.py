@@ -79,7 +79,7 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
 
         if code == 1:
             link = f"<https://discordapp.com/channels/{str(channel.guild.id)}/{str(channel.id)}/{str(latest_msg.id)}>"
-            await channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}".format(rip_title, link, verdict, msg))
+            await channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}\n-# React {} if this is resolved.".format(rip_title, link, verdict, msg, DEFAULT_CHECK))
 
         if code == -1:
             print("Warning: cannot process message\nRip: {}\n{}".format(rip_title, msg))
@@ -280,7 +280,7 @@ async def vet(ctx: Context):
 
             if code != 0:
                 link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(ctx.channel.id)}/{str(pinned_message.id)}>"
-                await ctx.channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}".format(rip_title, link, verdict, msg))
+                await ctx.channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}-# React {} if this is resolved.".format(rip_title, link, verdict, msg, DEFAULT_CHECK))
 
         if len(pin_list) == 0:
             await ctx.channel.send("No rips found.")
