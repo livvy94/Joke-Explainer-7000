@@ -648,6 +648,8 @@ def performQoC(url: str, fullFeedback: bool = True) -> Tuple[int, str]:
     message = ""
     if fullFeedback or not bitrateCheck: 
         message += "- {}".format(bitrateMsg)
+    if fullFeedback or (not bitrateCheck and not clippingCheck):
+        message += "\n"
     if fullFeedback or not clippingCheck: 
         message += "- {}".format(clippingMsg)
 
