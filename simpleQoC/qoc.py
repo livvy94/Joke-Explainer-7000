@@ -174,7 +174,7 @@ def downloadAudioFromUrl(validUrl: str) -> str:
             if not ('audio' in response.headers['Content-Type'] or 'video' in response.headers['Content-Type']):
                 if 'html' in response.headers['Content-Type']:
                     text = response.text
-                    title = re.search('<\W*title\W*(.*)</title', text, re.IGNORECASE).group(1)
+                    title = re.search(r'<\W*title\W*(.*)</title', text, re.IGNORECASE).group(1)
                     raise QoCException('Filename cannot be parsed from the URL (server response: {}).'.format(title))
                 else:
                     raise QoCException('Unknown error trying to parse filename.')

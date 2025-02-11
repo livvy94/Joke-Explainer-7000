@@ -362,7 +362,7 @@ async def help(ctx: Context):
             + "\n`!count_subs` " + count_subs.brief \
             + "\n_**Auto QoC tools**_\n`!vet` " + vet.brief + "\n`!vet_all` " + vet_all.brief \
             + "\n`!vet_msg` " + vet_msg.brief + "\n`!vet_url` " + vet_url.brief
-        await send_embed(ctx, result)
+        await send_embed(ctx, result, delete_after=None)
 
 @bot.command(name='op')
 async def test(ctx: Context):
