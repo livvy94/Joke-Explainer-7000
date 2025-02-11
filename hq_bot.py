@@ -125,19 +125,20 @@ async def links(ctx: Context):
 
 
 @bot.command(name='mypins', brief='displays rips you\'ve pinned')
-async def mypins(ctx: Context):
+async def mypins(ctx: Context, optional_arg = None):
     """
     Retrieve all messages pinned by the command author.
+    Accepts an optional argument to "hide" the reactions (legacy behavior).
     """
     if channel_is_not_qoc(ctx.channel): return
     heard_command("mypins", ctx.message.author.name)
 
     async with ctx.channel.typing():
-        all_pins = await process_pins(ctx.channel, False)
+        all_pins = await process_pins(ctx.channel, optional_arg is None)
         result = ""
         for rip_id, rip_info in all_pins.items():
             if rip_info["PinMiser"] == ctx.author.name:
-                result += make_markdown(rip_info, False) # a match!
+                result += make_markdown(rip_info, optional_arg is None) # a match!
         if result == "":
             await ctx.channel.send("No rips found.")
         else:
@@ -361,7 +362,7 @@ async def help(ctx: Context):
             + "\n`!limitcheck` " + limitcheck.brief \
             + "\n`!count_subs` " + count_subs.brief \
             + "\n_**Auto QoC tools**_\n`!vet` " + vet.brief + "\n`!vet_all` " + vet_all.brief \
-            + "\n`!vet_msg` " + vet_msg.brief + "\n`!vet_url` " + vet_url.brief
+            + "\n`!vet_msg <link to message>` " + vet_msg.brief + "\n`!vet_url <link to URL>` " + vet_url.brief
         await send_embed(ctx, result, delete_after=None)
 
 @bot.command(name='op')
