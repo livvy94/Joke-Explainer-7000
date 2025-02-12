@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 import discord
-from discord import Message, Thread, TextChannel, Reaction, PartialEmoji
+from discord import Message, Thread, TextChannel, Reaction
 from discord.abc import GuildChannel
 from discord.ext import commands
 from discord.ext.commands import Context
@@ -26,6 +26,7 @@ DEFAULT_STOP = '🛑'
 DEFAULT_GOLDCHECK = '🎉'
 DEFAULT_REJECT = '❌'
 DEFAULT_ALERT = '❗'
+DEFAULT_QOC = '🛃'
 
 QOC_DEFAULT_LINKERR = '🔗'
 QOC_DEFAULT_BITRATE = '🔢'
@@ -44,20 +45,19 @@ bot = commands.Bot(
 
 bot.remove_command('help') # get rid of the dumb default !help command
 
+#===============================================#
+#                    EVENTS                     #
+#===============================================#
+
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user.name}')
     print('#################################')
+
+    # Update latest_pin_time in order to keep track of 
     global latest_pin_time
     latest_pin_time = datetime.now(timezone.utc)
 
-# This thing here is for when I start attempting slash commands again. Until then, this should be unused.
-# Thank you to cibere on the Digiwind server for having the patience of a saint.
-#@bot.command(name='sync_commands')
-#@commands.is_owner()
-#async def sync(ctx):
-#  cmds = await bot.tree.sync()
-#  await ctx.send(f"Synced {len(cmds)} commands globally!")
 
 @bot.event
 async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Thread], last_pin: datetime):
@@ -405,6 +405,14 @@ async def count_subs(ctx: Context):
 # While it might occur to folks in the future that a good command to write would be a rip feedback-sending command, something like that
 # would be way too impersonal imo.
 
+# This thing here is for when I start attempting slash commands again. Until then, this should be unused.
+# Thank you to cibere on the Digiwind server for having the patience of a saint.
+#@bot.command(name='sync_commands')
+#@commands.is_owner()
+#async def sync(ctx):
+#  cmds = await bot.tree.sync()
+#  await ctx.send(f"Synced {len(cmds)} commands globally!")
+
 #===============================================#
 #               HELPER FUNCTIONS                #
 #===============================================#
@@ -624,22 +632,25 @@ def react_name(react: Reaction) -> str:
     else: return react.emoji
 
 def react_is_goldcheck(react: Reaction) -> bool:
-    return any([r in react_name(react) for r in ["goldcheck", DEFAULT_GOLDCHECK]])
+    return any([r in react_name(react).lower() for r in ["goldcheck", DEFAULT_GOLDCHECK]])
 
 def react_is_check(react: Reaction) -> bool:
-    return not react_is_goldcheck(react) and any([r in react_name(react) for r in ["check", DEFAULT_CHECK]])
+    return not react_is_goldcheck(react) and any([r in react_name(react).lower() for r in ["check", DEFAULT_CHECK]])
 
 def react_is_fix(react: Reaction) -> bool:
-    return any([r in react_name(react) for r in ["fix", "wrench", DEFAULT_FIX]])
+    return any([r in react_name(react).lower() for r in ["fix", "wrench", DEFAULT_FIX]])
 
 def react_is_reject(react: Reaction) -> bool:
-    return any([r in react_name(react) for r in ["reject", DEFAULT_REJECT]])
+    return any([r in react_name(react).lower() for r in ["reject", DEFAULT_REJECT]])
 
 def react_is_stop(react: Reaction) -> bool:
-    return any([r in react_name(react) for r in ["stop", "octagonal", DEFAULT_STOP]])
+    return any([r in react_name(react).lower() for r in ["stop", "octagonal", DEFAULT_STOP]])
 
 def react_is_alert(react: Reaction) -> bool:
-    return any([r in react_name(react) for r in ["alert", DEFAULT_ALERT]])
+    return any([r in react_name(react).lower() for r in ["alert", DEFAULT_ALERT]])
+
+def react_is_qoc(react: Reaction) -> bool:
+    return any([r in react_name(react).lower() for r in ["qoc", DEFAULT_QOC]])
 
 def react_is_checkreq(react: Reaction) -> bool:
     # TBA
