@@ -355,7 +355,7 @@ async def help(ctx: Context):
     async with ctx.channel.typing():
         result = "_**YOU ARE NOW QoCING:**_\n`!roundup` " + roundup.brief \
             + "\n`!links` " + links.brief \
-            + "\n`!qoc_roundup` " + qoc_roundup.brief \
+            + "\n`!qoc_roundup` " + qoc_roundup.brief + f' <#{discussion_channels[0]}>' \
             + "\n_**Special lists:**_\n`!mypins` " + mypins.brief \
             + "\n`!checks`\n`!rejects`\n`!wrenches`\n`!stops`" \
             + "\n_**Misc. tools**_\n`!count` " + count.brief \
