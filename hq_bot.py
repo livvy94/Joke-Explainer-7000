@@ -281,7 +281,7 @@ async def vet(ctx: Context):
 
             if code != 0:
                 link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(ctx.channel.id)}/{str(pinned_message.id)}>"
-                await ctx.channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}-# React {} if this is resolved.".format(rip_title, link, verdict, msg, DEFAULT_CHECK))
+                await ctx.channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}\n-# React {} if this is resolved.".format(rip_title, link, verdict, msg, DEFAULT_CHECK))
 
         if len(pin_list) == 0:
             await ctx.channel.send("No rips found.")
