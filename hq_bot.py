@@ -83,7 +83,7 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
             print("Warning: cannot QoC message\nRip: {}\n{}".format(rip_title, qcMsg))
         elif qcCode == 1:
             verdict += code_to_verdict(qcCode, qcMsg)
-            msg += qcMsg
+            msg += qcMsg + "\n"
 
         # Metadata
         playlistId = extract_playlist_id(latest_msg.content)
@@ -100,13 +100,13 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
             print("Warning: cannot check metadata of message\nRip: {}\n{}".format(rip_title, mtMsg))
         elif mtCode == 1:
             verdict += DEFAULT_METADATA
-            msg += "\n- {}".format(mtMsg)
+            msg += "- {}\n".format(mtMsg)
 
         # Send msg
         if qcCode == 1 or mtCode == 1:
             rip_title = get_rip_title(latest_msg)
             link = f"<https://discordapp.com/channels/{str(channel.guild.id)}/{str(channel.id)}/{str(latest_msg.id)}>"
-            await channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}\n-# React {} if this is resolved.".format(rip_title, link, verdict, msg, DEFAULT_CHECK))
+            await channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}-# React {} if this is resolved.".format(rip_title, link, verdict, msg, DEFAULT_CHECK))
 
         latest_pin_time = last_pin
 
