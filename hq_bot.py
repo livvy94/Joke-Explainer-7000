@@ -4,10 +4,11 @@ from discord import Message, Thread, TextChannel, Reaction
 from discord.abc import GuildChannel
 from discord.ext import commands
 from discord.ext.commands import Context
-from bot_secrets import token, roundup_channels, discussion_channels, submission_channel, op_channelid
+from bot_secrets import token, roundup_channels, discussion_channels, submission_channel, op_channelid, youtube_api_key, channel_name
 from datetime import datetime, timezone
 
 from simpleQoC.qoc import performQoC, msgContainsBitrateFix, msgContainsClippingFix
+from simpleQoC.metadataChecker import verifyTitle
 import re
 import functools
 import typing
@@ -27,6 +28,7 @@ DEFAULT_GOLDCHECK = '🎉'
 DEFAULT_REJECT = '❌'
 DEFAULT_ALERT = '❗'
 DEFAULT_QOC = '🛃'
+DEFAULT_METADATA = '📝'
 
 QOC_DEFAULT_LINKERR = '🔗'
 QOC_DEFAULT_BITRATE = '🔢'
@@ -71,18 +73,40 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
     else:
         pin_list = await channel.pins()
         latest_msg = pin_list[0]
+        verdict = ""
+        msg = ""
 
-        url = extract_first_link(latest_msg.content)
-        code, msg = await run_blocking(performQoC, url, False)
-        rip_title = get_rip_title(latest_msg)
-        verdict = code_to_verdict(code, msg)
+        # QoC
+        url = extract_rip_link(latest_msg.content)
+        qcCode, qcMsg = await run_blocking(performQoC, url, False)
+        if qcCode == -1:
+            print("Warning: cannot QoC message\nRip: {}\n{}".format(rip_title, qcMsg))
+        elif qcCode == 1:
+            verdict += code_to_verdict(qcCode, qcMsg)
+            msg += qcMsg
 
-        if code == 1:
+        # Metadata
+        playlistId = extract_playlist_id(latest_msg.content)
+        description = get_rip_description(latest_msg)
+        if len(playlistId) > 0 and len(description) > 0:
+            title = description.splitlines()[0]
+            game = title.split(' - ')[-1]   # TODO: make the split customizable
+
+            mtCode, mtMsg = await run_blocking(verifyTitle, title, game, channel_name, playlistId, youtube_api_key)
+        else:
+            mtCode, mtMsg = 0, "OK."
+
+        if mtCode == -1:
+            print("Warning: cannot check metadata of message\nRip: {}\n{}".format(rip_title, mtMsg))
+        elif mtCode == 1:
+            verdict += DEFAULT_METADATA
+            msg += "\n- {}".format(mtMsg)
+
+        # Send msg
+        if qcCode == 1 or mtCode == 1:
+            rip_title = get_rip_title(latest_msg)
             link = f"<https://discordapp.com/channels/{str(channel.guild.id)}/{str(channel.id)}/{str(latest_msg.id)}>"
             await channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}\n-# React {} if this is resolved.".format(rip_title, link, verdict, msg, DEFAULT_CHECK))
-
-        if code == -1:
-            print("Warning: cannot process message\nRip: {}\n{}".format(rip_title, msg))
 
         latest_pin_time = last_pin
 
@@ -274,7 +298,7 @@ async def vet(ctx: Context):
         pin_list.pop(-1) # get rid of a certain post about reading the rules
 
         for pinned_message in pin_list:
-            url = extract_first_link(pinned_message.content)
+            url = extract_rip_link(pinned_message.content)
             code, msg = await run_blocking(performQoC, url, False)
             rip_title = get_rip_title(pinned_message)
             verdict = code_to_verdict(code, msg)
@@ -325,7 +349,7 @@ async def vet_msg(ctx: Context, msg_link: str):
         channel = server.get_channel(channel_id)
         message = await channel.fetch_message(msg_id)
 
-        url = extract_first_link(message.content)
+        url = extract_rip_link(message.content)
         code, msg = await run_blocking(performQoC, url)
         rip_title = get_rip_title(message)
         verdict = code_to_verdict(code, msg)
@@ -521,9 +545,10 @@ async def run_blocking(blocking_func: typing.Callable, *args, **kwargs) -> typin
     return await bot.loop.run_in_executor(None, func)
 
 
-def extract_first_link(text: str) -> str:
+def extract_rip_link(text: str) -> str:
     """
-    Extract the first non-YouTube link from a text.
+    Extract the rip link from text.
+    Assumes it is the first non-YouTube link.
     """
     # Regular expression to match links that start with "http"
     pattern = r'\b(http[^\s]+)\b'
@@ -534,6 +559,20 @@ def extract_first_link(text: str) -> str:
         if "youtu" not in match:
             return match  # Return the first valid link
     return ""  # Return empty string if no valid links are found
+
+
+def extract_playlist_id(text: str) -> str:
+    """
+    Extract the YouTube playlist ID from text.
+    Assumes it is the first YouTube link.
+    """
+    playlist_regex = r'(?:https?://)?(?:www\.)?(?:youtube\.com/playlist\?list=|youtu\.be/)([a-zA-Z0-9_-]+)'
+    match = re.search(playlist_regex, text)
+    if match:
+        # Return the extracted playlist ID
+        return match.group(1)
+    else:
+        return ""  # Return empty string if no valid links are found
 
 
 def get_rip_title(message: Message) -> str:
@@ -579,6 +618,20 @@ def get_rip_author(message: Message) -> str:
         author += (f' (**{cleaned_author}**)')
 
     return author
+
+
+def get_rip_description(message: Message) -> str:
+    """
+    Return the description of a rip, i.e. the part inside ```
+    """
+    # Use a regular expression to find text between two ``` markers
+    match = re.search(r'```(.*?)```', message.content, re.DOTALL)
+
+    if match:
+        # Return the extracted text, stripping any leading/trailing whitespace
+        return match.group(1).strip()
+    else:
+        return ""  # Return empty string if no match was found
 
 
 async def get_pinned_msgs_and_react(channel: TextChannel, react_func: typing.Callable | None = None) -> dict:
@@ -721,7 +774,7 @@ async def vet_message(channel: TextChannel, message: Message) -> typing.Tuple[st
     """
     Return the QoC verdict of a message as emoji reactions.
     """
-    url = extract_first_link(message.content)
+    url = extract_rip_link(message.content)
     reacts = ""
     if url is not None:
         code, msg = await run_blocking(performQoC, url)
