@@ -90,9 +90,9 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
         description = get_rip_description(latest_msg)
         if len(playlistId) > 0 and len(description) > 0:
             title = description.splitlines()[0]
-            game = title.split(' - ')[-1]   # TODO: make the split customizable
+            # game = title.split(' - ')[-1]     # this doesn't work in certain cases, think of another way to get game name
 
-            mtCode, mtMsg = await run_blocking(verifyTitle, title, game, channel_name, playlistId, youtube_api_key)
+            mtCode, mtMsg = await run_blocking(verifyTitle, title, channel_name, playlistId, youtube_api_key)
         else:
             mtCode, mtMsg = 0, "OK."
 

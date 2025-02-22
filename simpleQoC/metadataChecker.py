@@ -61,13 +61,12 @@ def get_playlist_videos(playlist_id, api_key) -> List[str]:
     return video_titles
 
 
-def verifyTitle(title: str, game: str, channel_name: str, playlist_id: str, api_key: str) -> Tuple[int, str]:
+def verifyTitle(title: str, channel_name: str, playlist_id: str, api_key: str) -> Tuple[int, str]:
     """
     Verify a title and game name against a given playlist.
 
     - If the playlist's creator does not match the channel_name, returns a warning
     - If title already exists in playlist, returns a warning.
-    - If game name doesn't match the playlist name or any of the videos in playlist, returns a warning.
     - Otherwise, no problem.
     """
     try:
@@ -91,12 +90,12 @@ def verifyTitle(title: str, game: str, channel_name: str, playlist_id: str, api_
         return -1, e.message
 
     duplicateCheck = title not in existing_titles
-    gameCheck = (game == playlist_name) or any([video.endswith(" - " + game) for video in existing_titles])
+    # gameCheck = (game == playlist_name) or any([video.endswith(" - " + game) for video in existing_titles])
 
     if not duplicateCheck:
         return 1, "Video title already exists in playlist."
-    if not gameCheck:
-        return 1, "Game name may be incorrect according to playlist."
+    # if not gameCheck:
+    #     return 1, "Game name may be incorrect according to playlist."
     
     return 0, "OK."
 
