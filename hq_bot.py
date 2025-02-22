@@ -326,7 +326,7 @@ async def vet_msg(ctx: Context, msg_link: str):
         verdict, msg = await check_qoc_and_metadata(message, True)
         rip_title = get_rip_title(message)
 
-        await ctx.channel.send("**Rip**: {}\n**Verdict**: {}\n**Comments**:{}".format(rip_title, verdict, msg))
+        await ctx.channel.send("**Rip**: {}\n**Verdict**: {}\n**Comments**:\n{}".format(rip_title, verdict, msg))
 
 
 @bot.command(name='vet_url', brief='vet a single url')
@@ -341,7 +341,7 @@ async def vet_url(ctx: Context, url: str):
         code, msg = await run_blocking(performQoC, url)
         verdict = code_to_verdict(code, msg)
 
-        await ctx.channel.send("**Verdict**: {}\n**Comments**: {}".format(verdict, msg))
+        await ctx.channel.send("**Verdict**: {}\n**Comments**:\n{}".format(verdict, msg))
 
 
 # ============ Helper/test commands ============== #
