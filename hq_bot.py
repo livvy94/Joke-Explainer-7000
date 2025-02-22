@@ -326,7 +326,7 @@ async def vet_msg(ctx: Context, msg_link: str):
         verdict, msg = await check_qoc_and_metadata(message, True)
         rip_title = get_rip_title(message)
 
-        await ctx.channel.send("**Rip**: {}\n**Verdict**: {}\n**Comments**:\n{}".format(rip_title, verdict, msg))
+        await ctx.channel.send("**Rip**: {}\n**Verdict**: {}\n**Comments**:{}".format(rip_title, verdict, msg))
 
 
 @bot.command(name='vet_url', brief='vet a single url')
@@ -783,7 +783,7 @@ def code_to_verdict(code: int, msg: str) -> str:
     return verdict
 
 
-async def check_qoc_and_metadata(message: Message, show_ok: bool = False) -> typing.Tuple[str, str]:
+async def check_qoc_and_metadata(message: Message, fullFeedback: bool = False) -> typing.Tuple[str, str]:
     """
     Perform simpleQoC and metadata checking on a message.
 
@@ -796,10 +796,10 @@ async def check_qoc_and_metadata(message: Message, show_ok: bool = False) -> typ
     
     # QoC
     url = extract_rip_link(message.content)
-    qcCode, qcMsg = await run_blocking(performQoC, url, False)
+    qcCode, qcMsg = await run_blocking(performQoC, url, fullFeedback)
     if qcCode == -1:
         print("Warning: cannot QoC message\nRip: {}\n{}".format(rip_title, qcMsg))
-    elif qcCode == 1 or show_ok:
+    elif (qcCode == 1) or fullFeedback:
         verdict += code_to_verdict(qcCode, qcMsg)
         msg += qcMsg + "\n"
 
@@ -816,7 +816,7 @@ async def check_qoc_and_metadata(message: Message, show_ok: bool = False) -> typ
 
     if mtCode == -1:
         print("Warning: cannot check metadata of message\nRip: {}\n{}".format(rip_title, mtMsg))
-    elif mtCode == 1 or show_ok:
+    elif (mtCode == 1) or fullFeedback:
         verdict += DEFAULT_METADATA
         msg += "- {}\n".format(mtMsg)
 
