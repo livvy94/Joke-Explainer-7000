@@ -80,6 +80,7 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
         url = extract_rip_link(latest_msg.content)
         qcCode, qcMsg = await run_blocking(performQoC, url, False)
         if qcCode == -1:
+            rip_title = get_rip_title(latest_msg)
             print("Warning: cannot QoC message\nRip: {}\n{}".format(rip_title, qcMsg))
         elif qcCode == 1:
             verdict += code_to_verdict(qcCode, qcMsg)
