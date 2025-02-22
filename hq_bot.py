@@ -73,38 +73,11 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
     else:
         pin_list = await channel.pins()
         latest_msg = pin_list[0]
-        verdict = ""
-        msg = ""
-
-        # QoC
-        url = extract_rip_link(latest_msg.content)
-        qcCode, qcMsg = await run_blocking(performQoC, url, False)
-        if qcCode == -1:
-            rip_title = get_rip_title(latest_msg)
-            print("Warning: cannot QoC message\nRip: {}\n{}".format(rip_title, qcMsg))
-        elif qcCode == 1:
-            verdict += code_to_verdict(qcCode, qcMsg)
-            msg += qcMsg + "\n"
-
-        # Metadata
-        playlistId = extract_playlist_id(latest_msg.content)
-        description = get_rip_description(latest_msg)
-        if len(playlistId) > 0 and len(description) > 0:
-            title = description.splitlines()[0]
-            # game = title.split(' - ')[-1]     # this doesn't work in certain cases, think of another way to get game name
-
-            mtCode, mtMsg = await run_blocking(verifyTitle, title, channel_name, playlistId, youtube_api_key)
-        else:
-            mtCode, mtMsg = 0, "OK."
-
-        if mtCode == -1:
-            print("Warning: cannot check metadata of message\nRip: {}\n{}".format(rip_title, mtMsg))
-        elif mtCode == 1:
-            verdict += DEFAULT_METADATA
-            msg += "- {}\n".format(mtMsg)
+    
+        verdict, msg = await check_qoc_and_metadata(latest_msg)
 
         # Send msg
-        if qcCode == 1 or mtCode == 1:
+        if len(verdict) > 0:
             rip_title = get_rip_title(latest_msg)
             link = f"<https://discordapp.com/channels/{str(channel.guild.id)}/{str(channel.id)}/{str(latest_msg.id)}>"
             await channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}-# React {} if this is resolved.".format(rip_title, link, verdict, msg, DEFAULT_CHECK))
@@ -350,10 +323,8 @@ async def vet_msg(ctx: Context, msg_link: str):
         channel = server.get_channel(channel_id)
         message = await channel.fetch_message(msg_id)
 
-        url = extract_rip_link(message.content)
-        code, msg = await run_blocking(performQoC, url)
+        verdict, msg = await check_qoc_and_metadata(message, True)
         rip_title = get_rip_title(message)
-        verdict = code_to_verdict(code, msg)
 
         await ctx.channel.send("**Rip**: {}\n**Verdict**: {}\n**Comments**:\n{}".format(rip_title, verdict, msg))
 
@@ -810,6 +781,46 @@ def code_to_verdict(code: int, msg: str) -> str:
         if msgContainsClippingFix(msg):
             verdict += ' ' + QOC_DEFAULT_CLIPPING
     return verdict
+
+
+async def check_qoc_and_metadata(message: Message, show_ok: bool = False) -> typing.Tuple[str, str]:
+    """
+    Perform simpleQoC and metadata checking on a message.
+
+    - **message**: Message to check
+    - **show_ok**: If True, display "OK" messages. Otherwise, display only issues.
+    """
+    verdict = ""
+    msg = ""
+    rip_title = get_rip_title(message)
+    
+    # QoC
+    url = extract_rip_link(message.content)
+    qcCode, qcMsg = await run_blocking(performQoC, url, False)
+    if qcCode == -1:
+        print("Warning: cannot QoC message\nRip: {}\n{}".format(rip_title, qcMsg))
+    elif qcCode == 1 or show_ok:
+        verdict += code_to_verdict(qcCode, qcMsg)
+        msg += qcMsg + "\n"
+
+    # Metadata
+    playlistId = extract_playlist_id(message.content)
+    description = get_rip_description(message)
+    if len(playlistId) > 0 and len(description) > 0:
+        title = description.splitlines()[0]
+        # game = title.split(' - ')[-1]     # this doesn't work in certain cases, think of another way to get game name
+
+        mtCode, mtMsg = await run_blocking(verifyTitle, title, channel_name, playlistId, youtube_api_key)
+    else:
+        mtCode, mtMsg = 0, "Metadata is OK."
+
+    if mtCode == -1:
+        print("Warning: cannot check metadata of message\nRip: {}\n{}".format(rip_title, mtMsg))
+    elif mtCode == 1 or show_ok:
+        verdict += DEFAULT_METADATA
+        msg += "- {}\n".format(mtMsg)
+
+    return verdict, msg
 
 
 # Now that everything's defined, run the dang thing
