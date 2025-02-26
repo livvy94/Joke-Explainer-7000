@@ -97,7 +97,7 @@ def verifyTitle(title: str, channel_name: str, playlist_id: str, api_key: str) -
     # if not gameCheck:
     #     return 1, "Game name may be incorrect according to playlist."
     
-    return 0, "OK."
+    return 0, "Metadata is OK."
 
 
 # Example usage

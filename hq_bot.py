@@ -816,8 +816,10 @@ async def check_qoc_and_metadata(message: Message, fullFeedback: bool = False) -
 
     if mtCode == -1:
         print("Warning: cannot check metadata of message\nRip: {}\n{}".format(rip_title, mtMsg))
-    elif (mtCode == 1) or fullFeedback:
-        verdict += DEFAULT_METADATA
+    elif mtCode == 1:
+        verdict += ("" if len(verdict) == 0 else " ") + DEFAULT_METADATA
+    
+    if (mtCode == 1) or fullFeedback:
         msg += "- {}\n".format(mtMsg)
 
     return verdict, msg
