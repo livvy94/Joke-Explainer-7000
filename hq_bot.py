@@ -12,6 +12,7 @@ from simpleQoC.metadataChecker import verifyTitle
 import re
 import functools
 import typing
+import math
 
 MESSAGE_SECONDS = 2700  # 45 minutes
 DISCORD_CHARACTER_LIMIT = 4000 # Lower this to 2000 if we lose boosts
@@ -91,19 +92,31 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
 # ============ Aggregate commands ============= #
 
 @bot.command(name='roundup', aliases = ['down_taunt', 'qoc', 'qocparty', 'roudnup'], brief='displays all rips in QoC')
-async def roundup(ctx: Context):
+async def roundup(ctx: Context, optional_time = None):
     """
     Roundup command. Retrieve all pinned messages (except the first one) and their reactions.
+    Accepts an optional argument to control embed's display time *in hours*.
     """
     if channel_is_not_qoc(ctx.channel): return
     heard_command("roundup", ctx.message.author.name)
+
+    if optional_time is not None:
+        try:
+            time = float(optional_time) * 60 * 60
+            if math.isnan(time) or math.isinf(time) or time < 1:
+                raise ValueError
+        except ValueError:
+            await ctx.channel.send("Error: Cannot parse argument - make sure it is a valid value.")
+            return
+    else:
+        time = MESSAGE_SECONDS
 
     async with ctx.channel.typing():
         all_pins = await process_pins(ctx.channel, True)
         result = ""
         for rip_id, rip_info in all_pins.items():
             result += make_markdown(rip_info, True)
-        await send_embed(ctx, result)
+        await send_embed(ctx, result, time)
 
 
 @bot.command(name='links', aliases = ['list', 'ls'], brief='roundup but quicker')
@@ -349,10 +362,10 @@ async def vet_url(ctx: Context, url: str):
 @bot.command(name='help', aliases = ['commands', 'halp', 'test'])
 async def help(ctx: Context):
     async with ctx.channel.typing():
-        result = "_**YOU ARE NOW QoCING:**_\n`!roundup` " + roundup.brief \
+        result = "_**YOU ARE NOW QoCING:**_\n`!roundup` [embed_hours]" + roundup.brief \
             + "\n`!links` " + links.brief \
             + "\n`!qoc_roundup` " + qoc_roundup.brief + f' <#{discussion_channels[0]}>' \
-            + "\n_**Special lists:**_\n`!mypins` " + mypins.brief \
+            + "\n_**Special lists:**_\n`!mypins` [no_react]" + mypins.brief \
             + "\n`!checks`\n`!rejects`\n`!wrenches`\n`!stops`" \
             + "\n_**Misc. tools**_\n`!count` " + count.brief \
             + "\n`!limitcheck` " + limitcheck.brief \
