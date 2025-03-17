@@ -43,6 +43,14 @@ class QoCException(Exception):
 #           FFMPEG / FFPROBE            #
 #=======================================#
 
+def ffmpegExists():
+    try:
+        subprocess.run(['ffmpeg', '-version'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
+    except FileNotFoundError:
+        return False
+
+
 def ffprobeUrl(validUrl: str):
     """
     Retrives file metadata from URL using ffprobe.

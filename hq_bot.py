@@ -7,7 +7,7 @@ from discord.ext.commands import Context
 from bot_secrets import token, roundup_channels, discussion_channels, submission_channel, op_channelid, youtube_api_key, channel_name
 from datetime import datetime, timezone
 
-from simpleQoC.qoc import performQoC, msgContainsBitrateFix, msgContainsClippingFix
+from simpleQoC.qoc import performQoC, msgContainsBitrateFix, msgContainsClippingFix, ffmpegExists
 from simpleQoC.metadataChecker import verifyTitle
 import re
 import functools
@@ -280,6 +280,10 @@ async def vet(ctx: Context):
     if channel_is_not_qoc(ctx.channel): return
     heard_command("vet", ctx.message.author.name)
 
+    if not ffmpegExists():
+        await ctx.channel.send("WARNING: ffmpeg command not found on the bot's server. Please contact the developers.")
+        return
+
     async with ctx.channel.typing():
         pin_list = await ctx.channel.pins()
         pin_list.pop(-1) # get rid of a certain post about reading the rules
@@ -307,6 +311,10 @@ async def vet_all(ctx: Context):
     """
     if channel_is_not_qoc(ctx.channel): return
     heard_command("vet_all", ctx.message.author.name)
+
+    if not ffmpegExists():
+        await ctx.channel.send("WARNING: ffmpeg command not found on the bot's server. Please contact the developers.")
+        return
 
     async with ctx.channel.typing():
         all_pins = await vet_pins(ctx.channel)
