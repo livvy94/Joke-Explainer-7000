@@ -5,7 +5,7 @@ from discord.abc import GuildChannel
 from discord.ext import commands
 from discord.ext.commands import Context
 from bot_secrets import token, roundup_channels, discussion_channels, submission_channel, op_channelid, youtube_api_key, channel_name
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from simpleQoC.qoc import performQoC, msgContainsBitrateFix, msgContainsClippingFix, ffmpegExists
 from simpleQoC.metadataChecker import verifyTitle
@@ -15,12 +15,14 @@ import typing
 import math
 
 MESSAGE_SECONDS = 2700  # 45 minutes
-DISCORD_CHARACTER_LIMIT = 4000 # Lower this to 2000 if we lose boosts
+DISCORD_CHARACTER_LIMIT = 4000 # Lower this to 2000 if we lose boosts (TODO: move to bot_secrets?)
 EMBED_COLOR = 0x481761
+OVERDUE_DAYS = 30
 
 # Emoji definitions
 APPROVED_INDICATOR = '🔥'
 AWAITING_SPECIALIST_INDICATOR = '♨️'
+OVERDUE_INDICATOR = '🕒'
 
 DEFAULT_CHECK = '✅'
 DEFAULT_FIX = '🔧'
@@ -211,6 +213,31 @@ async def rejects(ctx: Context):
     await react_command(ctx, 'reject', react_is_reject, "No rejected rips found.")
 
 
+@bot.command(name='overdue', brief=f'display rips that have been here for over {OVERDUE_DAYS} days')
+async def overdue(ctx: Context):
+    """
+    Retrieve all pinned messages (except the first one) that are overdue.
+    """
+    if channel_is_not_qoc(ctx.channel): return
+    heard_command("overdue", ctx.message.author.name)
+    result = ""
+
+    async with ctx.channel.typing():
+        pin_list = await ctx.channel.pins()
+        pin_list.pop(-1) # get rid of a certain post about reading the rules
+
+        for pinned_message in pin_list:
+            if rip_is_overdue(pinned_message):
+                title = pinned_message.content.split('\n')[1].replace('`', '')
+                link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(ctx.channel.id)}/{str(pinned_message.id)}>"
+                result = result + f'**[{title}]({link})**\n'
+
+        if result != "":
+            await send_embed(ctx, result)
+        else:
+            await ctx.channel.send("No overdue rips.")
+
+
 @bot.command(name='qoc_roundup', brief='view rips in QoC in the discussion channel')
 async def qoc_roundup(ctx: Context):
     """
@@ -375,6 +402,7 @@ async def help(ctx: Context):
             + "\n`!qoc_roundup` " + qoc_roundup.brief + f' <#{discussion_channels[0]}>' \
             + "\n_**Special lists:**_\n`!mypins` [no_react]" + mypins.brief \
             + "\n`!checks`\n`!rejects`\n`!wrenches`\n`!stops`" \
+            + "\n`!overdue` " + overdue.brief \
             + "\n_**Misc. tools**_\n`!count` " + count.brief \
             + "\n`!limitcheck` " + limitcheck.brief \
             + "\n`!count_subs` " + count_subs.brief \
@@ -742,6 +770,13 @@ def react_is_number(react: Reaction) -> bool:
     return react_name(react) in KEYCAP_EMOJIS
 
 
+def rip_is_overdue(message: Message) -> bool:
+    """
+    Returns true if the message is older than OVERDUE_DAYS
+    """
+    return datetime.now() - message.created_at > timedelta(days=OVERDUE_DAYS)
+
+
 async def get_reactions(channel: TextChannel, message: Message) -> typing.Tuple[str, str]:
     """
     Return the reactions of a message.
@@ -791,6 +826,8 @@ async def get_reactions(channel: TextChannel, message: Message) -> typing.Tuple[
 
     if check_passed:
         indicator = APPROVED_INDICATOR if specs_passed else AWAITING_SPECIALIST_INDICATOR
+    elif rip_is_overdue(message):
+        indicator = OVERDUE_INDICATOR
 
     return reacts, indicator
 
