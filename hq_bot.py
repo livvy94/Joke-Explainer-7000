@@ -174,7 +174,7 @@ async def fresh(ctx: Context):
         for pinned_message in pin_list:
             mesg = await ctx.channel.fetch_message(pinned_message.id)
             if len(mesg.reactions) < 1:
-                title = pinned_message.content.split('\n')[1].replace('`', '')
+                title = get_rip_title(mesg)
                 link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(ctx.channel.id)}/{str(pinned_message.id)}>"
                 result = result + f'**[{title}]({link})**\n'
 
@@ -223,19 +223,13 @@ async def overdue(ctx: Context):
     result = ""
 
     async with ctx.channel.typing():
-        pin_list = await ctx.channel.pins()
-        pin_list.pop(-1) # get rid of a certain post about reading the rules
+        all_pins = await process_pins(ctx.channel, True)
+        result = ""
 
-        for pinned_message in pin_list:
-            if rip_is_overdue(pinned_message):
-                title = pinned_message.content.split('\n')[1].replace('`', '')
-                link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(ctx.channel.id)}/{str(pinned_message.id)}>"
-                result = result + f'**[{title}]({link})**\n'
-
-        if result != "":
-            await send_embed(ctx, result)
-        else:
-            await ctx.channel.send("No overdue rips.")
+        for rip_id, rip_info in all_pins.items():
+            if rip_info["Indicator"] == OVERDUE_INDICATOR:
+                result += make_markdown(rip_info, False)
+        await send_embed(ctx, result)
 
 
 @bot.command(name='qoc_roundup', brief='view rips in QoC in the discussion channel')
