@@ -378,6 +378,7 @@ async def help(ctx: Context):
             + "\n_**Misc. tools**_\n`!count` " + count.brief \
             + "\n`!limitcheck` " + limitcheck.brief \
             + "\n`!count_subs` " + count_subs.brief \
+            + "\n`!stats` " + stats.brief \
             + "\n_**Auto QoC tools**_\n`!vet` " + vet.brief + "\n`!vet_all` " + vet_all.brief \
             + "\n`!vet_msg <link to message>` " + vet_msg.brief + "\n`!vet_url <link to URL>` " + vet_url.brief
         await send_embed(ctx, result, delete_after=None)
@@ -398,7 +399,6 @@ async def count_subs(ctx: Context):
     """
     Count number of messages in a channel (e.g. submissions).
     Retrieve the entire history of a channel and count the number of messages not in threads.
-    Turns out to be pretty fast for channels with not a lot of messages or conversations.
     """
     if channel_is_not_qoc(ctx.channel): return
     heard_command("count_subs", ctx.message.author.name)
@@ -407,10 +407,7 @@ async def count_subs(ctx: Context):
         server = ctx.guild
         channel = server.get_channel(submission_channel)
 
-        count = 0
-        async for message in channel.history(limit = None):
-            if not (message.channel is Thread):
-                count = count + 1
+        count = await count_messages(channel)
 
         if (count < 1):
             result = "```ansi\n\u001b[0;31m* Determination.\u001b[0;0m```"
@@ -418,6 +415,44 @@ async def count_subs(ctx: Context):
             result = f"```ansi\n\u001b[0;31m* {count} left.\u001b[0;0m```"
 
         await ctx.channel.send(result)
+
+@bot.command(name='stats', brief='display remaining number of rips across channels')
+async def stats(ctx: Context):
+    """
+    Display the number of rips in the QoC and submission channels
+    """
+    if channel_is_not_qoc(ctx.channel): return
+    heard_command("stats", ctx.message.author.name)
+
+    server = ctx.guild
+
+    async with ctx.channel.typing():
+        ret = "**QoC channels**\n"
+
+        for channel_id in roundup_channels:
+            team_count = 0
+            email_count = 0
+
+            channel = server.get_channel(submission_channel)
+            pin_list = await channel.pins()
+            pin_list.pop(-1) # get rid of a certain post about reading the rules
+
+            for pinned_message in pin_list:
+                author = get_rip_author(pinned_message)
+                if 'email' in author.lower():
+                    email_count += 1
+                else:
+                    team_count += 1
+            
+            ret += f"- <#{channel_id}>: **{team_count + email_count}** rips\n\t- {team_count} team subs\n\t{email_count} email subs\n"
+
+        ret += "**Submission channels**\n"
+
+        sub_count = await count_messages(server.get_channel(submission_channel))
+        ret += - f"<#{submission_channel}>: **{sub_count}** rips"
+
+        await ctx.channel.send(ret)
+
 
 # While it might occur to folks in the future that a good command to write would be a rip feedback-sending command, something like that
 # would be way too impersonal imo.
@@ -845,6 +880,20 @@ async def check_qoc_and_metadata(message: Message, fullFeedback: bool = False) -
 
     return verdict, msg
 
+
+async def count_messages(channel: TextChannel) -> int:
+    """
+    Returns the number of non-thread messages in a channel.
+    This includes "started a thread" messages.
+    
+    Warning: Might take a long time for big channels. Limit this to submissions or queue channels.
+    """
+    count = 0
+    async for message in channel.history(limit = None):
+        if not (message.channel is Thread):
+            count = count + 1
+    
+    return count
 
 # Now that everything's defined, run the dang thing
 bot.run(token)
