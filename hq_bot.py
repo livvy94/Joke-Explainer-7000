@@ -444,7 +444,7 @@ async def stats(ctx: Context):
                 else:
                     team_count += 1
             
-            ret += f"- <#{channel_id}>: **{team_count + email_count}** rips\n\t- {team_count} team subs\n\t- {email_count} email subs\n"
+            ret += f"- <#{channel_id}>: **{team_count + email_count}** rips\n  - {team_count} team subs\n  - {email_count} email subs\n"
 
         ret += "**Submission channels**\n"
 
