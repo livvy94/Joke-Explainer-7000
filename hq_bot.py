@@ -411,7 +411,7 @@ async def help(ctx: Context):
             + "\n_**Misc. tools**_\n`!count` " + count.brief \
             + "\n`!limitcheck` " + limitcheck.brief \
             + "\n`!count_subs` [channel_id] " + count_subs.brief \
-            + "\n`!stats` " + stats.brief \
+            + "\n`!stats` [show_queues]" + stats.brief \
             + "\n_**Auto QoC tools**_\n`!vet` " + vet.brief + "\n`!vet_all` " + vet_all.brief \
             + "\n`!vet_msg <link to message>` " + vet_msg.brief + "\n`!vet_url <link to URL>` " + vet_url.brief
         await send_embed(ctx, result, delete_after=None)
@@ -462,9 +462,10 @@ async def count_subs(ctx: Context, sub_channel_link: str = None):
         await ctx.channel.send(result)
 
 @bot.command(name='stats', brief='display remaining number of rips across channels')
-async def stats(ctx: Context):
+async def stats(ctx: Context, optional_arg = None):
     """
-    Display the number of rips in the QoC, submission and queue channels
+    Display the number of rips in the QoC and submission channels.
+    Accepts an optional argument to show queue channels too.
     """
     if not channel_is_type(ctx.channel, 'ROUNDUP'): return
     heard_command("stats", ctx.message.author.name)
@@ -504,20 +505,23 @@ async def stats(ctx: Context):
             if t =='thread':
                 ret += f"- <#{channel_id}>:\n"
                 for thread, count in sub_count.items():
-                    ret += f"  - <#{thread}>: **{count}** rips\n"
+                    if count > 0:
+                        ret += f"  - <#{thread}>: **{count}** rips\n"
             else:
                 ret += f"- <#{channel_id}>: **{sub_count}** rips\n"
 
-        ret += "**Queues**\n"
-        queue_channels = [k for k, v in CHANNELS.items() if 'QUEUE' in v]
-        for channel_id in queue_channels:
-            channel = server.get_channel(channel_id)
-            rip_count = await count_rips(channel, 'msg')
-            ret += f"- <#{channel_id}>: **{rip_count}** rips\n"
+        if optional_arg is not None:
+            ret += "**Queues**\n"
+            queue_channels = [k for k, v in CHANNELS.items() if 'QUEUE' in v]
+            for channel_id in queue_channels:
+                channel = server.get_channel(channel_id)
+                rip_count = await count_rips(channel, 'msg')
+                ret += f"- <#{channel_id}>: **{rip_count}** rips\n"
 
-            rip_thread_counts = await count_rips(channel, 'thread')
-            for thread, count in rip_thread_counts.items():
-                ret += f"  - <#{thread}>: **{count}** rips\n"
+                rip_thread_counts = await count_rips(channel, 'thread')
+                for thread, count in rip_thread_counts.items():
+                    if count > 0:
+                        ret += f"  - <#{thread}>: **{count}** rips\n"
 
         long_message = split_long_message(ret)
         for line in long_message:
@@ -961,9 +965,9 @@ async def count_rips(channel: TextChannel, type: typing.Literal['pin', 'msg', 't
     """
     Returns the number of rips in a channel.
     `type` argument specifies what type of messages to retrieve:
-    - 'pin': Pinned messages. Assumes first pinned message is not a rip for simplicity
-    - 'msg': Messages in channel, ignoring threads
-    - 'thread': Messages in threads. Returns a dictionary of thread IDs and counts
+    - 'pin': Pinned messages. Assumes first pinned message is not a rip for simplicity.
+    - 'msg': Messages in channel, ignoring threads. Only count messages with ```.
+    - 'thread': Messages in threads. Returns a dictionary of thread IDs and counts.
     
     Notes:
     - `msg` might take a long time for big channels. Limit this to submissions or queue channels.
@@ -975,7 +979,7 @@ async def count_rips(channel: TextChannel, type: typing.Literal['pin', 'msg', 't
     elif type == 'msg':
         async for message in channel.history(limit = None):
             if channel is Thread or not (message.channel is Thread):
-                if len(extract_rip_link(message.content)) > 0:
+                if '```' in message.content:
                     count = count + 1
     elif type == 'thread':
         count = {}
