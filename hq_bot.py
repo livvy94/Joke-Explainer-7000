@@ -228,7 +228,7 @@ async def overdue(ctx: Context):
 
         for rip_id, rip_info in all_pins.items():
             if rip_info["Indicator"] == OVERDUE_INDICATOR:
-                result += make_markdown(rip_info, False)
+                result += make_markdown(rip_info, True)
         await send_embed(ctx, result)
 
 
