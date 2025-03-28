@@ -476,8 +476,8 @@ def make_markdown(rip_info: dict, display_reacts: bool) -> str:
     base_message = f'**[{rip_info["Title"]}]({rip_info["Link"]})**\n{rip_info["Author"]}'
     result = ""
 
-    if rip_info["Approved"] == True:
-        base_message = f'{APPROVED_INDICATOR} **[{rip_info["Title"]}]({rip_info["Link"]})** {APPROVED_INDICATOR}\n{rip_info["Author"]}'
+    if len(rip_info["Indicator"]) > 0:
+        base_message = f'{rip_info["Indicator"]} **[{rip_info["Title"]}]({rip_info["Link"]})** {rip_info["Indicator"]}\n{rip_info["Author"]}'
 
     if display_reacts:
         result = base_message + f' | {rip_info["Reacts"]}\n'
@@ -502,7 +502,7 @@ async def react_command(ctx: Context, react: str, check_func: typing.Callable, n
             if any([check_func(r) for r in message.reactions]):
                 return await get_reactions(channel, message)
             # if not, return an indication string to skip from markdown
-            return "FILTERED", False
+            return "FILTERED", ""
 
         filtered_pins = await get_pinned_msgs_and_react(ctx.channel, filter_reacts)
         
@@ -686,9 +686,9 @@ async def get_pinned_msgs_and_react(channel: TextChannel, react_func: typing.Cal
         # Get reactions
         if react_func is not None:
             message = await channel.fetch_message(pinned_message.id)
-            reacts, approved = await react_func(channel, message)
+            reacts, indicator = await react_func(channel, message)
         else:
-            reacts, approved = "", False
+            reacts, indicator = "", ""
 
         #get rid of all asterisks and underscores in the author so an odd number of them doesn't mess up the rest of the message
         author = author.replace('*', '').replace('_', '')
@@ -699,7 +699,7 @@ async def get_pinned_msgs_and_react(channel: TextChannel, react_func: typing.Cal
             'Author': author,
             'Reacts': reacts,
             'PinMiser': pinned_message.author.name,  # im mister rip christmas, im mister qoc
-            'Approved': approved,
+            'Indicator': indicator,
             'Link': f"<https://discordapp.com/channels/{str(channel.guild.id)}/{str(channel.id)}/{str(pinned_message.id)}>"
         }
         dict_index += 1
@@ -742,11 +742,11 @@ def react_is_number(react: Reaction) -> bool:
     return react_name(react) in KEYCAP_EMOJIS
 
 
-async def get_reactions(channel: TextChannel, message: Message) -> typing.Tuple[str, bool]:
+async def get_reactions(channel: TextChannel, message: Message) -> typing.Tuple[str, str]:
     """
     Return the reactions of a message.
     The message should contain the full reactions information.
-    Set 'approved' to True if the reactions indicate that the rip is approved.
+    Returns an additional emoji as special indicator for the message.
     Requirements for approval:
     - At least 3 more checks than rejects
     - No fixes or alerts
@@ -754,7 +754,7 @@ async def get_reactions(channel: TextChannel, message: Message) -> typing.Tuple[
     - If checkreq is present, change 3 to the corresponding value
     """
     reacts = ""
-    approved = False
+    indicator = ""
 
     num_checks = 0
     num_rejects = 0
@@ -786,9 +786,13 @@ async def get_reactions(channel: TextChannel, message: Message) -> typing.Tuple[
         else:
             reacts += f"{react.emoji} " * react.count
     
-    approved = (num_checks - num_rejects >= checks_required) and not fix_or_alert and (not specs_needed or num_goldchecks >= specs_required)
+    check_passed = (num_checks - num_rejects >= checks_required) and not fix_or_alert
+    specs_passed = (not specs_needed or num_goldchecks >= specs_required)
 
-    return reacts, approved
+    if check_passed:
+        indicator = APPROVED_INDICATOR if specs_passed else AWAITING_SPECIALIST_INDICATOR
+
+    return reacts, indicator
 
 async def process_pins(channel: TextChannel, get_reacts: bool):
     """
@@ -798,7 +802,7 @@ async def process_pins(channel: TextChannel, get_reacts: bool):
     return await get_pinned_msgs_and_react(channel, get_reactions if get_reacts else None)
 
 
-async def vet_message(channel: TextChannel, message: Message) -> typing.Tuple[str, bool]:
+async def vet_message(channel: TextChannel, message: Message) -> typing.Tuple[str, str]:
     """
     Return the QoC verdict of a message as emoji reactions.
     """
@@ -812,7 +816,7 @@ async def vet_message(channel: TextChannel, message: Message) -> typing.Tuple[st
         if code == -1:
             print("Message: {}\n\nURL: {}\n\nError: {}".format(message.content, url, msg))
 
-    return reacts, False
+    return reacts, ""
 
 async def vet_pins(channel: TextChannel):
     """
