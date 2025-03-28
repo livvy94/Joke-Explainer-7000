@@ -519,7 +519,9 @@ async def stats(ctx: Context):
             for thread, count in rip_thread_counts.items():
                 ret += f"  - <#{thread}>: **{count}** rips\n"
 
-        await ctx.channel.send(ret)
+        long_message = split_long_message(ret)
+        for line in long_message:
+            await ctx.channel.send(line)
 
 
 # While it might occur to folks in the future that a good command to write would be a rip feedback-sending command, something like that
@@ -617,7 +619,7 @@ async def send_embed(ctx: Context, message: str, delete_after: float = MESSAGE_S
         await ctx.channel.send(embed=fancy_message, delete_after=delete_after)
 
 def channel_is_type(channel: TextChannel, type: str):
-    return channel.id not in CHANNELS.keys() or type not in CHANNELS[channel.id]
+    return channel.id in CHANNELS.keys() and type in CHANNELS[channel.id]
 
 def heard_command(command_name: str, user: str):
     today = datetime.now() # Technically not useful, but it looks gorgeous on my CRT monitor
@@ -959,7 +961,7 @@ async def count_rips(channel: TextChannel, type: typing.Literal['pin', 'msg', 't
     """
     Returns the number of rips in a channel.
     `type` argument specifies what type of messages to retrieve:
-    - 'pin': Pinned messages
+    - 'pin': Pinned messages. Assumes first pinned message is not a rip for simplicity
     - 'msg': Messages in channel, ignoring threads
     - 'thread': Messages in threads. Returns a dictionary of thread IDs and counts
     
@@ -969,19 +971,17 @@ async def count_rips(channel: TextChannel, type: typing.Literal['pin', 'msg', 't
     count = 0
     if type == 'pin':
         pins = await channel.pins()
-        for message in pins:
-            if len(extract_rip_link(message)) > 0:
-                count = count + 1
+        count = len(pins) - 1
     elif type == 'msg':
         async for message in channel.history(limit = None):
             if channel is Thread or not (message.channel is Thread):
-                if len(extract_rip_link(message)) > 0:
+                if len(extract_rip_link(message.content)) > 0:
                     count = count + 1
     elif type == 'thread':
         count = {}
         async for message in channel.history(limit = None):
             if message.thread is not None:
-                count[message.thread.id] = count_rips(message.thread, 'msg')
+                count[message.thread.id] = await count_rips(message.thread, 'msg')
     
     return count
 
