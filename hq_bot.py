@@ -774,7 +774,7 @@ def rip_is_overdue(message: Message) -> bool:
     """
     Returns true if the message is older than OVERDUE_DAYS
     """
-    return datetime.now() - message.created_at > timedelta(days=OVERDUE_DAYS)
+    return datetime.now(timezone.utc) - message.created_at > timedelta(days=OVERDUE_DAYS)
 
 
 async def get_reactions(channel: TextChannel, message: Message) -> typing.Tuple[str, str]:
