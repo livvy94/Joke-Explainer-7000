@@ -444,12 +444,12 @@ async def stats(ctx: Context):
                 else:
                     team_count += 1
             
-            ret += f"- <#{channel_id}>: **{team_count + email_count}** rips\n\t- {team_count} team subs\n\t{email_count} email subs\n"
+            ret += f"- <#{channel_id}>: **{team_count + email_count}** rips\n\t- {team_count} team subs\n\t- {email_count} email subs\n"
 
         ret += "**Submission channels**\n"
 
         sub_count = await count_messages(server.get_channel(submission_channel))
-        ret += - f"<#{submission_channel}>: **{sub_count}** rips"
+        ret += f"- <#{submission_channel}>: **{sub_count}** rips"
 
         await ctx.channel.send(ret)
 
