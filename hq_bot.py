@@ -4,7 +4,7 @@ from discord import Message, Thread, TextChannel, Reaction
 from discord.abc import GuildChannel
 from discord.ext import commands
 from discord.ext.commands import Context
-from bot_secrets import token, roundup_channels, discussion_channels, submission_channel, op_channelid, youtube_api_key, channel_name
+from bot_secrets import TOKEN, YOUTUBE_API_KEY, YOUTUBE_CHANNEL_NAME, CHANNELS
 from datetime import datetime, timezone, timedelta
 
 from simpleQoC.qoc import performQoC, msgContainsBitrateFix, msgContainsClippingFix, ffmpegExists
@@ -66,7 +66,7 @@ async def on_ready():
 
 @bot.event
 async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Thread], last_pin: datetime):
-    if channel_is_not_qoc(channel):
+    if not channel_is_type(channel, 'ROUNDUP'):
         return
     
     global latest_pin_time
@@ -99,7 +99,7 @@ async def roundup(ctx: Context, optional_time = None):
     Roundup command. Retrieve all pinned messages (except the first one) and their reactions.
     Accepts an optional argument to control embed's display time *in hours*.
     """
-    if channel_is_not_qoc(ctx.channel): return
+    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
     heard_command("roundup", ctx.message.author.name)
 
     if optional_time is not None:
@@ -126,7 +126,7 @@ async def links(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) without showing reactions.
     """
-    if channel_is_not_qoc(ctx.channel): return
+    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
     heard_command("links", ctx.message.author.name)
 
     async with ctx.channel.typing():
@@ -143,7 +143,7 @@ async def mypins(ctx: Context, optional_arg = None):
     Retrieve all messages pinned by the command author.
     Accepts an optional argument to "hide" the reactions (legacy behavior).
     """
-    if channel_is_not_qoc(ctx.channel): return
+    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
     heard_command("mypins", ctx.message.author.name)
 
     async with ctx.channel.typing():
@@ -163,7 +163,7 @@ async def fresh(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) with 0 reactions.
     """
-    if channel_is_not_qoc(ctx.channel): return
+    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
     heard_command("fresh", ctx.message.author.name)
     result = ""
 
@@ -218,7 +218,7 @@ async def overdue(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) that are overdue.
     """
-    if channel_is_not_qoc(ctx.channel): return
+    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
     heard_command("overdue", ctx.message.author.name)
     result = ""
 
@@ -232,16 +232,21 @@ async def overdue(ctx: Context):
         await send_embed(ctx, result)
 
 
-@bot.command(name='qoc_roundup', brief='view rips in QoC in the discussion channel')
-async def qoc_roundup(ctx: Context):
+@bot.command(name='qoc_roundup', brief='view QoC rips in the proxy channel')
+async def qoc_roundup(ctx: Context, qoc_channel_link: str = None):
     """
-    Same as roundup, but to be run in a different channel for viewing convenience
+    Same as roundup, but to be run in a different channel for viewing convenience.
+    Accepts an optional link argument to the roundup-type channel to view - if not, first valid channel in config is used.
     """
-    if channel_is_not_discussion(ctx.channel): return
+    if not channel_is_type(ctx.channel, 'PROXY_ROUNDUP'): return
     heard_command("qoc_roundup", ctx.message.author.name)
 
-    # Hardcode the channel to fetch pins from to be the first in the roundup_channels list
-    channel = bot.get_channel(roundup_channels[0])
+    qoc_channel, msg = parse_channel_link(qoc_channel_link, ["ROUNDUP"])
+    if len(msg) > 0:
+        await ctx.channel.send(msg)
+        if qoc_channel == -1: return
+
+    channel = bot.get_channel(qoc_channel)
 
     async with ctx.channel.typing():
         all_pins = await process_pins(channel, True)
@@ -259,13 +264,12 @@ async def qoc_roundup(ctx: Context):
 @bot.command(name='count', brief="counts all pinned rips")
 async def count(ctx: Context):
     """
-    Count the number of pinned messages (minus 1).
+    Count the number of pinned messages containing rip links.
     """
     heard_command("count", ctx.message.author.name)
 
     async with ctx.channel.typing():
-        pin_list = await ctx.channel.pins()
-        pincount = len(pin_list) - 1
+        pincount = await count_rips(ctx.channel, 'pin')
 
         if (pincount < 1):
             result = "`* Determination.`"
@@ -298,7 +302,7 @@ async def vet(ctx: Context):
     """
     Find rips in pinned messages with bitrate/clipping issues and show their details
     """
-    if channel_is_not_qoc(ctx.channel): return
+    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
     heard_command("vet", ctx.message.author.name)
 
     if not ffmpegExists():
@@ -330,7 +334,7 @@ async def vet_all(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) and perform basic QoC, giving emoji labels.
     """
-    if channel_is_not_qoc(ctx.channel): return
+    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
     heard_command("vet_all", ctx.message.author.name)
 
     if not ffmpegExists():
@@ -352,15 +356,19 @@ async def vet_msg(ctx: Context, msg_link: str):
     Perform basic QoC on a linked message.
     The first non-YouTube link found in the message is treated as the rip URL.
     """
-    if channel_is_not_qoc(ctx.channel): return
+    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
     heard_command("vet_msg", ctx.message.author.name)
 
     async with ctx.channel.typing():
-        # https://stackoverflow.com/a/63212069
-        ids = msg_link.split('/')
-        server_id = int(ids[4])
-        channel_id = int(ids[5])
-        msg_id = int(ids[6])
+        try:
+            ids = msg_link.split('/')
+            server_id = int(ids[4])
+            channel_id = int(ids[5])
+            msg_id = int(ids[6])
+        except IndexError:
+            await ctx.channel.send("Error: Cannot parse argument - make sure it is a valid link to message.")
+            return
+        
         server = bot.get_guild(server_id)
         channel = server.get_channel(channel_id)
         message = await channel.fetch_message(msg_id)
@@ -376,7 +384,7 @@ async def vet_url(ctx: Context, url: str):
     """
     Perform basic QoC on an URL.
     """
-    if channel_is_not_qoc(ctx.channel): return
+    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
     heard_command("vet_url", ctx.message.author.name)
 
     async with ctx.channel.typing():
@@ -390,16 +398,19 @@ async def vet_url(ctx: Context, url: str):
 
 @bot.command(name='help', aliases = ['commands', 'halp', 'test'])
 async def help(ctx: Context):
+    proxy_channels = [k for k, v in CHANNELS.items() if 'PROXY_ROUNDUP' in v]
+    proxy_channel = '' if len(proxy_channels) == 0 else f' <#{proxy_channels[0]}>'
+    
     async with ctx.channel.typing():
         result = "_**YOU ARE NOW QoCING:**_\n`!roundup` [embed_hours]" + roundup.brief \
             + "\n`!links` " + links.brief \
-            + "\n`!qoc_roundup` " + qoc_roundup.brief + f' <#{discussion_channels[0]}>' \
+            + "\n`!qoc_roundup` [channel_id] " + qoc_roundup.brief + proxy_channel \
             + "\n_**Special lists:**_\n`!mypins` [no_react]" + mypins.brief \
             + "\n`!checks`\n`!rejects`\n`!wrenches`\n`!stops`" \
             + "\n`!overdue` " + overdue.brief \
             + "\n_**Misc. tools**_\n`!count` " + count.brief \
             + "\n`!limitcheck` " + limitcheck.brief \
-            + "\n`!count_subs` " + count_subs.brief \
+            + "\n`!count_subs` [channel_id] " + count_subs.brief \
             + "\n`!stats` " + stats.brief \
             + "\n_**Auto QoC tools**_\n`!vet` " + vet.brief + "\n`!vet_all` " + vet_all.brief \
             + "\n`!vet_msg <link to message>` " + vet_msg.brief + "\n`!vet_url <link to URL>` " + vet_url.brief
@@ -417,19 +428,31 @@ async def cat(ctx: Context):
 
 
 @bot.command(name='count_subs', brief='count number of remaining submissions')
-async def count_subs(ctx: Context):
+async def count_subs(ctx: Context, sub_channel_link: str = None):
     """
     Count number of messages in a channel (e.g. submissions).
     Retrieve the entire history of a channel and count the number of messages not in threads.
+    Accepts an optional link argument to the subs-type channel to view - if not, first valid channel in config is used.
     """
-    if channel_is_not_qoc(ctx.channel): return
+    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
     heard_command("count_subs", ctx.message.author.name)
+
+    sub_channel, msg = parse_channel_link(sub_channel_link, ['SUBS', 'SUBS_PIN', 'SUBS_THREAD'])
+    if len(msg) > 0:
+        await ctx.channel.send(msg)
+        if sub_channel == -1: return
 
     async with ctx.channel.typing():
         server = ctx.guild
-        channel = server.get_channel(submission_channel)
+        channel = server.get_channel(sub_channel)
 
-        count = await count_messages(channel)
+        if channel_is_type(channel, 'SUBS'): t = 'msg'
+        elif channel_is_type(channel, 'SUBS_PIN'): t = 'pin'
+        elif channel_is_type(channel, 'SUBS_THREAD'): t = 'thread'
+
+        count = await count_rips(channel, t)
+        if t == 'thread':
+            count = sum(count.values())
 
         if (count < 1):
             result = "```ansi\n\u001b[0;31m* Determination.\u001b[0;0m```"
@@ -441,17 +464,17 @@ async def count_subs(ctx: Context):
 @bot.command(name='stats', brief='display remaining number of rips across channels')
 async def stats(ctx: Context):
     """
-    Display the number of rips in the QoC and submission channels
+    Display the number of rips in the QoC, submission and queue channels
     """
-    if channel_is_not_qoc(ctx.channel): return
+    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
     heard_command("stats", ctx.message.author.name)
 
     server = ctx.guild
 
     async with ctx.channel.typing():
         ret = "**QoC channels**\n"
-
-        for channel_id in roundup_channels:
+        qoc_channels = [k for k, v in CHANNELS.items() if 'QOC' in v]
+        for channel_id in qoc_channels:
             team_count = 0
             email_count = 0
 
@@ -469,9 +492,32 @@ async def stats(ctx: Context):
             ret += f"- <#{channel_id}>: **{team_count + email_count}** rips\n  - {team_count} team subs\n  - {email_count} email subs\n"
 
         ret += "**Submission channels**\n"
+        sub_channels = [k for k, v in CHANNELS.items() if any(t in v for t in ['SUBS', 'SUBS_PIN', 'SUBS_THREAD'])]
+        for channel_id in sub_channels:
+            channel = server.get_channel(channel_id)
 
-        sub_count = await count_messages(server.get_channel(submission_channel))
-        ret += f"- <#{submission_channel}>: **{sub_count}** rips"
+            if channel_is_type(channel, 'SUBS'): t = 'msg'
+            elif channel_is_type(channel, 'SUBS_PIN'): t = 'pin'
+            elif channel_is_type(channel, 'SUBS_THREAD'): t = 'thread'
+
+            sub_count = await count_rips(channel, t)
+            if t =='thread':
+                ret += f"- <#{channel_id}>:\n"
+                for thread, count in sub_count.items():
+                    ret += f"  - <#{thread}>: **{count}** rips\n"
+            else:
+                ret += f"- <#{channel_id}>: **{sub_count}** rips\n"
+
+        ret += "**Queues**\n"
+        queue_channels = [k for k, v in CHANNELS.items() if 'QUEUE' in v]
+        for channel_id in queue_channels:
+            channel = server.get_channel(channel_id)
+            rip_count = await count_rips(channel, 'msg')
+            ret += f"- <#{channel_id}>: **{rip_count}** rips\n"
+
+            rip_thread_counts = await count_rips(channel, 'thread')
+            for thread, count in rip_thread_counts.items():
+                ret += f"  - <#{thread}>: **{count}** rips\n"
 
         await ctx.channel.send(ret)
 
@@ -515,8 +561,7 @@ async def react_command(ctx: Context, react: str, check_func: typing.Callable, n
     Unified command to only return messages with specific reactions.
     Uses the react_is_ABC helper functions to filter reacts.
     """
-    if channel_is_not_qoc(ctx.channel):
-        return
+    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
     heard_command(react, ctx.message.author.name)
 
     async with ctx.channel.typing():
@@ -571,14 +616,8 @@ async def send_embed(ctx: Context, message: str, delete_after: float = MESSAGE_S
         fancy_message = discord.Embed(description=line, color=EMBED_COLOR)
         await ctx.channel.send(embed=fancy_message, delete_after=delete_after)
 
-def channel_is_not_qoc(channel: TextChannel):
-    return channel.id not in roundup_channels
-
-def channel_is_not_discussion(channel: TextChannel):
-    return channel.id not in discussion_channels
-
-def channel_is_not_op(channel: TextChannel):
-    return channel.id != op_channelid
+def channel_is_type(channel: TextChannel, type: str):
+    return channel.id not in CHANNELS.keys() or type not in CHANNELS[channel.id]
 
 def heard_command(command_name: str, user: str):
     today = datetime.now() # Technically not useful, but it looks gorgeous on my CRT monitor
@@ -901,7 +940,7 @@ async def check_qoc_and_metadata(message: Message, fullFeedback: bool = False) -
         title = description.splitlines()[0]
         # game = title.split(' - ')[-1]     # this doesn't work in certain cases, think of another way to get game name
 
-        mtCode, mtMsg = await run_blocking(verifyTitle, title, channel_name, playlistId, youtube_api_key)
+        mtCode, mtMsg = await run_blocking(verifyTitle, title, YOUTUBE_CHANNEL_NAME, playlistId, YOUTUBE_API_KEY)
     else:
         mtCode, mtMsg = 0, "Metadata is OK."
 
@@ -916,19 +955,66 @@ async def check_qoc_and_metadata(message: Message, fullFeedback: bool = False) -
     return verdict, msg
 
 
-async def count_messages(channel: TextChannel) -> int:
+async def count_rips(channel: TextChannel, type: typing.Literal['pin', 'msg', 'thread']) -> int | dict:
     """
-    Returns the number of non-thread messages in a channel.
-    This includes "started a thread" messages.
+    Returns the number of rips in a channel.
+    `type` argument specifies what type of messages to retrieve:
+    - 'pin': Pinned messages
+    - 'msg': Messages in channel, ignoring threads
+    - 'thread': Messages in threads. Returns a dictionary of thread IDs and counts
     
-    Warning: Might take a long time for big channels. Limit this to submissions or queue channels.
+    Notes:
+    - `msg` might take a long time for big channels. Limit this to submissions or queue channels.
     """
     count = 0
-    async for message in channel.history(limit = None):
-        if not (message.channel is Thread):
-            count = count + 1
+    if type == 'pin':
+        pins = await channel.pins()
+        for message in pins:
+            if len(extract_rip_link(message)) > 0:
+                count = count + 1
+    elif type == 'msg':
+        async for message in channel.history(limit = None):
+            if channel is Thread or not (message.channel is Thread):
+                if len(extract_rip_link(message)) > 0:
+                    count = count + 1
+    elif type == 'thread':
+        count = {}
+        async for message in channel.history(limit = None):
+            if message.thread is not None:
+                count[message.thread.id] = count_rips(message.thread, 'msg')
     
     return count
 
+
+def parse_channel_link(link: str | None, types: typing.List[str]) -> typing.Tuple[int, str]:
+    """
+    Parse the channel link and return the channel ID if it matches the specified types.
+    If channel is invalid or does not match the types, returns the first channel in config matching the types.
+    Returns null channel if no such channel types exists - the caller function should return early.
+
+    Return values:
+    - `channel_id`: Parsed channel ID if it is valid, default channel if it isn't, and -1 if no default channel
+    - `msg`: Message to print if `channel_id` is not parsed from `link`, empty string otherwise
+    """
+    try:
+        default_id = [k for k, v in CHANNELS.items() if any(t in v for t in types)][0]
+    except IndexError:
+        return -1, f"Error: No default channels found."
+    
+    if link is None:
+        return default_id, ""
+
+    try:
+        arg = int(link.split('/')[5])
+    except IndexError:
+        return -1, "Error: Cannot parse argument - make sure it is a valid link to channel."
+
+    # this is same as channel_is_type, but we only have the ID number
+    if arg in CHANNELS.keys() and any(t in CHANNELS[arg] for t in types):
+        return arg, ""
+    else:
+        return default_id, f"Warning: Link is not a valid roundup channel, defaulting to <#{default_id}>."
+
+
 # Now that everything's defined, run the dang thing
-bot.run(token)
+bot.run(TOKEN)
