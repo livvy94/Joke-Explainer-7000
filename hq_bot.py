@@ -433,7 +433,7 @@ async def stats(ctx: Context):
             team_count = 0
             email_count = 0
 
-            channel = server.get_channel(submission_channel)
+            channel = server.get_channel(channel_id)
             pin_list = await channel.pins()
             pin_list.pop(-1) # get rid of a certain post about reading the rules
 
