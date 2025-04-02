@@ -13,7 +13,7 @@ YOUTUBE_CHANNEL_NAME = ""
 # - SUBS_THREAD: Submission channel where subs are posted in threads. Used in !count_subs and !stats.
 # - QUEUE: Queue channel where approved rips are posted. Used in !stats.
 # - PROXY_ROUNDUP: Enables !qoc_roundup.
-# - OP: Development channel (legacy).
+# - DEBUG: For testing purposes.
 #
 # The first ROUNDUP and SUBS channels are used as default !qoc_roundup and !count_subs channels.
 
