@@ -939,7 +939,7 @@ async def check_qoc_and_metadata(message: Message, fullFeedback: bool = False) -
     
     # QoC
     urls = extract_rip_link(message.content)
-    qcCode = -1
+    qcCode, qcMsg = -1, "No links detected."
     for url in urls:
         qcCode, qcMsg = await run_blocking(performQoC, url, fullFeedback)
         if qcCode != -1:
