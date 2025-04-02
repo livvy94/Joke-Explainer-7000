@@ -314,14 +314,18 @@ async def vet(ctx: Context):
         pin_list.pop(-1) # get rid of a certain post about reading the rules
 
         for pinned_message in pin_list:
-            url = extract_rip_link(pinned_message.content)
-            code, msg = await run_blocking(performQoC, url, False)
-            rip_title = get_rip_title(pinned_message)
-            verdict = code_to_verdict(code, msg)
+            urls = extract_rip_link(pinned_message.content)
+            for url in urls:
+                code, msg = await run_blocking(performQoC, url, False)
+                rip_title = get_rip_title(pinned_message)
+                verdict = code_to_verdict(code, msg)
 
-            if code != 0:
-                link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(ctx.channel.id)}/{str(pinned_message.id)}>"
-                await ctx.channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}\n-# React {} if this is resolved.".format(rip_title, link, verdict, msg, DEFAULT_CHECK))
+                if code != 0:
+                    link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(ctx.channel.id)}/{str(pinned_message.id)}>"
+                    await ctx.channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}\n-# React {} if this is resolved.".format(rip_title, link, verdict, msg, DEFAULT_CHECK))
+                
+                if code != -1:
+                    break
 
         if len(pin_list) == 0:
             await ctx.channel.send("No rips found.")
@@ -640,20 +644,21 @@ async def run_blocking(blocking_func: typing.Callable, *args, **kwargs) -> typin
     return await bot.loop.run_in_executor(None, func)
 
 
-def extract_rip_link(text: str) -> str:
+def extract_rip_link(text: str) -> typing.List[str]:
     """
-    Extract the rip link from text.
-    Assumes it is the first non-YouTube link.
+    Extract potential rip links from text.
+    Ignores Youtube links.
     """
     # Regular expression to match links that start with "http"
     pattern = r'\b(http[^\s]+)\b'
     # Find all matches in the text
     matches = re.findall(pattern, text)
     # Filter out any matches that contain "youtu"
+    ret = []
     for match in matches:
         if "youtu" not in match:
-            return match  # Return the first valid link
-    return ""  # Return empty string if no valid links are found
+            ret.append(match)
+    return ret
 
 
 def extract_playlist_id(text: str) -> str:
@@ -882,15 +887,17 @@ async def vet_message(channel: TextChannel, message: Message) -> typing.Tuple[st
     """
     Return the QoC verdict of a message as emoji reactions.
     """
-    url = extract_rip_link(message.content)
+    urls = extract_rip_link(message.content)
     reacts = ""
-    if url is not None:
+    for url in urls:
         code, msg = await run_blocking(performQoC, url)
         reacts = code_to_verdict(code, msg)
         
         # debug
         if code == -1:
             print("Message: {}\n\nURL: {}\n\nError: {}".format(message.content, url, msg))
+        else:
+            break
 
     return reacts, ""
 
@@ -931,8 +938,12 @@ async def check_qoc_and_metadata(message: Message, fullFeedback: bool = False) -
     rip_title = get_rip_title(message)
     
     # QoC
-    url = extract_rip_link(message.content)
-    qcCode, qcMsg = await run_blocking(performQoC, url, fullFeedback)
+    urls = extract_rip_link(message.content)
+    qcCode = -1
+    for url in urls:
+        qcCode, qcMsg = await run_blocking(performQoC, url, fullFeedback)
+        if qcCode != -1:
+            break
     if qcCode == -1:
         print("Warning: cannot QoC message\nRip: {}\n{}".format(rip_title, qcMsg))
     elif (qcCode == 1) or fullFeedback:
@@ -979,7 +990,7 @@ async def count_rips(channel: TextChannel, type: typing.Literal['pin', 'msg', 't
     elif type == 'msg':
         async for message in channel.history(limit = None):
             if channel is Thread or not (message.channel is Thread):
-                if '```' in message.content:
+                if '```' in message.content and len(extract_rip_link(message.content)) > 0:
                     count = count + 1
     elif type == 'thread':
         count = {}
