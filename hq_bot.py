@@ -406,16 +406,16 @@ async def help(ctx: Context):
     proxy_channel = '' if len(proxy_channels) == 0 else f' <#{proxy_channels[0]}>'
     
     async with ctx.channel.typing():
-        result = "_**YOU ARE NOW QoCING:**_\n`!roundup [embed\_hours: float]`" + roundup.brief \
+        result = "_**YOU ARE NOW QoCING:**_\n`!roundup [embed_hours: float]`" + roundup.brief \
             + "\n`!links` " + links.brief \
             + "\n`!qoc_roundup [channel: link]` " + qoc_roundup.brief + proxy_channel \
-            + "\n_**Special lists:**_\n`!mypins [no\_react: any]`" + mypins.brief \
+            + "\n_**Special lists:**_\n`!mypins [no_react: any]`" + mypins.brief \
             + "\n`!checks`\n`!rejects`\n`!wrenches`\n`!stops`" \
             + "\n`!overdue` " + overdue.brief \
             + "\n_**Misc. tools**_\n`!count` " + count.brief \
             + "\n`!limitcheck` " + limitcheck.brief \
             + "\n`!count_subs [channel: link]` " + count_subs.brief \
-            + "\n`!stats [show\_queues: any]`" + stats.brief \
+            + "\n`!stats [show_queues: any]`" + stats.brief \
             + "\n_**Auto QoC tools**_\n`!vet` " + vet.brief + "\n`!vet_all` " + vet_all.brief \
             + "\n`!vet_msg [message: link]` " + vet_msg.brief + "\n`!vet_url [URL: link]` " + vet_url.brief
         await send_embed(ctx, result, delete_after=None)
