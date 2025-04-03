@@ -213,7 +213,7 @@ async def rejects(ctx: Context):
     await react_command(ctx, 'reject', react_is_reject, "No rejected rips found.")
 
 
-@bot.command(name='overdue', brief=f'display rips that have been here for over {OVERDUE_DAYS} days')
+@bot.command(name='overdue', brief=f'display rips that have been pinned for over {OVERDUE_DAYS} days')
 async def overdue(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) that are overdue.
@@ -406,18 +406,18 @@ async def help(ctx: Context):
     proxy_channel = '' if len(proxy_channels) == 0 else f' <#{proxy_channels[0]}>'
     
     async with ctx.channel.typing():
-        result = "_**YOU ARE NOW QoCING:**_\n`!roundup` [embed\_hours]" + roundup.brief \
+        result = "_**YOU ARE NOW QoCING:**_\n`!roundup [embed\_hours: float]`" + roundup.brief \
             + "\n`!links` " + links.brief \
-            + "\n`!qoc_roundup` [channel\_id] " + qoc_roundup.brief + proxy_channel \
-            + "\n_**Special lists:**_\n`!mypins` [no\_react]" + mypins.brief \
+            + "\n`!qoc_roundup [channel: link]` " + qoc_roundup.brief + proxy_channel \
+            + "\n_**Special lists:**_\n`!mypins [no\_react: any]`" + mypins.brief \
             + "\n`!checks`\n`!rejects`\n`!wrenches`\n`!stops`" \
             + "\n`!overdue` " + overdue.brief \
             + "\n_**Misc. tools**_\n`!count` " + count.brief \
             + "\n`!limitcheck` " + limitcheck.brief \
-            + "\n`!count_subs` [channel\_id] " + count_subs.brief \
-            + "\n`!stats` [show\_queues]" + stats.brief \
+            + "\n`!count_subs [channel: link]` " + count_subs.brief \
+            + "\n`!stats [show\_queues: any]`" + stats.brief \
             + "\n_**Auto QoC tools**_\n`!vet` " + vet.brief + "\n`!vet_all` " + vet_all.brief \
-            + "\n`!vet_msg <link to message>` " + vet_msg.brief + "\n`!vet_url <link to URL>` " + vet_url.brief
+            + "\n`!vet_msg [message: link]` " + vet_msg.brief + "\n`!vet_url [URL: link]` " + vet_url.brief
         await send_embed(ctx, result, delete_after=None)
 
 @bot.command(name='op')
