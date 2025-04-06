@@ -1069,7 +1069,8 @@ async def get_rips(channel: TextChannel, type: typing.Literal['pin', 'msg', 'thr
         rips = {}
         async for message in channel.history(limit = None):
             if message.thread is not None:
-                rips[message.thread.id] = await get_rips(message.thread, 'msg')[message.thread.id]
+                thread_rips = await get_rips(message.thread, 'msg')
+                rips[message.thread.id] = thread_rips[message.thread.id]
     
     return rips
 
