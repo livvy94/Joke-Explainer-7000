@@ -412,27 +412,28 @@ async def scan(ctx: Context, channel_link: str):
         return
     
     channel = bot.get_channel(channel_id)
-    if channel_is_type(channel, 'SUBS'): t = 'msg'
-    elif channel_is_type(channel, 'SUBS_PIN'): t = 'pin'
-    elif channel_is_type(channel, 'SUBS_THREAD'): t = 'thread'
-    elif channel_is_type(channel, 'QUEUE'): t = 'thread'
+    if channel_is_type(channel, 'SUBS'): types = ['msg']
+    elif channel_is_type(channel, 'SUBS_PIN'): types = ['pin']
+    elif channel_is_type(channel, 'SUBS_THREAD'): types = ['thread']
+    elif channel_is_type(channel, 'QUEUE'): types = ['msg', 'thread']
 
     async with ctx.channel.typing():
-        rips = await get_rips(channel, t)
-        count = 0
-        
-        for k, v in rips.items():
-            for message in v:
-                count += 1
-                rip_title = get_rip_title(message)
+        for t in types:
+            rips = await get_rips(channel, t)
+            count = 0
+            
+            for k, v in rips.items():
+                for message in v:
+                    count += 1
+                    rip_title = get_rip_title(message)
 
-                mtCode, mtMsg = await check_metadata(message)
-                if mtCode == -1:
-                    print("Warning: cannot check metadata of message\nRip: {}\n{}".format(rip_title, mtMsg))
+                    mtCode, mtMsg = await check_metadata(message)
+                    if mtCode == -1:
+                        print("Warning: cannot check metadata of message\nRip: {}\n{}".format(rip_title, mtMsg))
 
-                if mtCode == 1:
-                    link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(channel_id)}/{str(message.id)}>"
-                    await ctx.channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}".format(rip_title, link, DEFAULT_METADATA, mtMsg))
+                    if mtCode == 1:
+                        link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(channel_id)}/{str(message.id)}>"
+                        await ctx.channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}".format(rip_title, link, DEFAULT_METADATA, mtMsg))
         
         await ctx.channel.send("Finished checking metadata of {} rips.".format(count))
     
