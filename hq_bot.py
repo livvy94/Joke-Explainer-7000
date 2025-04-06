@@ -314,18 +314,13 @@ async def vet(ctx: Context):
         pin_list.pop(-1) # get rid of a certain post about reading the rules
 
         for pinned_message in pin_list:
-            urls = extract_rip_link(pinned_message.content)
-            for url in urls:
-                code, msg = await run_blocking(performQoC, url, False)
-                rip_title = get_rip_title(pinned_message)
-                verdict = code_to_verdict(code, msg)
+            qcCode, qcMsg = await check_qoc(pinned_message, False)
+            rip_title = get_rip_title(pinned_message)
+            verdict = code_to_verdict(qcCode, qcMsg)
 
-                if code != 0:
-                    link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(ctx.channel.id)}/{str(pinned_message.id)}>"
-                    await ctx.channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}\n-# React {} if this is resolved.".format(rip_title, link, verdict, msg, DEFAULT_CHECK))
-                
-                if code != -1:
-                    break
+            if qcCode != 0:
+                link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(ctx.channel.id)}/{str(pinned_message.id)}>"
+                await ctx.channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}\n-# React {} if this is resolved.".format(rip_title, link, verdict, qcMsg, DEFAULT_CHECK))
 
         if len(pin_list) == 0:
             await ctx.channel.send("No rips found.")
@@ -398,6 +393,50 @@ async def vet_url(ctx: Context, url: str):
         await ctx.channel.send("**Verdict**: {}\n**Comments**:\n{}".format(verdict, msg))
 
 
+@bot.command(name='scan', brief='scan queue/sub channel for metadata issues')
+async def scan(ctx: Context, channel_link: str):
+    """
+    Scan through a submission or queue channel for metadata issues.
+    Channel link must be provided as argument.
+    """
+    if not (channel_is_type(ctx.channel, 'ROUNDUP') or channel_is_type(ctx.channel, 'PROXY_ROUNDUP')): return
+    heard_command("scan", ctx.message.author.name)
+
+    if channel_link is None:
+        await ctx.channel.send("Please provide a link to the channel you want to scan.")
+        return
+
+    channel_id, msg = parse_channel_link(channel_link, ['SUBS', 'SUBS_PIN', 'SUBS_THREAD', 'QUEUE'])
+    if len(msg) > 0:
+        await ctx.channel.send(msg)
+        return
+    
+    channel = bot.get_channel(channel_id)
+    if channel_is_type(channel, 'SUBS'): t = 'msg'
+    elif channel_is_type(channel, 'SUBS_PIN'): t = 'pin'
+    elif channel_is_type(channel, 'SUBS_THREAD'): t = 'thread'
+    elif channel_is_type(channel, 'QUEUE'): t = 'thread'
+
+    async with ctx.channel.typing():
+        rips = await get_rips(channel, t)
+        count = 0
+        
+        for k, v in rips.items():
+            for message in v:
+                count += 1
+                rip_title = get_rip_title(message)
+
+                mtCode, mtMsg = await check_metadata(message)
+                if mtCode == -1:
+                    print("Warning: cannot check metadata of message\nRip: {}\n{}".format(rip_title, mtMsg))
+
+                if mtCode == 1:
+                    link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(channel_id)}/{str(message.id)}>"
+                    await ctx.channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}".format(rip_title, link, DEFAULT_METADATA, mtCode))
+        
+        await ctx.channel.send("Finished checking metadata of {} rips.".format(count))
+    
+
 # ============ Helper/test commands ============== #
 
 @bot.command(name='help', aliases = ['commands', 'halp', 'test'])
@@ -417,7 +456,8 @@ async def help(ctx: Context):
             + "\n`!count_subs [channel: link]` " + count_subs.brief \
             + "\n`!stats [show_queues: any]`" + stats.brief \
             + "\n_**Auto QoC tools**_\n`!vet` " + vet.brief + "\n`!vet_all` " + vet_all.brief \
-            + "\n`!vet_msg [message: link]` " + vet_msg.brief + "\n`!vet_url [URL: link]` " + vet_url.brief
+            + "\n`!vet_msg <message: link>` " + vet_msg.brief + "\n`!vet_url <URL: link>` " + vet_url.brief \
+            + "\n`!scan <channel: link>`" + scan.brief
         await send_embed(ctx, result, delete_after=None)
 
 @bot.command(name='op')
@@ -926,31 +966,23 @@ def code_to_verdict(code: int, msg: str) -> str:
     return verdict
 
 
-async def check_qoc_and_metadata(message: Message, fullFeedback: bool = False) -> typing.Tuple[str, str]:
+async def check_qoc(message: Message, fullFeedback: bool = False) -> typing.Tuple[str, str]:
     """
-    Perform simpleQoC and metadata checking on a message.
-
-    - **message**: Message to check
-    - **show_ok**: If True, display "OK" messages. Otherwise, display only issues.
+    Perform simpleQoC on a message.
     """
-    verdict = ""
-    msg = ""
-    rip_title = get_rip_title(message)
-    
-    # QoC
     urls = extract_rip_link(message.content)
     qcCode, qcMsg = -1, "No links detected."
     for url in urls:
         qcCode, qcMsg = await run_blocking(performQoC, url, fullFeedback)
         if qcCode != -1:
             break
-    if qcCode == -1:
-        print("Warning: cannot QoC message\nRip: {}\n{}".format(rip_title, qcMsg))
-    elif (qcCode == 1) or fullFeedback:
-        verdict += code_to_verdict(qcCode, qcMsg)
-        msg += qcMsg + "\n"
+    return qcCode, qcMsg
 
-    # Metadata
+
+async def check_metadata(message: Message) -> typing.Tuple[str, str]:
+    """
+    Perform metadata checking on a message.
+    """
     playlistId = extract_playlist_id(message.content)
     description = get_rip_description(message)
     if len(playlistId) > 0 and len(description) > 0:
@@ -960,12 +992,34 @@ async def check_qoc_and_metadata(message: Message, fullFeedback: bool = False) -
         mtCode, mtMsg = await run_blocking(verifyTitle, title, YOUTUBE_CHANNEL_NAME, playlistId, YOUTUBE_API_KEY)
     else:
         mtCode, mtMsg = 0, "Metadata is OK."
+    return mtCode, mtMsg
 
+
+async def check_qoc_and_metadata(message: Message, fullFeedback: bool = False) -> typing.Tuple[str, str]:
+    """
+    Perform simpleQoC and metadata checking on a message.
+
+    - **message**: Message to check
+    - **fullFeedback**: If True, display "OK" messages. Otherwise, display only issues.
+    """
+    verdict = ""
+    msg = ""
+    rip_title = get_rip_title(message)
+    
+    # QoC
+    qcCode, qcMsg = await check_qoc(message, fullFeedback)
+    if qcCode == -1:
+        print("Warning: cannot QoC message\nRip: {}\n{}".format(rip_title, qcMsg))
+    elif (qcCode == 1) or fullFeedback:
+        verdict += code_to_verdict(qcCode, qcMsg)
+        msg += qcMsg + "\n"
+
+    # Metadata
+    mtCode, mtMsg = await check_metadata(message)
     if mtCode == -1:
         print("Warning: cannot check metadata of message\nRip: {}\n{}".format(rip_title, mtMsg))
     elif mtCode == 1:
         verdict += ("" if len(verdict) == 0 else " ") + DEFAULT_METADATA
-    
     if (mtCode == 1) or fullFeedback:
         msg += "- {}\n".format(mtMsg)
 
@@ -975,30 +1029,49 @@ async def check_qoc_and_metadata(message: Message, fullFeedback: bool = False) -
 async def count_rips(channel: TextChannel, type: typing.Literal['pin', 'msg', 'thread']) -> int | dict:
     """
     Returns the number of rips in a channel.
+    `type` argument specifies what type of messages to retrieve (see get_rips).
+    """
+    rips = await get_rips(channel, type)
+    if len(rips) == 1:
+        return len(rips[channel.id])
+    else:
+        count = {}
+        for k, v in rips.items():
+            count[k] = len(v)
+        return count
+
+
+async def get_rips(channel: TextChannel, type: typing.Literal['pin', 'msg', 'thread']) -> dict[int, typing.List[Message]]:
+    """
+    Retrieve all rips in a channel, depending on the type: rips are in pins, messages or threads.
     `type` argument specifies what type of messages to retrieve:
     - 'pin': Pinned messages. Assumes first pinned message is not a rip for simplicity.
     - 'msg': Messages in channel, ignoring threads. Only count messages with ```.
-    - 'thread': Messages in threads. Returns a dictionary of thread IDs and counts.
-    
+    - 'thread': Messages in threads.
+
+    Return value is a dictionary of channel IDs as key and list of messages as values.
+
     Notes:
     - `msg` might take a long time for big channels. Limit this to submissions or queue channels.
     """
-    count = 0
+    rips = {
+        channel.id: []
+    }
     if type == 'pin':
         pins = await channel.pins()
-        count = len(pins) - 1
+        rips[channel.id] = pins[:-1]
     elif type == 'msg':
         async for message in channel.history(limit = None):
             if channel is Thread or not (message.channel is Thread):
                 if '```' in message.content and len(extract_rip_link(message.content)) > 0:
-                    count = count + 1
+                    rips[channel.id].append(message)
     elif type == 'thread':
-        count = {}
+        rips = {}
         async for message in channel.history(limit = None):
             if message.thread is not None:
-                count[message.thread.id] = await count_rips(message.thread, 'msg')
+                rips[message.thread.id] = await get_rips(message.thread, 'msg')
     
-    return count
+    return rips
 
 
 def parse_channel_link(link: str | None, types: typing.List[str]) -> typing.Tuple[int, str]:
