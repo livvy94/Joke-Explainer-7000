@@ -1,3 +1,4 @@
+import re
 import requests
 from typing import Tuple, List
 
@@ -61,6 +62,13 @@ def get_playlist_videos(playlist_id, api_key) -> List[str]:
     return video_titles
 
 
+def remove_links(text):
+    # Regular expression pattern to match URLs
+    url_pattern = r'http[s]?://\S+|www\.\S+|https?://\S+'
+    # Replace all matches with "[link]"
+    return re.sub(url_pattern, '[link]', text)
+
+
 def verifyTitle(title: str, channel_name: str, playlist_id: str, api_key: str) -> Tuple[int, str]:
     """
     Verify a title and game name against a given playlist.
@@ -87,7 +95,7 @@ def verifyTitle(title: str, channel_name: str, playlist_id: str, api_key: str) -
             raise MetadataException('Unknown URL error. {}'.format(e.strerror))
         
     except MetadataException as e:
-        return -1, e.message
+        return -1, remove_links(e.message)
 
     duplicateCheck = title not in existing_titles
     # gameCheck = (game == playlist_name) or any([video.endswith(" - " + game) for video in existing_titles])

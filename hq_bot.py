@@ -402,6 +402,10 @@ async def scan(ctx: Context, channel_link: str):
     if not (channel_is_type(ctx.channel, 'ROUNDUP') or channel_is_type(ctx.channel, 'PROXY_ROUNDUP')): return
     heard_command("scan", ctx.message.author.name)
 
+    # TODO: this function consumes a lot of API calls
+    await ctx.channel.send("This function is temporarily disabled for the time being.")
+    return
+
     if channel_link is None:
         await ctx.channel.send("Please provide a link to the channel you want to scan.")
         return
@@ -458,7 +462,7 @@ async def help(ctx: Context):
             + "\n`!stats [show_queues: any]`" + stats.brief \
             + "\n_**Auto QoC tools**_\n`!vet` " + vet.brief + "\n`!vet_all` " + vet_all.brief \
             + "\n`!vet_msg <message: link>` " + vet_msg.brief + "\n`!vet_url <URL: link>` " + vet_url.brief \
-            + "\n`!scan <channel: link>`" + scan.brief
+            # + "\n`!scan <channel: link>`" + scan.brief
         await send_embed(ctx, result, delete_after=None)
 
 @bot.command(name='op')
