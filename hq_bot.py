@@ -432,7 +432,7 @@ async def scan(ctx: Context, channel_link: str):
 
                 if mtCode == 1:
                     link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(channel_id)}/{str(message.id)}>"
-                    await ctx.channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}".format(rip_title, link, DEFAULT_METADATA, mtCode))
+                    await ctx.channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}".format(rip_title, link, DEFAULT_METADATA, mtMsg))
         
         await ctx.channel.send("Finished checking metadata of {} rips.".format(count))
     
@@ -706,7 +706,7 @@ def extract_playlist_id(text: str) -> str:
     Extract the YouTube playlist ID from text.
     Assumes it is the first YouTube link.
     """
-    playlist_regex = r'(?:https?://)?(?:www\.)?(?:youtube\.com/playlist\?list=|youtu\.be/)([a-zA-Z0-9_-]+)'
+    playlist_regex = r'(?:https?://)?(?:www\.)?(?:youtube\.com/|youtu\.be/)playlist\?list=([a-zA-Z0-9_-]+)'
     match = re.search(playlist_regex, text)
     if match:
         # Return the extracted playlist ID
@@ -1069,7 +1069,7 @@ async def get_rips(channel: TextChannel, type: typing.Literal['pin', 'msg', 'thr
         rips = {}
         async for message in channel.history(limit = None):
             if message.thread is not None:
-                rips[message.thread.id] = await get_rips(message.thread, 'msg')
+                rips[message.thread.id] = await get_rips(message.thread, 'msg')[message.thread.id]
     
     return rips
 
