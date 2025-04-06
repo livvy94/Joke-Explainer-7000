@@ -418,9 +418,9 @@ async def scan(ctx: Context, channel_link: str):
     elif channel_is_type(channel, 'QUEUE'): types = ['msg', 'thread']
 
     async with ctx.channel.typing():
+        count = 0
         for t in types:
             rips = await get_rips(channel, t)
-            count = 0
             
             for k, v in rips.items():
                 for message in v:
