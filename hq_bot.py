@@ -38,6 +38,7 @@ QOC_DEFAULT_BITRATE = '🔢'
 QOC_DEFAULT_CLIPPING = '📢'
 
 latest_pin_time = None # Keeps track of the last pinned message's time to distinguish between pins and unpins. To be updated on ready.
+latest_scan_time = None
 
 bot = commands.Bot(
     command_prefix='!',
@@ -394,17 +395,22 @@ async def vet_url(ctx: Context, url: str):
 
 
 @bot.command(name='scan', brief='scan queue/sub channel for metadata issues')
-async def scan(ctx: Context, channel_link: str):
+async def scan(ctx: Context, channel_link: str, start_index: int, end_index: int):
     """
     Scan through a submission or queue channel for metadata issues.
     Channel link must be provided as argument.
+    Accepts two optional arguments to specify the range of rips to scan through, if the channel has too many rips.
+
+    - `start_index`: First rip to look at (inclusive). Index 1 means start from the oldest rip.
+    - `end_index`: Last rip to look at (inclusive). Index 100 means scan until and including the 100th oldest rip. If this is not provided, scan to the latest rip.
     """
     if not (channel_is_type(ctx.channel, 'ROUNDUP') or channel_is_type(ctx.channel, 'PROXY_ROUNDUP')): return
     heard_command("scan", ctx.message.author.name)
 
-    # TODO: this function consumes a lot of API calls
-    await ctx.channel.send("This function is temporarily disabled for the time being.")
-    return
+    global latest_scan_time
+    if latest_scan_time is not None and datetime.now(timezone.utc) - latest_scan_time > timedelta(minutes=30):
+        await ctx.channel.send("Please wait at least 30 minutes and contact bot developers before running this command again.")
+        return
 
     if channel_link is None:
         await ctx.channel.send("Please provide a link to the channel you want to scan.")
@@ -421,25 +427,63 @@ async def scan(ctx: Context, channel_link: str):
     elif channel_is_type(channel, 'SUBS_THREAD'): types = ['thread']
     elif channel_is_type(channel, 'QUEUE'): types = ['msg', 'thread']
 
-    async with ctx.channel.typing():
-        count = 0
-        for t in types:
-            rips = await get_rips(channel, t)
-            
-            for k, v in rips.items():
-                for message in v:
-                    count += 1
-                    rip_title = get_rip_title(message)
+    rips = []
+    for t in types:
+        t_rips = await get_rips(channel, t)
+        for k, v in t_rips.items():
+            rips.extend(v)
 
-                    mtCode, mtMsg = await check_metadata(message)
-                    if mtCode == -1:
-                        print("Warning: cannot check metadata of message\nRip: {}\n{}".format(rip_title, mtMsg))
+    rips = rips.reverse()
+    num_rips = len(rips)
 
-                    if mtCode == 1:
-                        link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(channel_id)}/{str(message.id)}>"
-                        await ctx.channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}".format(rip_title, link, DEFAULT_METADATA, mtMsg))
+    if start_index is not None:
+        try:
+            sInd = int(start_index)
+            if sInd < 1: raise ValueError()
+        except ValueError:
+            await ctx.channel.send("Invalid start index argument.")
+            return
+        sInd = max(sInd, 1)
         
-        await ctx.channel.send("Finished checking metadata of {} rips.".format(count))
+        if end_index is not None:
+            try:
+                eInd = int(start_index)
+                if eInd < sInd: raise ValueError()
+            except ValueError:
+                await ctx.channel.send("Invalid end index argument.")
+                return
+            eInd = min(eInd, num_rips)
+        else:
+            eInd = num_rips
+    else:
+        sInd = 1
+        eInd = num_rips
+
+    if eInd - sInd > 100:
+        await ctx.channel.send("Warning: More than 100 rips found. Limit the scanning range by specifying the indexes, e.g. `!scan [link] 1 50` to scan the oldest 50 rips.")
+        return
+
+    async with ctx.channel.typing():
+        index = 0
+        for message in rips:
+            index += 1
+            if (index < sInd):
+                continue
+            if (index > eInd):
+                break
+            
+            rip_title = get_rip_title(message)
+
+            mtCode, mtMsg = await check_metadata(message)
+            if mtCode == -1:
+                print("Warning: cannot check metadata of message\nRip: {}\n{}".format(rip_title, mtMsg))
+
+            if mtCode == 1:
+                link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(channel_id)}/{str(message.id)}>"
+                await ctx.channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}".format(rip_title, link, DEFAULT_METADATA, mtMsg))
+        
+        latest_scan_time = datetime.now(timezone.utc)
+        await ctx.channel.send("Finished checking metadata of {} rips. Wait for ~30 minutes and contact bot developers if you wish to use this command again today.".format(eInd - sInd))
     
 
 # ============ Helper/test commands ============== #
@@ -456,13 +500,13 @@ async def help(ctx: Context):
             + "\n_**Special lists:**_\n`!mypins [no_react: any]`" + mypins.brief \
             + "\n`!checks`\n`!rejects`\n`!wrenches`\n`!stops`" \
             + "\n`!overdue` " + overdue.brief \
-            + "\n_**Misc. tools**_\n`!count` " + count.brief \
+            + "\n_**Misc. tools:**_\n`!count` " + count.brief \
             + "\n`!limitcheck` " + limitcheck.brief \
             + "\n`!count_subs [channel: link]` " + count_subs.brief \
             + "\n`!stats [show_queues: any]`" + stats.brief \
-            + "\n_**Auto QoC tools**_\n`!vet` " + vet.brief + "\n`!vet_all` " + vet_all.brief \
+            + "\n_**Auto QoC tools:**_\n`!vet` " + vet.brief + "\n`!vet_all` " + vet_all.brief \
             + "\n`!vet_msg <message: link>` " + vet_msg.brief + "\n`!vet_url <URL: link>` " + vet_url.brief \
-            # + "\n`!scan <channel: link>`" + scan.brief
+            + "\n_**Experimental tools:**_\n`!scan <channel: link> [start_index: int] [end_index: int]`" + scan.brief
         await send_embed(ctx, result, delete_after=None)
 
 @bot.command(name='op')
