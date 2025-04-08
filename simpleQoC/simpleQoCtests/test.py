@@ -107,6 +107,12 @@ class TestDownload(unittest.TestCase):
         self.assertEqual(filepath, DOWNLOAD_DIR / 'IoG_Fanfare.mp3')
         if filepath:
             os.remove(filepath)
+
+    def testSuccessCatbox(self):
+        filepath = self.parseAndDownload("https://files.catbox.moe/twp0nz.mp3")
+        self.assertEqual(filepath, DOWNLOAD_DIR / 'twp0nz.mp3')
+        if filepath:
+            os.remove(filepath)
     
     # TODO: Try a large Google Drive link (should work)
 

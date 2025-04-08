@@ -26,6 +26,10 @@ def DEBUG(msg):
     if DEBUG_MODE:
         print(msg)
 
+"""
+Usage: Run the following command in main directory: python -m simpleQoC.simpleQoCtests.test [TestClass[.testfunc]]
+"""
+
 #=======================================#
 #          EXCEPTION HANDLING           #
 #=======================================#
@@ -150,56 +154,56 @@ def save_response_content(response, destination):
                 f.write(chunk)
 
 
-def getHeadFromUrl(validUrl: str):
+def getResponseFromUrl(validUrl: str, head: bool = False):
     try:
         session = requests.Session()
-        response = session.head(validUrl, stream=True)
+        # https://stackoverflow.com/questions/33174804/python-requests-getting-connection-aborted-badstatusline-error
+        headers = { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36' }
+        
+        if head:
+            response = session.head(validUrl, stream=True, headers=headers)
+        else:
+            response = session.get(validUrl, stream=True, headers=headers)
 
-        return response.headers
+        return response
     
     # https://stackoverflow.com/questions/16511337/correct-way-to-try-except-using-python-requests-module
-    except requests.exceptions.Timeout:
-        raise QoCException('Request timed out.')
-    except requests.exceptions.TooManyRedirects:
-        raise QoCException('Bad URL.')
+    except requests.exceptions.Timeout as e:
+        raise QoCException('Request timed out. {}'.format(e))
+    except requests.exceptions.TooManyRedirects as e:
+        raise QoCException('Bad URL. {}'.format(e))
+    except requests.exceptions.ConnectionError as e:
+        raise QoCException('Connection error. {}'.format(e))
     except requests.exceptions.RequestException as e: # Other errors
-        raise QoCException('Unknown URL error. {}'.format(e.strerror))
+        raise QoCException('Unknown URL error. {}'.format(e))
+
+
+def getHeadFromUrl(validUrl: str):
+    return getResponseFromUrl(validUrl, True).headers
 
 
 def downloadAudioFromUrl(validUrl: str) -> str:
     filepath = None
 
+    response = getResponseFromUrl(validUrl)
     try:
-        session = requests.Session()
-        response = session.get(validUrl, stream=True)
-
-        try:
-            # apparently cgi is deprecated? may need to change to email.message
-            # https://stackoverflow.com/questions/32330152/how-can-i-parse-the-value-of-content-type-from-an-http-header-response
-            _, params = cgi.parse_header(response.headers['Content-Disposition'])
-            filename = params['filename']
-        except KeyError:
-            if not ('audio' in response.headers['Content-Type'] or 'video' in response.headers['Content-Type']):
-                if 'html' in response.headers['Content-Type']:
-                    text = response.text
-                    title = re.search(r'<\W*title\W*(.*)</title', text, re.IGNORECASE).group(1)
-                    raise QoCException('Filename cannot be parsed from the URL (server response: {}).'.format(title))
-                else:
-                    raise QoCException('Unknown error trying to parse filename.')
-            filename = validUrl.split('/')[-1]
-        
-        filepath = DOWNLOAD_DIR / filename
-
-        save_response_content(response, filepath)
+        # apparently cgi is deprecated? may need to change to email.message
+        # https://stackoverflow.com/questions/32330152/how-can-i-parse-the-value-of-content-type-from-an-http-header-response
+        _, params = cgi.parse_header(response.headers['Content-Disposition'])
+        filename = params['filename']
+    except KeyError:
+        if not ('audio' in response.headers['Content-Type'] or 'video' in response.headers['Content-Type']):
+            if 'html' in response.headers['Content-Type']:
+                text = response.text
+                title = re.search(r'<\W*title\W*(.*)</title', text, re.IGNORECASE)
+                raise QoCException('Filename cannot be parsed from the URL (server response: {}).'.format(title.group(1) if title else None))
+            else:
+                raise QoCException('Unknown error trying to parse filename.')
+        filename = validUrl.split('/')[-1]
     
-    # https://stackoverflow.com/questions/16511337/correct-way-to-try-except-using-python-requests-module
-    except requests.exceptions.Timeout:
-        raise QoCException('Request timed out.')
-    except requests.exceptions.TooManyRedirects:
-        raise QoCException('Bad URL.')
-    except requests.exceptions.RequestException as e: # Other errors
-        raise QoCException('Unknown URL error. {}'.format(e.strerror))
-
+    filepath = DOWNLOAD_DIR / filename
+    save_response_content(response, filepath)
+    
     DEBUG('Downloaded filepath: {}'.format(filepath))
     return filepath
 

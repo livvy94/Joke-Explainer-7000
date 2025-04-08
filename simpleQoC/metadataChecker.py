@@ -92,7 +92,7 @@ def verifyTitle(title: str, channel_name: str, playlist_id: str, api_key: str) -
         except requests.exceptions.HTTPError as http_err:
             raise MetadataException(f"HTTP error occurred: {http_err}")
         except requests.exceptions.RequestException as e: # Other errors
-            raise MetadataException('Unknown URL error. {}'.format(e.strerror))
+            raise MetadataException('Unknown URL error. {}'.format(e))
         
     except MetadataException as e:
         return -1, remove_links(e.message)
