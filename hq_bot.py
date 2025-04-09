@@ -476,7 +476,7 @@ async def scan(ctx: Context, channel_link: str, start_index: int, end_index: int
 
             mtCode, mtMsg = await check_metadata(message)
             if mtCode == -1:
-                print("Warning: cannot check metadata of message\nRip: {}\n{}".format(rip_title, mtMsg))
+                write_log("Warning: cannot check metadata of message\nRip: {}\n{}".format(rip_title, mtMsg))
 
             if mtCode == 1:
                 link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(channel_id)}/{str(message.id)}>"
@@ -984,7 +984,7 @@ async def vet_message(channel: TextChannel, message: Message) -> typing.Tuple[st
         
         # debug
         if code == -1:
-            print("Message: {}\n\nURL: {}\n\nError: {}".format(message.content, url, msg))
+            write_log("Message: {}\n\nURL: {}\n\nError: {}".format(message.content, url, msg))
         else:
             break
 
@@ -1058,7 +1058,7 @@ async def check_qoc_and_metadata(message: Message, fullFeedback: bool = False) -
     # QoC
     qcCode, qcMsg = await check_qoc(message, fullFeedback)
     if qcCode == -1:
-        print("Warning: cannot QoC message\nRip: {}\n{}".format(rip_title, qcMsg))
+        write_log("Warning: cannot QoC message\nRip: {}\n{}".format(rip_title, qcMsg))
     elif (qcCode == 1) or fullFeedback:
         verdict += code_to_verdict(qcCode, qcMsg)
         msg += qcMsg + "\n"
@@ -1066,7 +1066,7 @@ async def check_qoc_and_metadata(message: Message, fullFeedback: bool = False) -
     # Metadata
     mtCode, mtMsg = await check_metadata(message)
     if mtCode == -1:
-        print("Warning: cannot check metadata of message\nRip: {}\n{}".format(rip_title, mtMsg))
+        write_log("Warning: cannot check metadata of message\nRip: {}\n{}".format(rip_title, mtMsg))
     elif mtCode == 1:
         verdict += ("" if len(verdict) == 0 else " ") + DEFAULT_METADATA
     if (mtCode == 1) or fullFeedback:
@@ -1152,6 +1152,18 @@ def parse_channel_link(link: str | None, types: typing.List[str]) -> typing.Tupl
         return arg, ""
     else:
         return default_id, f"Warning: Link is not a valid roundup channel, defaulting to <#{default_id}>."
+
+
+def write_log(msg: str):
+    """
+    Helper function to write debug text to a file so it doesn't get drowned in terminal.
+    The files should be cleaned up regularly.
+    """
+    with open('logs.txt', 'a', encoding='utf-8') as file:
+        file.write(datetime.now(timezone.utc).strftime('%m/%d/%y %I:%M %p'))
+        file.write('\n')
+        file.write(msg)
+        file.write('\n=========================================\n')
 
 
 # Now that everything's defined, run the dang thing
