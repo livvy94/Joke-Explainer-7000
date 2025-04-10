@@ -1114,7 +1114,7 @@ async def check_qoc_and_metadata(message: Message, fullFeedback: bool = False) -
     elif mtCode == 1:
         verdict += ("" if len(verdict) == 0 else " ") + DEFAULT_METADATA
     if (mtCode == 1) or fullFeedback:
-        msg += "- {}\n".format(mtMsg)
+        msg += mtMsg + "\n"
 
     return verdict, msg
 
