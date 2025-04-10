@@ -89,6 +89,8 @@ def desc_to_dict(description: str, start_line: int) -> Tuple[Dict[str, str], Set
             continue
         try:
             key, value = line.split(':', 1)
+            if key in desc.keys():
+                messages.add(f'Duplicate key ``{key}`` found.')
             if len(value) > 0:
                 if value[0] == ' ': value = value[1:]
                 else: messages.add(f'Missing space in ``{key}`` line.')
@@ -111,6 +113,9 @@ def crosscheck_description_key(key: str, video_descs: List[str], threshold: floa
     Set threshold to 0 to instead just check if key is present in any video.
     """
     # return sum([key in desc_to_dict(desc.replace('\r', '').split('\n\n')[0], 0)[0].keys() for desc in video_descs]) / len(video_descs) > threshold
+    if len(video_descs) == 0:
+        return True
+
     if threshold > 0:
         return sum([key in desc for desc in video_descs]) / len(video_descs) > threshold
     else:
@@ -193,12 +198,18 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
             return 0, []
         else:
             # Compare desc with existing videos
+            existing_descs = [video['description'] for video in videos]
             for key in desc.keys():
                 # ignore ones already covered by patterns.json
                 if (key + ":") in [p["pattern"] for p in patterns["MISTAKE"]]:
                     continue
-                if not crosscheck_description_key(key, [video['description'] for video in videos], 0):
+                if not crosscheck_description_key(key, existing_descs, 0):
                     adv_messages.add(f'``{key}`` field not present in any existing videos in playlist.')
+
+            # Check the order of keys
+            if len(existing_descs) > 0 and not any([list(desc.keys()) == list(desc_to_dict(d.replace('\r', '').split('\n\n')[0], 0)[0].keys()) for d in existing_descs]):
+                adv_messages.add(f'Order of lines does not match any existing videos in playlist.')
+            
             # Compare desc['Music'] and title
             try:
                 track = desc['Music']
@@ -217,7 +228,7 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
                     
                     # Check game name
                     game = match.group('game')
-                    if (game != playlist_name) and not any([game in video for video in existing_titles]):
+                    if len(existing_titles) > 0 and (game != playlist_name) and not any([game in video for video in existing_titles]):
                         adv_messages.add('Game in title does not match playlist name nor any existing videos.')
             
             if game is None:

@@ -57,7 +57,7 @@ class TestMetadata(unittest.TestCase):
             if DEBUG_MODE: print(msg)
         
         self.assertEqual(code, 1)
-        self.assertEqual(len(msgs), 12)
+        self.assertEqual(len(msgs), 13)
         self.assertTrue("Double space detected in description." in msgs)
         self.assertTrue("There is no **s** in Platform." in msgs)
         self.assertTrue("Typographic apostrophe (``’``) detected. It is recommended that you use typewriter apostrophe(``'``) for consistency." in msgs)
@@ -70,6 +70,7 @@ class TestMetadata(unittest.TestCase):
         self.assertTrue("``Arrangement`` field not present in any existing videos in playlist." in msgs)
         self.assertTrue("``Platlist`` field not present in any existing videos in playlist." in msgs)
         self.assertTrue("Title format does not match existing videos, or Music line is incorrect." in msgs)
+        self.assertTrue("Order of lines does not match any existing videos in playlist." in msgs)
 
 
     @patch('simpleQoC.metadataChecker.get_playlist_videos')
@@ -110,6 +111,22 @@ class TestMetadata(unittest.TestCase):
         self.assertTrue("The **S** in PlayStation should be capitalized." in msgs)
         self.assertTrue("We commonly use Xbox Series X|S." in msgs)
         self.assertTrue("Reboot metadata found. Change to regular metadata if this was not intentional." in msgs)
+
+    
+    @patch('simpleQoC.metadataChecker.get_playlist_videos')
+    @patch('simpleQoC.metadataChecker.get_playlist_details')
+    def test_metadata_issue_v4(self, mock_details, mock_videos):
+        mock_details.return_value = "", ""
+        mock_videos.return_value = []
+
+        description = "Track - New Game\nMusic: Track\nPlaylist:\nPlatform: PC"
+
+        code, msgs = checkMetadata(description, self.CHANNEL_NAME, "", None, True)
+        for msg in msgs:
+            if DEBUG_MODE: print(msg)
+        
+        self.assertEqual(code, 0)
+        self.assertEqual(len(msgs), 0)
     
 
     @patch('simpleQoC.metadataChecker.get_playlist_videos')
