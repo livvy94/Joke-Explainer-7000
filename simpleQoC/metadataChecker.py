@@ -122,6 +122,7 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
     Perform metadata checking.
 
     Types of metadata errors detected:
+    - Title is longer than 100 characters
     - Linked playlist is not from `channel_name`
     - Title (first line of description) already exists in playlist
     - Any patterns in `patterns.json` under "MISTAKE"
@@ -132,6 +133,10 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
     messages = set()
     desc_lines = description.splitlines()
     title = desc_lines[0]
+
+    # Title limit check
+    if len(title) > 100:
+        messages.add('Title has more than 100 characters.')
 
     # Parse description for more in-depth metadata checking
     desc, adv_messages = desc_to_dict(description, 1)
@@ -212,7 +217,7 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
                     
                     # Check game name
                     game = match.group('game')
-                    if (game != playlist_name) and not any([video.endswith(" - " + game) for video in existing_titles]):
+                    if (game != playlist_name) and not any([game in video for video in existing_titles]):
                         adv_messages.add('Game in title does not match playlist name nor any existing videos.')
             
             if game is None:
@@ -225,6 +230,7 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
 # Example usage
 from bot_secrets import YOUTUBE_CHANNEL_NAME, YOUTUBE_API_KEY
 
+# paste description here for testing
 DESC = """
 """
 
