@@ -69,7 +69,7 @@ class TestMetadata(unittest.TestCase):
         self.assertTrue("Irregular line without : found in description: \"dummy l...s — lol\"" in msgs)
         self.assertTrue("``Arrangement`` field not present in any existing videos in playlist." in msgs)
         self.assertTrue("``Platlist`` field not present in any existing videos in playlist." in msgs)
-        self.assertTrue("Title format does not match existing videos; check for typos or missing mixnames." in msgs)
+        self.assertTrue("Title format does not match existing videos, or Music line is incorrect." in msgs)
 
 
     @patch('simpleQoC.metadataChecker.get_playlist_videos')
