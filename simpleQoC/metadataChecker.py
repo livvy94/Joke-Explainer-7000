@@ -192,7 +192,7 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
                 if "message" in p.keys(): messages.add(p["message"])
                 if "adv_message" in p.keys(): adv_messages.add(p["adv_message"])
 
-        if len(desc) == 0 or 'music' in list(desc.keys())[0].lower():
+        if len(desc) == 0 or 'music' not in list(desc.keys())[0].lower():
             # If the first description line is not "Music:", assume the metadata is intentionally unusual
             # just return nothing?
             return 0, []

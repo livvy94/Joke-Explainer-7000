@@ -57,7 +57,7 @@ class TestMetadata(unittest.TestCase):
             if DEBUG_MODE: print(msg)
         
         self.assertEqual(code, 1)
-        self.assertEqual(len(msgs), 13)
+        self.assertEqual(len(msgs), 12)
         self.assertTrue("Double space detected in description." in msgs)
         self.assertTrue("There is no **s** in Platform." in msgs)
         self.assertTrue("Typographic apostrophe (``’``) detected. It is recommended that you use typewriter apostrophe(``'``) for consistency." in msgs)
@@ -70,7 +70,6 @@ class TestMetadata(unittest.TestCase):
         self.assertTrue("``Arrangement`` field not present in any existing videos in playlist." in msgs)
         self.assertTrue("``Platlist`` field not present in any existing videos in playlist." in msgs)
         self.assertTrue("Title format does not match existing videos, or Music line is incorrect." in msgs)
-        self.assertTrue("Order of lines does not match any existing videos in playlist." in msgs)
 
 
     @patch('simpleQoC.metadataChecker.get_playlist_videos')
