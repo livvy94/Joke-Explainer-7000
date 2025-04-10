@@ -91,7 +91,7 @@ def desc_to_dict(description: str, start_line: int) -> Tuple[Dict[str, str], Set
             key, value = line.split(':', 1)
             if len(value) > 0:
                 if value[0] == ' ': value = value[1:]
-                else: messages.add(f'Missing space in `{key}` line.')
+                else: messages.add(f'Missing space in ``{key}`` line.')
         except ValueError:
             # ignore last line if ppl decide to put channel desc
             if line != description.splitlines()[-1]:
@@ -106,10 +106,14 @@ def desc_to_dict(description: str, start_line: int) -> Tuple[Dict[str, str], Set
 def crosscheck_description_key(key: str, video_descs: List[str], threshold: float):
     """
     Check if key is present in existing video descriptions, e.g. at least 50%.
-    If not, it is likely there is a typo in the key, e.g. "Platlist"
+    If not, it is likely there is a typo in the key, e.g. "Platlist".
+    Set threshold to 0 to instead just check if key is present in any video.
     """
     # return sum([key in desc_to_dict(desc.replace('\r', '').split('\n\n')[0], 0)[0].keys() for desc in video_descs]) / len(video_descs) > threshold
-    return sum([key in desc for desc in video_descs]) / len(video_descs) > threshold
+    if threshold > 0:
+        return sum([key in desc for desc in video_descs]) / len(video_descs) > threshold
+    else:
+        return any([key in desc for desc in video_descs])
 
 
 def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key: str, advanced: bool) -> Tuple[int, List[str]]:
@@ -187,9 +191,8 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
                 # ignore ones already covered by patterns.json
                 if (key + ":") in [p["pattern"] for p in patterns["MISTAKE"]]:
                     continue
-                threshold = 0.5
-                if not crosscheck_description_key(key, [video['description'] for video in videos], threshold):
-                    adv_messages.add(f'`{key}` field not present in at least {int(100*threshold)}% of existing videos in playlist.')
+                if not crosscheck_description_key(key, [video['description'] for video in videos], 0):
+                    adv_messages.add(f'``{key}`` field not present in any existing videos in playlist.')
             # Compare desc['Music'] and title
             try:
                 track = desc['Music']
