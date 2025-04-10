@@ -8,11 +8,13 @@ from bot_secrets import TOKEN, YOUTUBE_API_KEY, YOUTUBE_CHANNEL_NAME, CHANNELS
 from datetime import datetime, timezone, timedelta
 
 from simpleQoC.qoc import performQoC, msgContainsBitrateFix, msgContainsClippingFix, ffmpegExists
-from simpleQoC.metadataChecker import verifyTitle
+from simpleQoC.metadataChecker import checkMetadata
 import re
 import functools
 import typing
 import math
+import json
+import os
 
 MESSAGE_SECONDS = 2700  # 45 minutes
 DISCORD_CHARACTER_LIMIT = 4000 # Lower this to 2000 if we lose boosts (TODO: move to bot_secrets?)
@@ -394,7 +396,7 @@ async def vet_url(ctx: Context, url: str):
         await ctx.channel.send("**Verdict**: {}\n**Comments**:\n{}".format(verdict, msg))
 
 
-@bot.command(name='scan', brief='scan queue/sub channel for metadata issues')
+@bot.command(name='scan', brief='scan queue/sub channel for metadata issues [IMPORTANT: Contact bot developers before using this!]')
 async def scan(ctx: Context, channel_link: str, start_index: int, end_index: int):
     """
     Scan through a submission or queue channel for metadata issues.
@@ -484,7 +486,41 @@ async def scan(ctx: Context, channel_link: str, start_index: int, end_index: int
         
         latest_scan_time = datetime.now(timezone.utc)
         await ctx.channel.send("Finished checking metadata of {} rips. Wait for ~30 minutes and contact bot developers if you wish to use this command again today.".format(eInd - sInd))
-    
+
+
+# ============ Config commands ============== #
+
+@bot.command(name='enable_metadata')
+async def enable_metadata(ctx: Context): 
+    set_config('metadata', True)
+    await ctx.channel.send("Advanced metadata checking enabled.")
+
+@bot.command(name='disable_metadata')
+async def disable_metadata(ctx: Context): 
+    set_config('metadata', False)
+    await ctx.channel.send("Advanced metadata checking disabled.")
+
+def set_config(config: str, value: bool):
+    if os.path.exists('config.json'):
+        with open('config.json', 'r', encoding='utf-8') as file:
+            configs = json.load(file)
+    else:
+        configs = {}
+    configs[config] = value
+    with open('config.json', 'w', encoding='utf-8') as file:
+        json.dump(configs, file, indent=4)
+
+def get_config(config: str):
+    if os.path.exists('config.json'):
+        with open('config.json', 'r', encoding='utf-8') as file:
+            configs = json.load(file)
+            try:
+                value = configs[config]
+            except KeyError:
+                value = None
+            return value
+    else:
+        return None
 
 # ============ Helper/test commands ============== #
 
@@ -506,7 +542,8 @@ async def help(ctx: Context):
             + "\n`!stats [show_queues: any]`" + stats.brief \
             + "\n_**Auto QoC tools:**_\n`!vet` " + vet.brief + "\n`!vet_all` " + vet_all.brief \
             + "\n`!vet_msg <message: link>` " + vet_msg.brief + "\n`!vet_url <URL: link>` " + vet_url.brief \
-            + "\n_**Experimental tools:**_\n`!scan <channel: link> [start_index: int] [end_index: int]`" + scan.brief
+            + "\n_**Experimental tools:**_\n`!scan <channel: link> [start_index: int] [end_index: int]`" + scan.brief \
+            + "\n_**Config:**_\n`![enable/disable]_metadata` enables/disables advanced metadata checking (currently {})".format("enabled" if get_config('metadata') else "disabled")
         await send_embed(ctx, result, delete_after=None)
 
 @bot.command(name='op')
@@ -1028,19 +1065,26 @@ async def check_qoc(message: Message, fullFeedback: bool = False) -> typing.Tupl
     return qcCode, qcMsg
 
 
-async def check_metadata(message: Message) -> typing.Tuple[str, str]:
+async def check_metadata(message: Message, fullFeedback: bool = False) -> typing.Tuple[str, str]:
     """
     Perform metadata checking on a message.
+    If message contains the phrase "unusual metadata", skip most checks
     """
-    playlistId = extract_playlist_id(message.content)
+    playlistId = extract_playlist_id('\n'.join(message.content.splitlines()[1:])) # ignore author line
     description = get_rip_description(message)
-    if len(playlistId) > 0 and len(description) > 0:
-        title = description.splitlines()[0]
-        # game = title.split(' - ')[-1]     # this doesn't work in certain cases, think of another way to get game name
-
-        mtCode, mtMsg = await run_blocking(verifyTitle, title, YOUTUBE_CHANNEL_NAME, playlistId, YOUTUBE_API_KEY)
+    advancedCheck = get_config('metadata')
+    skipCheck = "unusual metadata" in description.lower()
+    if not skipCheck and len(description) > 0:
+        mtCode, mtMsgs = await run_blocking(checkMetadata, description, YOUTUBE_CHANNEL_NAME, playlistId, YOUTUBE_API_KEY, advancedCheck)
     else:
-        mtCode, mtMsg = 0, "Metadata is OK."
+        mtCode, mtMsgs = 0, []
+
+    if mtCode != -1 and "[Unusual Pin Format]" in get_rip_author(message):
+        mtCode = 1
+        mtMsgs.append("Rip author is missing.")
+
+    mtMsg = '\n'.join(["- " + m for m in mtMsgs]) if len(mtMsgs) > 0 else ("- Metadata is OK." if fullFeedback else "")
+    
     return mtCode, mtMsg
 
 
@@ -1064,7 +1108,7 @@ async def check_qoc_and_metadata(message: Message, fullFeedback: bool = False) -
         msg += qcMsg + "\n"
 
     # Metadata
-    mtCode, mtMsg = await check_metadata(message)
+    mtCode, mtMsg = await check_metadata(message, fullFeedback)
     if mtCode == -1:
         write_log("Warning: cannot check metadata of message\nRip: {}\n{}".format(rip_title, mtMsg))
     elif mtCode == 1:
