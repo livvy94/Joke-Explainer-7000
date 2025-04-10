@@ -235,7 +235,7 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
                 adv_messages.add('Title format does not match {}, or Music line is incorrect.'.format('existing videos' if len(videos) > 0 else 'any known pattern'))
     
     if advanced: messages = messages.union(adv_messages)
-    return int(len(messages) > 0), messages
+    return int(len(messages) > 0), list(messages)
 
 
 # Example usage
