@@ -192,22 +192,25 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
                 if "message" in p.keys(): messages.add(p["message"])
                 if "adv_message" in p.keys(): adv_messages.add(p["adv_message"])
 
-        if len(desc) == 0 or list(desc.keys())[0].lower() != 'music':
+        if len(desc) == 0 or 'music' in list(desc.keys())[0].lower():
             # If the first description line is not "Music:", assume the metadata is intentionally unusual
             # just return nothing?
             return 0, []
         else:
             # Compare desc with existing videos
             existing_descs = [video['description'] for video in videos]
+            extra_fields = False
             for key in desc.keys():
                 # ignore ones already covered by patterns.json
                 if (key + ":") in [p["pattern"] for p in patterns["MISTAKE"]]:
                     continue
                 if not crosscheck_description_key(key, existing_descs, 0):
+                    extra_fields = True
                     adv_messages.add(f'``{key}`` field not present in any existing videos in playlist.')
 
             # Check the order of keys
-            if len(existing_descs) > 0 and not any([list(desc.keys()) == list(desc_to_dict(d.replace('\r', '').split('\n\n')[0], 0)[0].keys()) for d in existing_descs]):
+            if not extra_fields and len(existing_descs) > 0 \
+                and not any([list(desc.keys()) == list(desc_to_dict(d.replace('\r', '').split('\n\n')[0], 0)[0].keys()) for d in existing_descs]):
                 adv_messages.add(f'Order of lines does not match any existing videos in playlist.')
             
             # Compare desc['Music'] and title
