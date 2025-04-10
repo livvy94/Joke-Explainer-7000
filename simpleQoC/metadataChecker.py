@@ -92,6 +92,7 @@ def desc_to_dict(description: str, start_line: int) -> Tuple[Dict[str, str], Set
             if len(value) > 0:
                 if value[0] == ' ': value = value[1:]
                 else: messages.add(f'Missing space in ``{key}`` line.')
+                value = value.rstrip()
         except ValueError:
             # ignore last line if ppl decide to put channel desc
             if line != description.splitlines()[-1]:
@@ -218,16 +219,22 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
                 adv_messages.add('Title format does not match {}, or Music line is incorrect.'.format('existing videos' if len(videos) > 0 else 'any known pattern'))
     
     if advanced: messages = messages.union(adv_messages)
-    return len(messages) > 0, messages
+    return int(len(messages) > 0), messages
 
 
 # Example usage
+from bot_secrets import YOUTUBE_CHANNEL_NAME, YOUTUBE_API_KEY
+
+DESC = """
+"""
+
 if __name__ == "__main__":
-    PLAYLIST_ID = input("Paste the playlist ID: ")
-    API_KEY = input("Paste the API key: ")
+    CHANNEL_NAME = YOUTUBE_CHANNEL_NAME if len(YOUTUBE_CHANNEL_NAME) > 0 else input("Paste expected channel name: ")
+    API_KEY = YOUTUBE_API_KEY if len(YOUTUBE_API_KEY) > 0 else input("Paste the API key: ")
+    match = re.search(r'(?:https?://)?(?:www\.)?(?:youtube\.com/|youtu\.be/)playlist\?list=([a-zA-Z0-9_-]+)', DESC)
+    playlist = match.group(1) if match else ""
 
-    name, user = get_playlist_details(PLAYLIST_ID, API_KEY)
-    videos = get_playlist_videos(PLAYLIST_ID, API_KEY)
-
-    print('Playlist name: {}, by: {}'.format(name, user))
-    print('Number of videos: {}'.format(len(videos)))
+    code, msgs = checkMetadata(DESC, CHANNEL_NAME, playlist, API_KEY, True)
+    print(f"Code: {code}")
+    for msg in msgs:
+        print(msg)
