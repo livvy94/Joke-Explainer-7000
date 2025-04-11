@@ -146,10 +146,17 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
     # Parse description for more in-depth metadata checking
     desc, adv_messages = desc_to_dict(description, 1)
 
-    # If the Playlist field exists but it is empty and playlist_id is not empty,
-    # likely a rare case of the Joke line containing a playlist not intended as for the rip.
-    if 'Playlist' in desc.keys() and len(desc['Playlist']) == 0 and len(playlist_id) > 0:
-        playlist_id = ""
+    if 'Playlist' in desc.keys():
+        if len(desc['Playlist']) == 0 and len(playlist_id) > 0:
+            # If the Playlist field exists but it is empty and playlist_id is not empty,
+            # likely a rare case of the Joke line containing a playlist not intended as for the rip.
+            playlist_id = ""
+        elif len(desc['Playlist']) > 0 and len(playlist_id) == 0:
+            # Playlist field contains non-playlist link
+            # raise issue if it is not a redirect link or Google Drive link,
+            # assuming any other intentional cases are rare
+            if 'drive' not in desc['Playlist'] and 'redirect' not in desc['Playlist']:
+                adv_messages.add('Playlist field is not a valid playlist, YouTube redirect or Drive link. Ignore if this is intentional.')
 
     # Check metadata based on provided playlist ID
     if len(playlist_id) > 0:
