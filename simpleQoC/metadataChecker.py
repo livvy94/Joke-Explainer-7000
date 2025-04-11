@@ -232,10 +232,10 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
                     # Check game name
                     game = match.group('game')
                     if len(existing_titles) > 0 and (game != playlist_name) and not any([game in video for video in existing_titles]):
-                        adv_messages.add('Game in title does not match playlist name nor any existing videos.')
+                        adv_messages.add('Game in title does not match playlist name nor any existing videos in playlist.')
             
             if game is None:
-                adv_messages.add('Title format does not match {}, or Music line is incorrect.'.format('existing videos' if len(videos) > 0 else 'any known pattern'))
+                adv_messages.add('Title format does not match {}, or Music line is incorrect (e.g. missing mixname, leftover game part).'.format('existing videos in playlist' if len(videos) > 0 else 'any known pattern'))
     
     if advanced: messages = messages.union(adv_messages)
     return int(len(messages) > 0), list(messages)
