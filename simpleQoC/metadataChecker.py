@@ -247,7 +247,7 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
                         game_match = True
                     
                     if len(existing_titles) > 0 and (game != playlist_name) and not game_match:
-                        if len(title) == 100 and (game in playlist_name or any([game in video for video in existing_titles])):
+                        if len(title) < 100 and (game in playlist_name or any([game in video for video in existing_titles])):
                             adv_messages.add('Game in title appears to be cut off. Ignore if this was intentional to go under 100-character limit.')
                         else:
                             adv_messages.add('Game in title does not match playlist name nor any existing videos in playlist.')
