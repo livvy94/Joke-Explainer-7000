@@ -358,7 +358,7 @@ async def vet_msg(ctx: Context, msg_link: str):
     Perform basic QoC on a linked message.
     The first non-YouTube link found in the message is treated as the rip URL.
     """
-    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("vet_msg", ctx.message.author.name)
 
     async with ctx.channel.typing():
@@ -386,7 +386,7 @@ async def vet_url(ctx: Context, url: str):
     """
     Perform basic QoC on an URL.
     """
-    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("vet_url", ctx.message.author.name)
 
     async with ctx.channel.typing():
@@ -406,7 +406,7 @@ async def scan(ctx: Context, channel_link: str, start_index: int, end_index: int
     - `start_index`: First rip to look at (inclusive). Index 1 means start from the oldest rip.
     - `end_index`: Last rip to look at (inclusive). Index 100 means scan until and including the 100th oldest rip. If this is not provided, scan to the latest rip.
     """
-    if not (channel_is_type(ctx.channel, 'ROUNDUP') or channel_is_type(ctx.channel, 'PROXY_ROUNDUP')): return
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("scan", ctx.message.author.name)
 
     global latest_scan_time
@@ -564,7 +564,7 @@ async def count_subs(ctx: Context, sub_channel_link: str = None):
     Retrieve the entire history of a channel and count the number of messages not in threads.
     Accepts an optional link argument to the subs-type channel to view - if not, first valid channel in config is used.
     """
-    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("count_subs", ctx.message.author.name)
 
     sub_channel, msg = parse_channel_link(sub_channel_link, ['SUBS', 'SUBS_PIN', 'SUBS_THREAD'])
@@ -597,7 +597,7 @@ async def stats(ctx: Context, optional_arg = None):
     Display the number of rips in the QoC and submission channels.
     Accepts an optional argument to show queue channels too.
     """
-    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("stats", ctx.message.author.name)
 
     server = ctx.guild
@@ -754,6 +754,9 @@ async def send_embed(ctx: Context, message: str, delete_after: float = MESSAGE_S
 
 def channel_is_type(channel: TextChannel, type: str):
     return channel.id in CHANNELS.keys() and type in CHANNELS[channel.id]
+
+def channel_is_types(channel: TextChannel, types: typing.List[str]):
+    return channel.id in CHANNELS.keys() and any([t in CHANNELS[channel.id] for t in types])
 
 def heard_command(command_name: str, user: str):
     today = datetime.now() # Technically not useful, but it looks gorgeous on my CRT monitor
