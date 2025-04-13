@@ -195,7 +195,10 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
 
         # Common mistake patterns
         for p in patterns["MISTAKE"]:
-            if p["pattern"] in description:
+            if "pattern" in p.keys() and p["pattern"] in description:
+                if "message" in p.keys(): messages.add(p["message"])
+                if "adv_message" in p.keys(): adv_messages.add(p["adv_message"])
+            elif "reg_pattern" in p.keys() and re.search(p["reg_pattern"], description) is not None:
                 if "message" in p.keys(): messages.add(p["message"])
                 if "adv_message" in p.keys(): adv_messages.add(p["adv_message"])
 
@@ -209,7 +212,7 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
             extra_fields = False
             for key in desc.keys():
                 # ignore ones already covered by patterns.json
-                if (key + ":") in [p["pattern"] for p in patterns["MISTAKE"]]:
+                if (key + ":") in [p["pattern"] for p in patterns["MISTAKE"] if "pattern" in p.keys()]:
                     continue
                 if not crosscheck_description_key(key, existing_descs, 0):
                     extra_fields = True
@@ -228,12 +231,12 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
 
             game = None
             for p in patterns["TITLE"]:
-                match = re.match(p.replace('[[TRACK]]', re.escape(track)), title)
+                match = re.search(p.replace('[[TRACK]]', re.escape(track)), title)
                 if match:
                     existing_titles = [video['title'] for video in videos]
 
                     # Check that at least 50% of existing videos have the same title formatting
-                    if len(existing_titles) > 0 and sum([re.match(p.replace('[[TRACK]]', r'(?P<track>[^\n]*)'), t) is not None for t in existing_titles]) / len(existing_titles) < 0.5:
+                    if len(existing_titles) > 0 and sum([re.search(p.replace('[[TRACK]]', r'(?P<track>[^\n]*)'), t) is not None for t in existing_titles]) / len(existing_titles) < 0.5:
                         continue
                     
                     # Check game name

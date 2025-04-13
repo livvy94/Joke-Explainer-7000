@@ -48,7 +48,7 @@ class TestMetadata(unittest.TestCase):
         self.base_test(
             mock_details, mock_videos,
             ("Super Mario Bros. 2 (JP)", self.CHANNEL_NAME), self.SMB2JP,
-            "Castle (Beta Mix) - Super Mario Bros. 2 (JP)\n\nMusic: Castle (Beta Mix) \nComposer: Koji Kondo\nPlaylist: https://www.youtube.com/playlist?list=PLL0CQjrcN8D1eRlsClwtcJM1V1xtZbU1S\nPlatform: Famicom Disk System\n\nPlease read the c",
+            "Castle (Beta Mix) - Super Mario Bros. 2 (JP)\n\nMusic: Castle (Beta Mix) \nComposer: Koji Kondo  \nPlaylist: https://www.youtube.com/playlist?list=PLL0CQjrcN8D1eRlsClwtcJM1V1xtZbU1S\nPlatform: Famicom Disk System\n\nPlease read the c",
             "PLL0CQjrcN8D1eRlsClwtcJM1V1xtZbU1S",
             []
         )
