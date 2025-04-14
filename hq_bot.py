@@ -430,11 +430,11 @@ async def count_dupe(ctx: Context, msg_link: str, check_queues: str = None):
             for queue_channel_id in queue_channels:
                 queue_channel = server.get_channel(queue_channel_id)
                 queue_rips = await get_rips(queue_channel, 'msg')
-                q += sum([isDupe(description, get_rip_description(r)) for r in queue_rips[queue_channel_id]])
+                q += sum([isDupe(description, get_rip_description(r)) for r in queue_rips[queue_channel_id] if r.id != msg_id])
 
                 queue_thread_rips = await get_rips(queue_channel, 'thread')
                 for thread, rips in queue_thread_rips.items():
-                    q += sum([isDupe(description, get_rip_description(r)) for r in rips])
+                    q += sum([isDupe(description, get_rip_description(r)) for r in rips if r.id != msg_id])
 
         # https://codegolf.stackexchange.com/questions/4707/outputting-ordinal-numbers-1st-2nd-3rd#answer-4712 how
         ordinal = lambda n: "%d%s" % (n,"tsnrhtdd"[(n//10%10!=1)*(n%10<4)*n%10::4])
