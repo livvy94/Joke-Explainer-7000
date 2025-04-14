@@ -374,7 +374,7 @@ async def vet_msg(ctx: Context, msg_link: str):
         verdict, msg = await check_qoc_and_metadata(message, True)
         rip_title = get_rip_title(message)
 
-        await ctx.channel.send("**Rip**: {}\n**Verdict**: {}\n**Comments**:\n{}".format(rip_title, verdict, msg))
+        await ctx.channel.send("**Rip**: **{}**\n**Verdict**: {}\n**Comments**:\n{}".format(rip_title, verdict, msg))
 
 
 @bot.command(name='vet_url', brief='vet a single url')
@@ -417,11 +417,12 @@ async def count_dupe(ctx: Context, msg_link: str, check_queues: str = None):
 
         playlistId = extract_playlist_id('\n'.join(message.content.splitlines()[1:])) # ignore author line
         description = get_rip_description(message)
+        rip_title = get_rip_title(message)
 
-        p, msg = run_blocking(countDupe, description, YOUTUBE_CHANNEL_NAME, playlistId, YOUTUBE_API_KEY)
+        p, msg = await run_blocking(countDupe, description, YOUTUBE_CHANNEL_NAME, playlistId, YOUTUBE_API_KEY)
         if len(msg) > 0:
             await ctx.channel.send(msg)
-            return
+            if check_queues is None: return
 
         if check_queues is not None:
             q = 0
@@ -431,7 +432,7 @@ async def count_dupe(ctx: Context, msg_link: str, check_queues: str = None):
                 queue_rips = await get_rips(queue_channel, 'msg')
                 q += sum([isDupe(description, get_rip_description(r)) for r in queue_rips[queue_channel_id]])
 
-                queue_thread_rips = await get_rips(channel, 'thread')
+                queue_thread_rips = await get_rips(queue_channel, 'thread')
                 for thread, rips in queue_thread_rips.items():
                     q += sum([isDupe(description, get_rip_description(r)) for r in rips])
 
@@ -439,9 +440,9 @@ async def count_dupe(ctx: Context, msg_link: str, check_queues: str = None):
         ordinal = lambda n: "%d%s" % (n,"tsnrhtdd"[(n//10%10!=1)*(n%10<4)*n%10::4])
 
         if check_queues is not None:
-            await ctx.channel.send(f"Found {p + q} dupe rips ({p} on the channel, {q} in queues). This is the {ordinal(p + q + 1)} dupe.")
+            await ctx.channel.send(f"**Rip**: **{rip_title}**\nFound {p + q} dupe rips ({p} on the channel, {q} in queues). This is the {ordinal(p + q + 1)} dupe.")
         else:
-            await ctx.channel.send(f"Found {p} dupe rips on the channel. This is the {ordinal(p + 1)} dupe.")
+            await ctx.channel.send(f"**Rip**: **{rip_title}**\nFound {p} dupe rips on the channel. This is the {ordinal(p + 1)} dupe.")
 
 
 @bot.command(name='scan', brief='scan queue/sub channel for metadata issues')
