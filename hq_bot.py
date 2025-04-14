@@ -537,11 +537,36 @@ async def help(ctx: Context):
             + "\n`!limitcheck` " + limitcheck.brief \
             + "\n`!count_subs [channel: link]` " + count_subs.brief \
             + "\n`!stats [show_queues: any]`" + stats.brief \
+            + "\n`!channel_list`" + channel_list.brief \
             + "\n_**Auto QoC tools:**_\n`!vet` " + vet.brief + "\n`!vet_all` " + vet_all.brief \
             + "\n`!vet_msg <message: link>` " + vet_msg.brief + "\n`!vet_url <URL: link>` " + vet_url.brief \
             + "\n_**Experimental tools:**_\n`!scan <channel: link> [start_index: int] [end_index: int]`" + scan.brief \
             + "\n_**Config:**_\n`![enable/disable]_metadata` enables/disables advanced metadata checking (currently {})".format("enabled" if get_config('metadata') else "disabled")
         await send_embed(ctx, result, delete_after=None)
+
+
+@bot.command(name='channel_list', brief='show channels and their supported commands')
+async def channel_list(ctx: Context):
+    async with ctx.channel.typing():
+        channels = [f"<#{channel_id}>: " + ", ".join(types) for channel_id, types in CHANNELS.items()]
+        message = [
+            "_**Command channel types**_",
+            "`ROUNDUP`: QoC-type channels with rips pinned. All QoC tools are available here.",
+            "`PROXY_ROUNDUP`: Supports `!qoc_roundup` and other non-pin tools e.g. `!stats`.",
+            "`DEBUG`: For developer testing purposes.",
+            "_**Stats channel types**_",
+            "`QOC`: QoC channel. Rips are pinned.",
+            "`SUBS`: Submission channel. Rips are posted as messages in main channel.",
+            "`SUBS_PIN`: Submission channel. Rips are pinned.",
+            "`SUBS_THREAD`: Submission channel. Rips are posted in threads.",
+            "`QUEUE`: Queue channel. Rips are posted as messages in main channel or threads.",
+            "_**Channels**_",
+        ]
+        message.extend(channels)
+        result = "\n".join(message)
+        
+        await send_embed(ctx, result, delete_after=None)
+
 
 @bot.command(name='op')
 async def test(ctx: Context):
