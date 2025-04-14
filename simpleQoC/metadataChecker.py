@@ -106,6 +106,16 @@ def desc_to_dict(description: str, start_line: int) -> Tuple[Dict[str, str], Set
     return desc, messages
 
 
+def get_music_from_desc(desc: Dict[str, str]) -> str:
+    if len(desc) == 0:
+        return ""
+    try:
+        track = desc['Music']
+    except KeyError:
+        track = desc[list(desc.keys())[0]]
+    return track
+
+
 def crosscheck_description_key(key: str, video_descs: List[str], threshold: float):
     """
     Check if key is present in existing video descriptions, e.g. at least 50%.
@@ -224,10 +234,7 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
                 adv_messages.add(f'Order of lines does not match any existing videos in playlist.')
             
             # Compare desc['Music'] and title
-            try:
-                track = desc['Music']
-            except KeyError:
-                track = desc[list(desc.keys())[0]]
+            track = get_music_from_desc(desc)
 
             game = None
             for p in patterns["TITLE"]:
@@ -260,6 +267,67 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
     
     if advanced: messages = messages.union(adv_messages)
     return int(len(messages) > 0), list(messages)
+
+
+def isDupe(desc1: str, desc2: str) -> bool:
+    """
+    Check if 2 descriptions are dupes of each other.
+    Input should be full descriptions, including title.
+    """
+    if len(desc1) == 0 or len(desc2) == 0:
+        return False
+    
+    D1, _ = desc_to_dict(desc1, 1)
+    D2, _ = desc_to_dict(desc2, 1)
+
+    if len(D1) == 0 or len(D2) == 0:
+        # Desc has nothing, check dupe based on title only
+        # Remove all instances of "(<anything>)" from titles,
+        # then check if they are equal
+        title1 = desc1.splitlines()[0]
+        title2 = desc2.splitlines()[0]
+        return re.sub(r'\s*\(.*?\)\s*', ' ', title1) == re.sub(r'\s*\(.*?\)\s*', ' ', title2)
+    else:
+        # Check dupe based on the 'Music' key
+        # Assuming all mixnames are "(<anything>)" added at the end of the track name,
+        # then rsplit by the last ( should yield the main mix track name
+        track1 = get_music_from_desc(D1)
+        track2 = get_music_from_desc(D2)
+        return track1.rsplit(' (', 1)[0] == track2.rsplit(' (', 1)[0]
+
+
+def countDupe(description: str, channel_name: str, playlist_id: str, api_key: str) -> Tuple[int, str]:
+    """
+    Check the playlist and count the number of dupes.
+    TODO: a lot of code is borrowed from checkMetadata. Merge them?
+    """
+    if len(playlist_id) > 0:
+        try:
+            try:
+                _, channel = get_playlist_details(playlist_id, api_key)
+                videos = get_playlist_videos(playlist_id, api_key)
+        
+            except requests.exceptions.Timeout:
+                raise MetadataException('Request timed out.')
+            except requests.exceptions.TooManyRedirects:
+                raise MetadataException('Bad URL.')
+            except requests.exceptions.HTTPError as http_err:
+                raise MetadataException(f"HTTP error occurred: {http_err}")
+            except requests.exceptions.RequestException as e: # Other errors
+                raise MetadataException('Unknown URL error. {}'.format(e))
+            
+        except MetadataException as e:
+            return 0, remove_links(e.message)
+
+        if channel_name != channel:
+            return 0, "Playlist is not from {} (found playlist from {})".format(channel_name, channel)
+    else:
+        return 0, "Playlist not found."
+    
+    if len(videos) == 0:
+        return 0, "Playlist is empty."
+
+    return sum([isDupe(description, video['title'] + '\n' + video['description'].replace('\r', '').split('\n\n')[0]) for video in videos]), ""
 
 
 # Example usage

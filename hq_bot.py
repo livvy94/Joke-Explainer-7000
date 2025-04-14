@@ -8,7 +8,7 @@ from bot_secrets import TOKEN, YOUTUBE_API_KEY, YOUTUBE_CHANNEL_NAME, CHANNELS
 from datetime import datetime, timezone, timedelta
 
 from simpleQoC.qoc import performQoC, msgContainsBitrateFix, msgContainsClippingFix, ffmpegExists
-from simpleQoC.metadataChecker import checkMetadata
+from simpleQoC.metadataChecker import checkMetadata, countDupe, isDupe
 import re
 import functools
 import typing
@@ -392,7 +392,59 @@ async def vet_url(ctx: Context, url: str):
         await ctx.channel.send("**Verdict**: {}\n**Comments**:\n{}".format(verdict, msg))
 
 
-@bot.command(name='scan', brief='scan queue/sub channel for metadata issues [IMPORTANT: Contact bot developers before using this!]')
+@bot.command(name='count_dupe', brief='count the number of dupes')
+async def count_dupe(ctx: Context, msg_link: str, check_queues: str = None):
+    """
+    Count the number of dupes for a given link to rip message.
+    Accepts an optional argument to also count rips in queues, which can take longer.
+    """
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
+    heard_command("count_dupe", ctx.message.author.name)
+
+    async with ctx.channel.typing():
+        try:
+            ids = msg_link.split('/')
+            server_id = int(ids[4])
+            channel_id = int(ids[5])
+            msg_id = int(ids[6])
+        except IndexError:
+            await ctx.channel.send("Error: Cannot parse argument - make sure it is a valid link to message.")
+            return
+        
+        server = bot.get_guild(server_id)
+        channel = server.get_channel(channel_id)
+        message = await channel.fetch_message(msg_id)
+
+        playlistId = extract_playlist_id('\n'.join(message.content.splitlines()[1:])) # ignore author line
+        description = get_rip_description(message)
+
+        p, msg = run_blocking(countDupe, description, YOUTUBE_CHANNEL_NAME, playlistId, YOUTUBE_API_KEY)
+        if len(msg) > 0:
+            await ctx.channel.send(msg)
+            return
+
+        if check_queues is not None:
+            q = 0
+            queue_channels = [k for k, v in CHANNELS.items() if 'QUEUE' in v]
+            for queue_channel_id in queue_channels:
+                queue_channel = server.get_channel(queue_channel_id)
+                queue_rips = await get_rips(queue_channel, 'msg')
+                q += sum([isDupe(description, get_rip_description(r)) for r in queue_rips[queue_channel_id]])
+
+                queue_thread_rips = await get_rips(channel, 'thread')
+                for thread, rips in queue_thread_rips.items():
+                    q += sum([isDupe(description, get_rip_description(r)) for r in rips])
+
+        # https://codegolf.stackexchange.com/questions/4707/outputting-ordinal-numbers-1st-2nd-3rd#answer-4712 how
+        ordinal = lambda n: "%d%s" % (n,"tsnrhtdd"[(n//10%10!=1)*(n%10<4)*n%10::4])
+
+        if check_queues is not None:
+            await ctx.channel.send(f"Found {p + q} dupe rips ({p} on the channel, {q} in queues). This is the {ordinal(p + q + 1)} dupe.")
+        else:
+            await ctx.channel.send(f"Found {p} dupe rips on the channel. This is the {ordinal(p + 1)} dupe.")
+
+
+@bot.command(name='scan', brief='scan queue/sub channel for metadata issues')
 async def scan(ctx: Context, channel_link: str, start_index: int, end_index: int):
     """
     Scan through a submission or queue channel for metadata issues.
@@ -540,6 +592,7 @@ async def help(ctx: Context):
             + "\n`!channel_list`" + channel_list.brief \
             + "\n_**Auto QoC tools:**_\n`!vet` " + vet.brief + "\n`!vet_all` " + vet_all.brief \
             + "\n`!vet_msg <message: link>` " + vet_msg.brief + "\n`!vet_url <URL: link>` " + vet_url.brief \
+            + "\n`!count_dupe <message: link> [count_queues: any]`" + stats.brief \
             + "\n_**Experimental tools:**_\n`!scan <channel: link> [start_index: int] [end_index: int]`" + scan.brief \
             + "\n_**Config:**_\n`![enable/disable]_metadata` enables/disables advanced metadata checking (currently {})".format("enabled" if get_config('metadata') else "disabled")
         await send_embed(ctx, result, delete_after=None)
