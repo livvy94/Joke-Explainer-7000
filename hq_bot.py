@@ -440,9 +440,9 @@ async def count_dupe(ctx: Context, msg_link: str, check_queues: str = None):
         ordinal = lambda n: "%d%s" % (n,"tsnrhtdd"[(n//10%10!=1)*(n%10<4)*n%10::4])
 
         if check_queues is not None:
-            await ctx.channel.send(f"**Rip**: **{rip_title}**\nFound {p + q} dupe rips ({p} on the channel, {q} in queues). This is the {ordinal(p + q + 1)} dupe.")
+            await ctx.channel.send(f"**Rip**: **{rip_title}**\nFound {p + q} rips of the same track ({p} on the channel, {q} in queues). This is the {ordinal(p + q + 1)} rip of this track.")
         else:
-            await ctx.channel.send(f"**Rip**: **{rip_title}**\nFound {p} dupe rips on the channel. This is the {ordinal(p + 1)} dupe.")
+            await ctx.channel.send(f"**Rip**: **{rip_title}**\nFound {p} rips of the same track on the channel. This is the {ordinal(p + 1)} rip of this track.")
 
 
 @bot.command(name='scan', brief='scan queue/sub channel for metadata issues')
