@@ -146,19 +146,15 @@ async def mypins(ctx: Context, optional_arg = None):
     Retrieve all messages pinned by the command author.
     Accepts an optional argument to "hide" the reactions (legacy behavior).
     """
-    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
-    heard_command("mypins", ctx.message.author.name)
+    await filter_command(ctx, 'mypins', (lambda ctx, rip_info: rip_info["PinMiser"] == ctx.author.name), optional_arg is None)
 
-    async with ctx.channel.typing():
-        all_pins = await process_pins(ctx.channel, optional_arg is None)
-        result = ""
-        for rip_id, rip_info in all_pins.items():
-            if rip_info["PinMiser"] == ctx.author.name:
-                result += make_markdown(rip_info, optional_arg is None) # a match!
-        if result == "":
-            await ctx.channel.send("No rips found.")
-        else:
-            await send_embed(ctx, result)
+
+@bot.command(name='emails', brief='displays emails')
+async def emails(ctx: Context):
+    """
+    Retrieve all messages that are tagged as email.
+    """
+    await filter_command(ctx, 'emails', (lambda ctx, rip_info: "email" in rip_info["Author"]), True)
 
 
 @bot.command(name="fresh", aliases = ['blank', 'bald', 'clean', 'noreacts'], brief='rips with no reacts yet')
@@ -534,6 +530,7 @@ async def help(ctx: Context):
             + "\n`!links` " + links.brief \
             + "\n`!qoc_roundup [channel: link]` " + qoc_roundup.brief + proxy_channel \
             + "\n_**Special lists:**_\n`!mypins [no_react: any]`" + mypins.brief \
+            + "\n`!emails` " + emails.brief \
             + "\n`!checks`\n`!rejects`\n`!wrenches`\n`!stops`" \
             + "\n`!overdue` " + overdue.brief \
             + "\n_**Misc. tools:**_\n`!count` " + count.brief \
@@ -692,13 +689,13 @@ def make_markdown(rip_info: dict, display_reacts: bool) -> str:
     return result
 
 
-async def react_command(ctx: Context, react: str, check_func: typing.Callable, not_found_message: str): # I've been meaning to simplify this for AGES (7/7/24)
+async def react_command(ctx: Context, cmd_name: str, check_func: typing.Callable, not_found_message: str): # I've been meaning to simplify this for AGES (7/7/24)
     """
     Unified command to only return messages with specific reactions.
     Uses the react_is_ABC helper functions to filter reacts.
     """
     if not channel_is_type(ctx.channel, 'ROUNDUP'): return
-    heard_command(react, ctx.message.author.name)
+    heard_command(cmd_name, ctx.message.author.name)
 
     async with ctx.channel.typing():
         async def filter_reacts(channel: TextChannel, message: Message):
@@ -716,6 +713,26 @@ async def react_command(ctx: Context, react: str, check_func: typing.Callable, n
 
         if result == "":
             await ctx.channel.send(not_found_message)
+        else:
+            await send_embed(ctx, result)
+
+
+async def filter_command(ctx: Context, cmd_name: str, filter_func: typing.Callable, display_reacts: bool):
+    """
+    Unified command to only return messages according to a predicate.
+    `filter_func` is a function accepting 2 parameters: `ctx`, `rip_info`
+    """
+    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
+    heard_command(cmd_name, ctx.message.author.name)
+
+    async with ctx.channel.typing():
+        all_pins = await process_pins(ctx.channel, display_reacts)
+        result = ""
+        for rip_id, rip_info in all_pins.items():
+            if filter_func(ctx, rip_info):
+                result += make_markdown(rip_info, display_reacts) # a match!
+        if result == "":
+            await ctx.channel.send("No rips found.")
         else:
             await send_embed(ctx, result)
 
