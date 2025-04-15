@@ -1189,19 +1189,19 @@ async def check_metadata(message: Message, fullFeedback: bool = False) -> typing
         for queue_channel_id in queue_channels:
             queue_channel = server.get_channel(queue_channel_id)
             queue_rips = await get_rips(queue_channel, 'msg')
-            if any([isDupe(description, get_rip_description(r)) for r in queue_rips[queue_channel_id] if r.id != message.id]):
+            if any([get_rip_title(message) == get_rip_title(r) for r in queue_rips[queue_channel_id] if r.id != message.id]):
                 mtMsgs.append(f"Video title already exists in <#{queue_channel_id}>.")
 
             queue_thread_rips = await get_rips(queue_channel, 'thread')
             for thread, rips in queue_thread_rips.items():
-                if any([isDupe(description, get_rip_description(r)) for r in rips if r.id != message.id]):
+                if any([get_rip_title(message) == get_rip_title(r) for r in rips if r.id != message.id]):
                     mtMsgs.append(f"Video title already exists in <#{thread}>.")
         
         qoc_channels = [k for k, v in CHANNELS.items() if 'QOC' in v]
         for qoc_channel_id in qoc_channels:
             qoc_channel = server.get_channel(qoc_channel_id)
             qoc_rips = await get_rips(qoc_channel, 'pin')
-            if any([isDupe(description, get_rip_description(r)) for r in qoc_rips[qoc_channel_id] if r.id != message.id]):
+            if any([get_rip_title(message) == get_rip_title(r) for r in qoc_rips[qoc_channel_id] if r.id != message.id]):
                 mtMsgs.append(f"Video title already exists in <#{qoc_channel_id}>.")      
 
     mtMsg = '\n'.join(["- " + m for m in mtMsgs]) if len(mtMsgs) > 0 else ("- Metadata is OK." if fullFeedback else "")
