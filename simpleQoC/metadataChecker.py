@@ -293,7 +293,10 @@ def isDupe(desc1: str, desc2: str) -> bool:
         # then rsplit by the last ( should yield the main mix track name
         track1 = get_music_from_desc(D1)
         track2 = get_music_from_desc(D2)
-        return track1.rsplit(' (', 1)[0] == track2.rsplit(' (', 1)[0]
+        # trying to account for track names with parentheses
+        track1_base = track1.rsplit(' (', 1)[0]
+        track2_base = track2.rsplit(' (', 1)[0]
+        return track1_base == track2_base or track1_base == track2
 
 
 def countDupe(description: str, channel_name: str, playlist_id: str, api_key: str) -> Tuple[int, str]:
