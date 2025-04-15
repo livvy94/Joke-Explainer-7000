@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 import discord
 from discord import Message, Thread, TextChannel, Reaction
+from discord import RawMessageUpdateEvent, RawMessageDeleteEvent
 from discord.abc import GuildChannel
 from discord.ext import commands
 from discord.ext.commands import Context
@@ -39,8 +40,21 @@ QOC_DEFAULT_LINKERR = '🔗'
 QOC_DEFAULT_BITRATE = '🔢'
 QOC_DEFAULT_CLIPPING = '📢'
 
+#===============================================#
+#               LOCAL VARIABLES                 #
+#===============================================#
 latest_pin_time = None # Keeps track of the last pinned message's time to distinguish between pins and unpins. To be updated on ready.
 latest_scan_time = None
+
+class RipsCache:
+    def __init__(self, rips: typing.List[Message]):
+        self.rips = rips
+        self.up_to_date = True
+
+cached_rips: dict[int, RipsCache] = {}
+def outdate_cache(channel_id: int):
+    if channel_id in cached_rips.keys():
+        cached_rips[channel_id].up_to_date = False
 
 bot = commands.Bot(
     command_prefix='!',
@@ -69,14 +83,14 @@ async def on_ready():
 
 @bot.event
 async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Thread], last_pin: datetime):
+    if channel_is_types(channel, ['QOC', 'SUBS_PIN']):
+        outdate_cache(channel.id)
+
     if not channel_is_type(channel, 'ROUNDUP'):
         return
     
     global latest_pin_time
-    if last_pin <= latest_pin_time:
-        # print("Seems to be a message being unpinned")
-        pass
-    else:
+    if last_pin > latest_pin_time:
         pin_list = await channel.pins()
         latest_msg = pin_list[0]
     
@@ -89,6 +103,29 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
             await channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}-# React {} if this is resolved.".format(rip_title, link, verdict, msg, DEFAULT_CHECK))
 
         latest_pin_time = last_pin
+
+
+@bot.event
+async def on_message(message: Message):
+    if channel_is_types(message.channel, ['SUBS', 'SUBS_THREAD', 'QUEUE']):
+        outdate_cache(message.channel.id)
+
+@bot.event
+async def on_raw_message_edit(payload: RawMessageUpdateEvent):
+    if channel_is_types(payload.channel_id, ['SUBS', 'SUBS_THREAD', 'QUEUE']):
+        outdate_cache(payload.channel_id)
+    elif channel_is_types(payload.channel_id, ['QOC', 'SUBS_PIN']) and \
+        payload.channel_id in cached_rips.keys() and payload.message_id in [m.id for m in cached_rips[payload.channel_id].rips]:
+        outdate_cache(payload.channel_id)
+
+@bot.event
+async def on_raw_message_delete(payload: RawMessageDeleteEvent):
+    if channel_is_types(payload.channel_id, ['SUBS', 'SUBS_THREAD', 'QUEUE']):
+        outdate_cache(payload.channel_id)
+    elif channel_is_types(payload.channel_id, ['QOC', 'SUBS_PIN']) and \
+        payload.channel_id in cached_rips.keys() and payload.message_id in [m.id for m in cached_rips[payload.channel_id].rips]:
+        outdate_cache(payload.channel_id)
+
 
 #===============================================#
 #                   COMMANDS                    #
@@ -1257,7 +1294,23 @@ async def count_rips(channel: TextChannel, type: typing.Literal['pin', 'msg', 't
 
 async def get_rips(channel: TextChannel, type: typing.Literal['pin', 'msg', 'thread']) -> dict[int, typing.List[Message]]:
     """
+    Retrieve rips from a channel.
+
+    If the channel was cached and is up to date, directly return it from cache.
+    Else, call `fetch_rips` and update the cache.
+    """
+    if not (channel.id in cached_rips.keys() and cached_rips[channel.id].up_to_date):
+        rips = await fetch_rips(channel, type)
+        for cid, r in rips.items():
+            cached_rips[cid] = RipsCache(r)
+    return cached_rips[channel.id]
+
+
+async def fetch_rips(channel: TextChannel, type: typing.Literal['pin', 'msg', 'thread']) -> dict[int, typing.List[Message]]:
+    """
     Retrieve all rips in a channel, depending on the type: rips are in pins, messages or threads.
+    To be executed if the channel was updated since last cache write.
+
     `type` argument specifies what type of messages to retrieve:
     - 'pin': Pinned messages. Assumes first pinned message is not a rip for simplicity.
     - 'msg': Messages in channel, ignoring threads. Only count messages with ```.
