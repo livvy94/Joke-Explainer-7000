@@ -115,7 +115,7 @@ async def roundup(ctx: Context, optional_time = None):
             await ctx.channel.send("Error: Cannot parse argument - make sure it is a valid value.")
             return
     else:
-        time = PROXY_MESSAGE_SECONDS if channel_is_types(ctx.channel, 'PROXY_ROUNDUP') else MESSAGE_SECONDS
+        time = PROXY_MESSAGE_SECONDS if channel_is_type(ctx.channel, 'PROXY_ROUNDUP') else MESSAGE_SECONDS
 
     channel = await get_roundup_channel(ctx)
     if channel is None: return
@@ -440,7 +440,7 @@ async def count_dupe(ctx: Context, msg_link: str, check_queues: str = None):
 
 
 @bot.command(name='scan', brief='scan queue/sub channel for metadata issues')
-async def scan(ctx: Context, channel_link: str, start_index: int, end_index: int):
+async def scan(ctx: Context, channel_link: str, start_index: int = None, end_index: int = None):
     """
     Scan through a submission or queue channel for metadata issues.
     Channel link must be provided as argument.
@@ -614,7 +614,7 @@ async def channel_list(ctx: Context):
 
 
 @bot.command(name='cleanup', brief='remove bot\'s old embed messages')
-async def cleanup(ctx: Context, search_limit: int):
+async def cleanup(ctx: Context, search_limit: int = None):
     if search_limit is None:
         search_limit = 200
     
@@ -866,7 +866,7 @@ def channel_is_types(channel: TextChannel, types: typing.List[str]):
     return channel.id in CHANNELS.keys() and any([t in CHANNELS[channel.id] for t in types])
 
 async def get_roundup_channel(ctx: Context):
-    if channel_is_types(ctx.channel, 'PROXY_ROUNDUP'):
+    if channel_is_type(ctx.channel, 'PROXY_ROUNDUP'):
         qoc_channel, msg = parse_channel_link(None, ["ROUNDUP"])
         if len(msg) > 0:
             await ctx.channel.send(msg)
