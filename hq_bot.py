@@ -591,6 +591,7 @@ async def help(ctx: Context):
             + "\n`!count_subs [channel: link]` " + count_subs.brief \
             + "\n`!stats [show_queues: any]`" + stats.brief \
             + "\n`!channel_list`" + channel_list.brief \
+            + "\n`!cleanup [search_limit: int]`" + cleanup.brief \
             + "\n_**Auto QoC tools:**_\n`!vet` " + vet.brief + "\n`!vet_all` " + vet_all.brief \
             + "\n`!vet_msg <message: link>` " + vet_msg.brief + "\n`!vet_url <URL: link>` " + vet_url.brief \
             + "\n`!count_dupe <message: link> [count_queues: any]`" + stats.brief \
@@ -620,6 +621,20 @@ async def channel_list(ctx: Context):
         result = "\n".join(message)
         
         await send_embed(ctx, result, delete_after=None)
+
+
+@bot.command(name='cleanup', brief='remove bot\'s old embed messages')
+async def cleanup(ctx: Context, search_limit: int):
+    if search_limit is None:
+        search_limit = 200
+    
+    count = 0
+    async for message in ctx.channel.history(limit = search_limit):
+        if message.author == bot.user and message.embeds:
+            await message.delete()
+            count += 1
+    
+    await ctx.channel.send(f"Removed {count} embed messages.")
 
 
 @bot.command(name='op')
