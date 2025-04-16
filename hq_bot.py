@@ -17,6 +17,7 @@ import json
 import os
 
 MESSAGE_SECONDS = 2700  # 45 minutes
+PROXY_MESSAGE_SECONDS = 43200  # 12 hours
 DISCORD_CHARACTER_LIMIT = 4000 # Lower this to 2000 if we lose boosts (TODO: move to bot_secrets?)
 EMBED_COLOR = 0x481761
 OVERDUE_DAYS = 30
@@ -102,7 +103,7 @@ async def roundup(ctx: Context, optional_time = None):
     Roundup command. Retrieve all pinned messages (except the first one) and their reactions.
     Accepts an optional argument to control embed's display time *in hours*.
     """
-    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("roundup", ctx.message.author.name)
 
     if optional_time is not None:
@@ -114,10 +115,13 @@ async def roundup(ctx: Context, optional_time = None):
             await ctx.channel.send("Error: Cannot parse argument - make sure it is a valid value.")
             return
     else:
-        time = MESSAGE_SECONDS
+        time = PROXY_MESSAGE_SECONDS if channel_is_types(ctx.channel, 'PROXY_ROUNDUP') else MESSAGE_SECONDS
+
+    channel = await get_roundup_channel(ctx)
+    if channel is None: return
 
     async with ctx.channel.typing():
-        all_pins = await process_pins(ctx.channel, True)
+        all_pins = await process_pins(channel, True)
         result = ""
         for rip_id, rip_info in all_pins.items():
             result += make_markdown(rip_info, True)
@@ -129,11 +133,14 @@ async def links(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) without showing reactions.
     """
-    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("links", ctx.message.author.name)
 
+    channel = await get_roundup_channel(ctx)
+    if channel is None: return
+
     async with ctx.channel.typing():
-        all_pins = await process_pins(ctx.channel, False)
+        all_pins = await process_pins(channel, False)
         result = ""
         for rip_id, rip_info in all_pins.items():
             result += make_markdown(rip_info, False)
@@ -162,19 +169,23 @@ async def fresh(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) with 0 reactions.
     """
-    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("fresh", ctx.message.author.name)
+
+    channel = await get_roundup_channel(ctx)
+    if channel is None: return
+
     result = ""
 
     async with ctx.channel.typing():
-        pin_list = await ctx.channel.pins()
+        pin_list = await channel.pins()
         pin_list.pop(-1) # get rid of a certain post about reading the rules
 
         for pinned_message in pin_list:
-            mesg = await ctx.channel.fetch_message(pinned_message.id)
+            mesg = await channel.fetch_message(pinned_message.id)
             if len(mesg.reactions) < 1:
                 title = get_rip_title(mesg)
-                link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(ctx.channel.id)}/{str(pinned_message.id)}>"
+                link = f"<https://discordapp.com/channels/{str(channel.guild.id)}/{str(channel.id)}/{str(pinned_message.id)}>"
                 result = result + f'**[{title}]({link})**\n'
 
         if result != "":
@@ -217,45 +228,22 @@ async def overdue(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) that are overdue.
     """
-    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("overdue", ctx.message.author.name)
+
+    channel = await get_roundup_channel(ctx)
+    if channel is None: return
+
     result = ""
 
     async with ctx.channel.typing():
-        all_pins = await process_pins(ctx.channel, True)
+        all_pins = await process_pins(channel, True)
         result = ""
 
         for rip_id, rip_info in all_pins.items():
             if rip_info["Indicator"] == OVERDUE_INDICATOR:
                 result += make_markdown(rip_info, True)
         await send_embed(ctx, result)
-
-
-@bot.command(name='qoc_roundup', brief='view QoC rips in the proxy channel')
-async def qoc_roundup(ctx: Context, qoc_channel_link: str = None):
-    """
-    Same as roundup, but to be run in a different channel for viewing convenience.
-    Accepts an optional link argument to the roundup-type channel to view - if not, first valid channel in config is used.
-    """
-    if not channel_is_type(ctx.channel, 'PROXY_ROUNDUP'): return
-    heard_command("qoc_roundup", ctx.message.author.name)
-
-    qoc_channel, msg = parse_channel_link(qoc_channel_link, ["ROUNDUP"])
-    if len(msg) > 0:
-        await ctx.channel.send(msg)
-        if qoc_channel == -1: return
-
-    channel = bot.get_channel(qoc_channel)
-
-    async with ctx.channel.typing():
-        all_pins = await process_pins(channel, True)
-        result = ""
-        for rip_id, rip_info in all_pins.items():
-            result += make_markdown(rip_info, True)
-        
-        # Assuming this command is meant to be run in a not-very-active channel
-        # Set to expire after 12 hours
-        await send_embed(ctx, result, 60*60*12)
 
 
 # ============ Pin count commands ============== #
@@ -301,15 +289,18 @@ async def vet(ctx: Context):
     """
     Find rips in pinned messages with bitrate/clipping issues and show their details
     """
-    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("vet", ctx.message.author.name)
+
+    channel = await get_roundup_channel(ctx)
+    if channel is None: return
 
     if not ffmpegExists():
         await ctx.channel.send("WARNING: ffmpeg command not found on the bot's server. Please contact the developers.")
         return
 
     async with ctx.channel.typing():
-        pin_list = await ctx.channel.pins()
+        pin_list = await channel.pins()
         pin_list.pop(-1) # get rid of a certain post about reading the rules
 
         for pinned_message in pin_list:
@@ -318,7 +309,7 @@ async def vet(ctx: Context):
             verdict = code_to_verdict(qcCode, qcMsg)
 
             if qcCode != 0:
-                link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(ctx.channel.id)}/{str(pinned_message.id)}>"
+                link = f"<https://discordapp.com/channels/{str(channel.guild.id)}/{str(channel.id)}/{str(pinned_message.id)}>"
                 await ctx.channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}\n-# React {} if this is resolved.".format(rip_title, link, verdict, qcMsg, DEFAULT_CHECK))
 
         if len(pin_list) == 0:
@@ -332,15 +323,18 @@ async def vet_all(ctx: Context):
     """
     Retrieve all pinned messages (except the first one) and perform basic QoC, giving emoji labels.
     """
-    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("vet_all", ctx.message.author.name)
+
+    channel = await get_roundup_channel(ctx)
+    if channel is None: return
 
     if not ffmpegExists():
         await ctx.channel.send("WARNING: ffmpeg command not found on the bot's server. Please contact the developers.")
         return
 
     async with ctx.channel.typing():
-        all_pins = await vet_pins(ctx.channel)
+        all_pins = await vet_pins(channel)
         result = ""
         for rip_id, rip_info in all_pins.items():
             result += make_markdown(rip_info, True)
@@ -574,14 +568,10 @@ def get_config(config: str):
 # ============ Helper/test commands ============== #
 
 @bot.command(name='help', aliases = ['commands', 'halp', 'test'])
-async def help(ctx: Context):
-    proxy_channels = [k for k, v in CHANNELS.items() if 'PROXY_ROUNDUP' in v]
-    proxy_channel = '' if len(proxy_channels) == 0 else f' <#{proxy_channels[0]}>'
-    
+async def help(ctx: Context):    
     async with ctx.channel.typing():
         result = "_**YOU ARE NOW QoCING:**_\n`!roundup [embed_hours: float]`" + roundup.brief \
             + "\n`!links` " + links.brief \
-            + "\n`!qoc_roundup [channel: link]` " + qoc_roundup.brief + proxy_channel \
             + "\n_**Special lists:**_\n`!mypins [no_react: any]`" + mypins.brief \
             + "\n`!emails` " + emails.brief \
             + "\n`!checks`\n`!rejects`\n`!wrenches`\n`!stops`" \
@@ -607,7 +597,7 @@ async def channel_list(ctx: Context):
         message = [
             "_**Command channel types**_",
             "`ROUNDUP`: QoC-type channels with rips pinned. All QoC tools are available here.",
-            "`PROXY_ROUNDUP`: Supports `!qoc_roundup` and other non-pin tools e.g. `!stats`.",
+            "`PROXY_ROUNDUP`: Allows running ROUNDUP commands in a different channel (and embed last longer by default).",
             "`DEBUG`: For developer testing purposes.",
             "_**Stats channel types**_",
             "`QOC`: QoC channel. Rips are pinned.",
@@ -788,17 +778,20 @@ async def react_command(ctx: Context, cmd_name: str, check_func: typing.Callable
     Unified command to only return messages with specific reactions.
     Uses the react_is_ABC helper functions to filter reacts.
     """
-    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command(cmd_name, ctx.message.author.name)
 
+    channel = await get_roundup_channel(ctx)
+    if channel is None: return
+
     async with ctx.channel.typing():
-        async def filter_reacts(channel: TextChannel, message: Message):
-            if any([check_func(r) for r in message.reactions]):
-                return await get_reactions(channel, message)
+        async def filter_reacts(c: TextChannel, m: Message):
+            if any([check_func(r) for r in m.reactions]):
+                return await get_reactions(c, m)
             # if not, return an indication string to skip from markdown
             return "FILTERED", ""
 
-        filtered_pins = await get_pinned_msgs_and_react(ctx.channel, filter_reacts)
+        filtered_pins = await get_pinned_msgs_and_react(channel, filter_reacts)
         
         result = ""
         for rip_id, rip_info in filtered_pins.items():
@@ -816,11 +809,14 @@ async def filter_command(ctx: Context, cmd_name: str, filter_func: typing.Callab
     Unified command to only return messages according to a predicate.
     `filter_func` is a function accepting 2 parameters: `ctx`, `rip_info`
     """
-    if not channel_is_type(ctx.channel, 'ROUNDUP'): return
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command(cmd_name, ctx.message.author.name)
 
+    channel = await get_roundup_channel(ctx)
+    if channel is None: return
+
     async with ctx.channel.typing():
-        all_pins = await process_pins(ctx.channel, display_reacts)
+        all_pins = await process_pins(channel, display_reacts)
         result = ""
         for rip_id, rip_info in all_pins.items():
             if filter_func(ctx, rip_info):
@@ -868,6 +864,17 @@ def channel_is_type(channel: TextChannel, type: str):
 
 def channel_is_types(channel: TextChannel, types: typing.List[str]):
     return channel.id in CHANNELS.keys() and any([t in CHANNELS[channel.id] for t in types])
+
+async def get_roundup_channel(ctx: Context):
+    if channel_is_types(ctx.channel, 'PROXY_ROUNDUP'):
+        qoc_channel, msg = parse_channel_link(None, ["ROUNDUP"])
+        if len(msg) > 0:
+            await ctx.channel.send(msg)
+            if qoc_channel == -1: return None
+        channel = bot.get_channel(qoc_channel)
+    else:
+        channel = ctx.channel
+    return channel
 
 def heard_command(command_name: str, user: str):
     today = datetime.now() # Technically not useful, but it looks gorgeous on my CRT monitor
