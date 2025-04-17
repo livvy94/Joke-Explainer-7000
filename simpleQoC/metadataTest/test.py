@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from inspect import getsourcefile
 
-from simpleQoC.metadataChecker import checkMetadata
+from simpleQoC.metadata import checkMetadata
 
 TEST_DIR = Path(os.path.abspath(getsourcefile(lambda:0))).parent
 DEBUG_MODE = False

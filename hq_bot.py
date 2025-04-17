@@ -7,8 +7,8 @@ from discord.ext.commands import Context
 from bot_secrets import TOKEN, YOUTUBE_API_KEY, YOUTUBE_CHANNEL_NAME, CHANNELS
 from datetime import datetime, timezone, timedelta
 
-from simpleQoC.qoc import performQoC, msgContainsBitrateFix, msgContainsClippingFix, ffmpegExists
-from simpleQoC.metadataChecker import checkMetadata, countDupe, isDupe
+from simpleQoC.qoc import performQoC, msgContainsBitrateFix, msgContainsClippingFix, ffmpegExists, getFileMetadata
+from simpleQoC.metadata import checkMetadata, countDupe, isDupe
 import re
 import functools
 import typing
@@ -535,6 +535,57 @@ async def scan(ctx: Context, channel_link: str, start_index: int = None, end_ind
         await ctx.channel.send("Finished checking metadata of {} rips. Wait for ~30 minutes and contact bot developers if you wish to use this command again today.".format(eInd - sInd))
 
 
+@bot.command(name='peek_msg', brief='print file metadata from message link')
+async def peek_msg(ctx: Context, msg_link: str):
+    """
+    Prints the file metadata of the rip at linked message.
+    The first non-YouTube link found in the message is treated as the rip URL.
+    """
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
+    heard_command("peek_msg", ctx.message.author.name)
+
+    async with ctx.channel.typing():
+        try:
+            ids = msg_link.split('/')
+            server_id = int(ids[4])
+            channel_id = int(ids[5])
+            msg_id = int(ids[6])
+        except IndexError:
+            await ctx.channel.send("Error: Cannot parse argument - make sure it is a valid link to message.")
+            return
+        
+        server = bot.get_guild(server_id)
+        channel = server.get_channel(channel_id)
+        message = await channel.fetch_message(msg_id)
+        rip_title = get_rip_title(message)
+        
+        urls = extract_rip_link(message.content)
+        for url in urls:
+            code, msg = await run_blocking(getFileMetadata, url)
+            if code != -1:
+                break
+        if code == -1:
+            await ctx.channel.send("Error reading message: {}".format(msg))
+        else:
+            await ctx.channel.send("**Rip**: **{}**\n**File metadata**:\n{}".format(rip_title, msg))
+
+
+@bot.command(name='peek_url', brief='print file metadata from url')
+async def peek_url(ctx: Context, url: str):
+    """
+    Prints the file metadata of the rip at linked URL.
+    """
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
+    heard_command("peek_url", ctx.message.author.name)
+
+    async with ctx.channel.typing():
+        code, msg = await run_blocking(getFileMetadata, url)
+        if code == -1:
+            await ctx.channel.send("Error reading URL: {}".format(msg))
+        else:
+            await ctx.channel.send("**File metadata**:\n{}".format(msg))
+
+
 # ============ Config commands ============== #
 
 @bot.command(name='enable_metadata')
@@ -588,6 +639,7 @@ async def help(ctx: Context):
             + "\n`!cleanup [search_limit: int]`" + cleanup.brief \
             + "\n_**Auto QoC tools:**_\n`!vet` " + vet.brief + "\n`!vet_all` " + vet_all.brief \
             + "\n`!vet_msg <message: link>` " + vet_msg.brief + "\n`!vet_url <URL: link>` " + vet_url.brief \
+            + "\n`!peek_msg <message: link>` " + peek_msg.brief + "\n`!peek_url <URL: link>` " + peek_url.brief \
             + "\n`!count_dupe <message: link> [count_queues: any]`" + stats.brief \
             + "\n_**Experimental tools:**_\n`!scan <channel: link> [start_index: int] [end_index: int]`" + scan.brief \
             + "\n_**Config:**_\n`![enable/disable]_metadata` enables/disables advanced metadata checking (currently {})".format("enabled" if get_config('metadata') else "disabled")

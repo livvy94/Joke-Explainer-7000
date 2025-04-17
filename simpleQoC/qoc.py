@@ -608,6 +608,41 @@ def msgContainsClippingFix(msg: str) -> bool:
 def msgContainsPRVRClippingFix(msg: str) -> bool:
     return msg.find("Post-render volume reduction detected") != -1
 
+
+def getFileMetadata(url: str) -> Tuple[int, str]:
+    """
+    Returns the metadata of file at given URL.
+    File metadata acquired via mutagen's `pprint()` function.
+    """
+    try:
+        downloadableUrl = parseUrl(url)
+    except QoCException as e:
+        return (-1, e.message)
+    
+    if not os.path.exists(DOWNLOAD_DIR):
+        os.mkdir(DOWNLOAD_DIR)
+    
+    filepath = None
+    errors = []
+
+    try:
+        filepath = downloadAudioFromUrl(downloadableUrl)
+        DEBUG("Downloaded audio: " + Path(filepath).name)
+    except QoCException as e:
+        errors.append(e.message)
+    else:
+        file = parseAudio(filepath)
+        metadata = file.pprint()
+    finally:
+        if filepath:
+            os.remove(filepath)
+
+    if len(errors) > 0:
+        return (-1, '\n'.join(errors))
+
+    return (0, metadata)
+
+
 #=======================================#
 #            Main Function              #
 #=======================================#
