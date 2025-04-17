@@ -285,12 +285,16 @@ async def limitcheck(ctx: Context):
 # ============ Basic QoC commands ============== #
 
 @bot.command(name='vet', brief='scan pinned messages for bitrate and clipping issues')
-async def vet(ctx: Context):
+async def vet(ctx: Context, optional_arg = None):
     """
     Find rips in pinned messages with bitrate/clipping issues and show their details
     """
     if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("vet", ctx.message.author.name)
+
+    if optional_arg is not None:
+        await ctx.channel.send("WARNING: ``!vet`` takes no argument. Did you mean to use ``!vet_msg`` or ``!vet_url``?")
+        return
 
     channel = await get_roundup_channel(ctx)
     if channel is None: return
