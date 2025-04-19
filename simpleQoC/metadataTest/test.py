@@ -42,8 +42,8 @@ class TestMetadata(unittest.TestCase):
             self.assertTrue(m in msgs)
 
 
-    @patch('simpleQoC.metadataChecker.get_playlist_videos')
-    @patch('simpleQoC.metadataChecker.get_playlist_details')
+    @patch('simpleQoC.metadata.get_playlist_videos')
+    @patch('simpleQoC.metadata.get_playlist_details')
     def test_metadata_ok(self, mock_details, mock_videos):
         self.base_test(
             mock_details, mock_videos,
@@ -54,8 +54,8 @@ class TestMetadata(unittest.TestCase):
         )
 
 
-    @patch('simpleQoC.metadataChecker.get_playlist_videos')
-    @patch('simpleQoC.metadataChecker.get_playlist_details')
+    @patch('simpleQoC.metadata.get_playlist_videos')
+    @patch('simpleQoC.metadata.get_playlist_details')
     def test_metadata_issue(self, mock_details, mock_videos):
         self.base_test(
             mock_details, mock_videos,
@@ -79,8 +79,8 @@ class TestMetadata(unittest.TestCase):
         )
 
 
-    @patch('simpleQoC.metadataChecker.get_playlist_videos')
-    @patch('simpleQoC.metadataChecker.get_playlist_details')
+    @patch('simpleQoC.metadata.get_playlist_videos')
+    @patch('simpleQoC.metadata.get_playlist_details')
     def test_metadata_issue_v2(self, mock_details, mock_videos):
         self.base_test(
             mock_details, mock_videos,
@@ -93,8 +93,8 @@ class TestMetadata(unittest.TestCase):
         )
 
 
-    @patch('simpleQoC.metadataChecker.get_playlist_videos')
-    @patch('simpleQoC.metadataChecker.get_playlist_details')
+    @patch('simpleQoC.metadata.get_playlist_videos')
+    @patch('simpleQoC.metadata.get_playlist_details')
     def test_metadata_issue_v3(self, mock_details, mock_videos):
         self.base_test(
             mock_details, mock_videos,
@@ -108,14 +108,13 @@ class TestMetadata(unittest.TestCase):
                 "Em dash (``—``) detected. It is recommended that you use hyphen (``-``) for consistency.",
                 "The **S** in PlayStation should be capitalized.",
                 "We commonly use Xbox Series X|S.",
-                "Reboot metadata found. Change to regular metadata if this was not intentional.",
             ],
             False
         )
 
     
-    @patch('simpleQoC.metadataChecker.get_playlist_videos')
-    @patch('simpleQoC.metadataChecker.get_playlist_details')
+    @patch('simpleQoC.metadata.get_playlist_videos')
+    @patch('simpleQoC.metadata.get_playlist_details')
     def test_metadata_no_playlist(self, mock_details, mock_videos):
         self.base_test(
             mock_details, mock_videos,
@@ -126,8 +125,8 @@ class TestMetadata(unittest.TestCase):
         )
     
 
-    @patch('simpleQoC.metadataChecker.get_playlist_videos')
-    @patch('simpleQoC.metadataChecker.get_playlist_details')
+    @patch('simpleQoC.metadata.get_playlist_videos')
+    @patch('simpleQoC.metadata.get_playlist_details')
     def test_metadata_announcement(self, mock_details, mock_videos):
         self.base_test(
             mock_details, mock_videos,

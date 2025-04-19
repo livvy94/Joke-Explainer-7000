@@ -237,6 +237,9 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
             track = get_music_from_desc(desc)
 
             game = None
+            temp_messages = set()
+            good_match = False
+
             for p in patterns["TITLE"]:
                 match = re.search(p.replace('[[TRACK]]', re.escape(track)), title)
                 if match:
@@ -258,9 +261,14 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
                     
                     if len(existing_titles) > 0 and (game != playlist_name) and not game_match:
                         if len(title) < 100 and (game in playlist_name or any([game in video for video in existing_titles])):
-                            adv_messages.add('Game in title appears to be cut off. Ignore if this was intentional to go under 100-character limit.')
+                            temp_messages.add('Game in title appears to be cut off. Ignore if this was intentional to go under 100-character limit.')
                         else:
-                            adv_messages.add('Game in title does not match playlist name nor any existing videos in playlist.')
+                            temp_messages.add('Game in title does not match playlist name nor any existing videos in playlist.')
+                    else:
+                        good_match = True
+
+            if not good_match:
+                adv_messages = adv_messages.union(temp_messages)
             
             if game is None:
                 adv_messages.add('Title format does not match {}, or Music line is incorrect (e.g. missing mixname, leftover game part).'.format('existing videos in playlist' if len(videos) > 0 else 'any known pattern'))
