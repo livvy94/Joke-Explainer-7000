@@ -312,7 +312,7 @@ async def vet(ctx: Context, optional_arg = None):
         pin_list.pop(-1) # get rid of a certain post about reading the rules
 
         for pinned_message in pin_list:
-            qcCode, qcMsg = await check_qoc(pinned_message, False)
+            qcCode, qcMsg, _ = await check_qoc(pinned_message, False)
             rip_title = get_rip_title(pinned_message)
             verdict = code_to_verdict(qcCode, qcMsg)
 
@@ -1233,17 +1233,19 @@ def code_to_verdict(code: int, msg: str) -> str:
     return verdict
 
 
-async def check_qoc(message: Message, fullFeedback: bool = False) -> typing.Tuple[str, str]:
+async def check_qoc(message: Message, fullFeedback: bool = False) -> typing.Tuple[str, str, str]:
     """
     Perform simpleQoC on a message.
     """
     urls = extract_rip_link(message.content)
     qcCode, qcMsg = -1, "No links detected."
+    detectedUrl = None
     for url in urls:
         qcCode, qcMsg = await run_blocking(performQoC, url, fullFeedback)
         if qcCode != -1:
+            detectedUrl = url
             break
-    return qcCode, qcMsg
+    return qcCode, qcMsg, detectedUrl
 
 
 async def check_metadata(message: Message, fullFeedback: bool = False) -> typing.Tuple[str, str]:
@@ -1306,7 +1308,7 @@ async def check_qoc_and_metadata(message: Message, fullFeedback: bool = False) -
     rip_title = get_rip_title(message)
     
     # QoC
-    qcCode, qcMsg = await check_qoc(message, fullFeedback)
+    qcCode, qcMsg, detectedUrl = await check_qoc(message, fullFeedback)
     if qcCode == -1:
         write_log("Warning: cannot QoC message\nRip: {}\n{}".format(rip_title, qcMsg))
     elif (qcCode == 1) or fullFeedback:
@@ -1321,6 +1323,18 @@ async def check_qoc_and_metadata(message: Message, fullFeedback: bool = False) -
         verdict += ("" if len(verdict) == 0 else " ") + DEFAULT_METADATA
     if (mtCode == 1) or fullFeedback:
         msg += mtMsg + "\n"
+
+    # Check for lines between the rip description and link - if it does not start with "Joke", add a warning
+    # in order to minimize accidental joke lines when uploading
+    try:
+        for line in message.content.split('```', 2)[2].splitlines():
+            if detectedUrl in line:
+                break
+            elif len(line) > 0 and not line.startswith('Joke'):
+                msg += "- Line not starting with ``Joke`` detected between description and rip URL. Recommend putting the URL directly under description to avoid accidentally uploading joke lines."
+                break
+    except IndexError:
+        pass
 
     return verdict, msg
 
