@@ -295,6 +295,10 @@ async def vet(ctx: Context, optional_arg = None):
     if optional_arg is not None:
         await ctx.channel.send("WARNING: ``!vet`` takes no argument. Did you mean to use ``!vet_msg`` or ``!vet_url``?")
         return
+    
+    if ctx.message.reference is not None:
+        await ctx.channel.send("WARNING: ``!vet`` takes no argument (nor replies). Did you mean to use ``!vet_msg`` or ``!vet_url``?")
+        return
 
     channel = await get_roundup_channel(ctx)
     if channel is None: return
