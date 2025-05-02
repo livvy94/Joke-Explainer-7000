@@ -161,7 +161,20 @@ async def emails(ctx: Context):
     """
     Retrieve all messages that are tagged as email.
     """
-    await filter_command(ctx, 'emails', (lambda ctx, rip_info: "email" in rip_info["Author"]), True)
+    await filter_command(ctx, 'emails', (lambda ctx, rip_info: "email" in rip_info["Author"].lower()), True)
+
+
+@bot.command(name='events', brief='displays event rips')
+async def events(ctx: Context, event: str = None):
+    """
+    Retrieve all messages that are tagged as for an event.
+    The provided string must appear in the rip's author label (case insensitive)
+    """
+    if channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']) and event is None:
+        await ctx.channel.send("Error: Please indicate the event name. Rips should be tagged with this name.")
+        return
+    
+    await filter_command(ctx, 'emails', (lambda ctx, rip_info: event.lower() in rip_info["Author"].lower()), True)
 
 
 @bot.command(name="fresh", aliases = ['blank', 'bald', 'clean', 'noreacts'], brief='rips with no reacts yet')
@@ -351,13 +364,17 @@ async def vet_all(ctx: Context):
 
 
 @bot.command(name='vet_msg', brief='vet a single message link')
-async def vet_msg(ctx: Context, msg_link: str):
+async def vet_msg(ctx: Context, msg_link: str = None):
     """
     Perform basic QoC on a linked message.
     The first non-YouTube link found in the message is treated as the rip URL.
     """
     if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("vet_msg", ctx.message.author.name)
+
+    if msg_link is None:
+        await ctx.channel.send("Error: Please provide a link to message.")
+        return
 
     async with ctx.channel.typing():
         try:
@@ -380,12 +397,16 @@ async def vet_msg(ctx: Context, msg_link: str):
 
 
 @bot.command(name='vet_url', brief='vet a single url')
-async def vet_url(ctx: Context, url: str):
+async def vet_url(ctx: Context, url: str = None):
     """
     Perform basic QoC on an URL.
     """
     if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("vet_url", ctx.message.author.name)
+
+    if url is None:
+        await ctx.channel.send("Error: Please provide an URL to rip.")
+        return
 
     async with ctx.channel.typing():
         code, msg = await run_blocking(performQoC, url)
@@ -395,13 +416,17 @@ async def vet_url(ctx: Context, url: str):
 
 
 @bot.command(name='count_dupe', brief='count the number of dupes')
-async def count_dupe(ctx: Context, msg_link: str, check_queues: str = None):
+async def count_dupe(ctx: Context, msg_link: str = None, check_queues: str = None):
     """
     Count the number of dupes for a given link to rip message.
     Accepts an optional argument to also count rips in queues, which can take longer.
     """
     if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("count_dupe", ctx.message.author.name)
+
+    if msg_link is None:
+        await ctx.channel.send("Error: Please provide a link to message.")
+        return
 
     async with ctx.channel.typing():
         try:
@@ -448,7 +473,7 @@ async def count_dupe(ctx: Context, msg_link: str, check_queues: str = None):
 
 
 @bot.command(name='scan', brief='scan queue/sub channel for metadata issues')
-async def scan(ctx: Context, channel_link: str, start_index: int = None, end_index: int = None):
+async def scan(ctx: Context, channel_link: str = None, start_index: int = None, end_index: int = None):
     """
     Scan through a submission or queue channel for metadata issues.
     Channel link must be provided as argument.
@@ -540,13 +565,17 @@ async def scan(ctx: Context, channel_link: str, start_index: int = None, end_ind
 
 
 @bot.command(name='peek_msg', brief='print file metadata from message link')
-async def peek_msg(ctx: Context, msg_link: str):
+async def peek_msg(ctx: Context, msg_link: str = None):
     """
     Prints the file metadata of the rip at linked message.
     The first non-YouTube link found in the message is treated as the rip URL.
     """
     if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("peek_msg", ctx.message.author.name)
+
+    if msg_link is None:
+        await ctx.channel.send("Error: Please provide a link to message.")
+        return
 
     async with ctx.channel.typing():
         try:
@@ -575,12 +604,16 @@ async def peek_msg(ctx: Context, msg_link: str):
 
 
 @bot.command(name='peek_url', brief='print file metadata from url')
-async def peek_url(ctx: Context, url: str):
+async def peek_url(ctx: Context, url: str = None):
     """
     Prints the file metadata of the rip at linked URL.
     """
     if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("peek_url", ctx.message.author.name)
+
+    if url is None:
+        await ctx.channel.send("Error: Please provide an URL to rip.")
+        return
 
     async with ctx.channel.typing():
         code, msg = await run_blocking(getFileMetadata, url)
@@ -632,7 +665,7 @@ async def help(ctx: Context):
         result = "_**YOU ARE NOW QoCING:**_\n`!roundup [embed_hours: float]`" + roundup.brief \
             + "\n`!links` " + links.brief \
             + "\n_**Special lists:**_\n`!mypins [no_react: any]`" + mypins.brief \
-            + "\n`!emails` " + emails.brief \
+            + "\n`!emails` " + emails.brief + "\n`!events <name: str>` " + events.brief \
             + "\n`!checks`\n`!rejects`\n`!wrenches`\n`!stops`" \
             + "\n`!overdue` " + overdue.brief \
             + "\n_**Misc. tools:**_\n`!count` " + count.brief \
