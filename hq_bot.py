@@ -623,6 +623,41 @@ async def peek_url(ctx: Context, url: str = None):
             await ctx.channel.send("**File metadata**:\n{}".format(msg))
 
 
+@bot.command(name='scout', brief='find approved rips with specific title prefix')
+async def scout(ctx: Context, prefix: str = None, channel_link: str = None):
+    """
+    Search queue channel for rips starting with the specific prefix (e.g. letter E).
+    The prefix is case insensitive.
+    """
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
+    heard_command("scout", ctx.message.author.name)
+
+    if prefix is None:
+        await ctx.channel.send("Error: Please provide a prefix string.")
+        return
+
+    channel_id, msg = parse_channel_link(channel_link, ['QUEUE'])
+    if len(msg) > 0:
+        await ctx.channel.send(msg)
+        return
+    
+    channel = bot.get_channel(channel_id)
+    rips: typing.List[Message] = []
+    for t in ['msg', 'thread']:
+        t_rips = await get_rips(channel, t)
+        for k, v in t_rips.items():
+            rips.extend(v)
+
+    async with ctx.channel.typing():
+        result = ""
+        for rip in rips:
+            rip_title = get_rip_title(rip)
+            rip_link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(channel_id)}/{str(rip.id)}>"
+            if rip_title.lower().startswith(prefix.lower()):
+                result += f'**[{rip_title}]({rip_link})**\n'
+
+        await send_embed(ctx, result)
+
 # ============ Config commands ============== #
 
 @bot.command(name='enable_metadata')
