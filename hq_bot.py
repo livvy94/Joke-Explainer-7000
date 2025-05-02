@@ -174,7 +174,7 @@ async def events(ctx: Context, event: str = None):
         await ctx.channel.send("Error: Please indicate the event name. Rips should be tagged with this name.")
         return
     
-    await filter_command(ctx, 'emails', (lambda ctx, rip_info: event.lower() in rip_info["Author"].lower()), True)
+    await filter_command(ctx, 'events', (lambda ctx, rip_info: event.lower() in rip_info["Author"].lower()), True)
 
 
 @bot.command(name="fresh", aliases = ['blank', 'bald', 'clean', 'noreacts'], brief='rips with no reacts yet')
