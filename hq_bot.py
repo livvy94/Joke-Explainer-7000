@@ -648,6 +648,10 @@ async def scout(ctx: Context, prefix: str = None, channel_link: str = None):
             t_rips = await get_rips(channel, t)
             for k, v in t_rips.items():
                 rips.extend(v)
+        
+        if len(rips) == 0:
+            await ctx.channel.send("No rips found.")
+            return
 
         result = ""
         for rip in rips:
