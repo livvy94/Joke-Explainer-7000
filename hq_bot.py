@@ -642,13 +642,13 @@ async def scout(ctx: Context, prefix: str = None, channel_link: str = None):
         return
     
     channel = bot.get_channel(channel_id)
-    rips: typing.List[Message] = []
-    for t in ['msg', 'thread']:
-        t_rips = await get_rips(channel, t)
-        for k, v in t_rips.items():
-            rips.extend(v)
-
     async with ctx.channel.typing():
+        rips: typing.List[Message] = []
+        for t in ['msg', 'thread']:
+            t_rips = await get_rips(channel, t)
+            for k, v in t_rips.items():
+                rips.extend(v)
+
         result = ""
         for rip in rips:
             rip_title = get_rip_title(rip)
@@ -712,7 +712,8 @@ async def help(ctx: Context):
             + "\n_**Auto QoC tools:**_\n`!vet` " + vet.brief + "\n`!vet_all` " + vet_all.brief \
             + "\n`!vet_msg <message: link>` " + vet_msg.brief + "\n`!vet_url <URL: link>` " + vet_url.brief \
             + "\n`!peek_msg <message: link>` " + peek_msg.brief + "\n`!peek_url <URL: link>` " + peek_url.brief \
-            + "\n`!count_dupe <message: link> [count_queues: any]`" + stats.brief \
+            + "\n`!count_dupe <message: link> [count_queues: any]`" + count_dupe.brief \
+            + "\n`!scout <prefix: str> [channel: link]`" + scout.brief \
             + "\n_**Experimental tools:**_\n`!scan <channel: link> [start_index: int] [end_index: int]`" + scan.brief \
             + "\n_**Config:**_\n`![enable/disable]_metadata` enables/disables advanced metadata checking (currently {})".format("enabled" if get_config('metadata') else "disabled")
         await send_embed(ctx, result, delete_after=None)
