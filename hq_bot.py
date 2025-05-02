@@ -649,10 +649,6 @@ async def scout(ctx: Context, prefix: str = None, channel_link: str = None):
             for k, v in t_rips.items():
                 rips.extend(v)
         
-        if len(rips) == 0:
-            await ctx.channel.send("No rips found.")
-            return
-
         result = ""
         for rip in rips:
             rip_title = get_rip_title(rip)
@@ -660,7 +656,10 @@ async def scout(ctx: Context, prefix: str = None, channel_link: str = None):
             if rip_title.lower().startswith(prefix.lower()):
                 result += f'**[{rip_title}]({rip_link})**\n'
 
-        await send_embed(ctx, result)
+        if len(result) == 0:
+            await ctx.channel.send("No rips found.")
+        else:
+            await send_embed(ctx, result)
 
 # ============ Config commands ============== #
 
