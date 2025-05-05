@@ -243,14 +243,10 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
             for p in patterns["TITLE"]:
                 match = re.search(p.replace('[[TRACK]]', re.escape(track)), title)
                 if match:
+                    game = match.group('game')
                     existing_titles = [video['title'] for video in videos]
 
-                    # Check that at least 50% of existing videos have the same title formatting
-                    if len(existing_titles) > 0 and sum([re.search(p.replace('[[TRACK]]', r'(?P<track>[^\n]*)'), t) is not None for t in existing_titles]) / len(existing_titles) < 0.5:
-                        continue
-                    
                     # Check game name
-                    game = match.group('game')
                     if p.startswith('[[TRACK]]'):
                         game_match = any([video.endswith(game) for video in existing_titles])
                     elif p.endswith('[[TRACK]]'):
@@ -265,6 +261,11 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
                         else:
                             temp_messages.add('Game in title does not match playlist name nor any existing videos in playlist.')
                     else:
+                        # Check that at least 50% of existing videos have the same title formatting
+                        other_p = p.replace('[[TRACK]]', r'(?P<track>[^\n]*)').replace(r'(?P<game>[^\n]*)', re.escape(game))
+                        if len(existing_titles) > 0 and sum([re.search(other_p, t) is not None for t in existing_titles]) / len(existing_titles) < 0.5:
+                            game = None
+                            continue
                         good_match = True
 
             if not good_match:
