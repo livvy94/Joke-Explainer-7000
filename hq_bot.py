@@ -1403,7 +1403,7 @@ async def check_qoc_and_metadata(message: Message, fullFeedback: bool = False) -
             if detectedUrl in line:
                 break
             elif len(line) > 0 and not line.startswith('Joke'):
-                msg += "- Line not starting with ``Joke`` detected between description and rip URL. Recommend putting the URL directly under description to avoid accidentally uploading joke lines."
+                msg += "- Line not starting with ``Joke`` detected between description and rip URL. Recommend putting the URL directly under description to avoid accidentally uploading joke lines.\n"
                 break
     except IndexError:
         pass
