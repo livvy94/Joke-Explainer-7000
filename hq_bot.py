@@ -78,6 +78,7 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
         # print("Seems to be a message being unpinned")
         pass
     else:
+        latest_pin_time = last_pin
         pin_list = await channel.pins()
         latest_msg = pin_list[0]
     
@@ -89,7 +90,6 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
             link = f"<https://discordapp.com/channels/{str(channel.guild.id)}/{str(channel.id)}/{str(latest_msg.id)}>"
             await channel.send("**Rip**: **[{}]({})**\n**Verdict**: {}\n{}-# React {} if this is resolved.".format(rip_title, link, verdict, msg, DEFAULT_CHECK))
 
-        latest_pin_time = last_pin
 
 #===============================================#
 #                   COMMANDS                    #
