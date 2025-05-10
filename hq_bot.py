@@ -268,18 +268,27 @@ async def count(ctx: Context):
     """
     heard_command("count", ctx.message.author.name)
 
+    if channel_is_type(ctx.channel, 'PROXY_ROUNDUP'):
+        channel = await get_roundup_channel(ctx)
+        if channel is None: return
+        else: proxy = f"\n-# Showing results from <#{channel.id}>."
+    else:
+        channel = ctx.channel
+        proxy = ""
+
     async with ctx.channel.typing():
-        pincount = await count_rips(ctx.channel, 'pin')
+        pincount = await count_rips(channel, 'pin')
 
         if (pincount < 1):
             result = "`* Determination.`"
         else:
             result = f"`* {pincount} left.`"
 
+        result += proxy
         await ctx.channel.send(result)
 
 
-@bot.command(name='limitcheck', brief="pin limit checker")
+@bot.command(name='limitcheck', aliases=['pinlimit'], brief="pin limit checker")
 async def limitcheck(ctx: Context):
     """
     Count the number of available pin slots.
@@ -287,11 +296,20 @@ async def limitcheck(ctx: Context):
     heard_command("limitcheck", ctx.message.author.name)
     max_pins = 50
 
+    if channel_is_type(ctx.channel, 'PROXY_ROUNDUP'):
+        channel = await get_roundup_channel(ctx)
+        if channel is None: return
+        else: proxy = f"\n-# Showing results from <#{channel.id}>."
+    else:
+        channel = ctx.channel
+        proxy = ""
+
     async with ctx.channel.typing():
-        pin_list = await ctx.channel.pins()
+        pin_list = await channel.pins()
         pincount = len(pin_list)
         result = f"You can pin {max_pins - pincount} more rips until hitting Discord's pin limit."
 
+        result += proxy
         await ctx.channel.send(result)
 
 
