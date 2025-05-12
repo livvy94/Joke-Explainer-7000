@@ -7,7 +7,7 @@ from discord.ext.commands import Context
 from bot_secrets import TOKEN, YOUTUBE_API_KEY, YOUTUBE_CHANNEL_NAME, CHANNELS
 from datetime import datetime, timezone, timedelta
 
-from simpleQoC.qoc import performQoC, msgContainsBitrateFix, msgContainsClippingFix, ffmpegExists, getFileMetadata
+from simpleQoC.qoc import performQoC, msgContainsBitrateFix, msgContainsClippingFix, msgContainsSigninErr, ffmpegExists, getFileMetadata
 from simpleQoC.metadata import checkMetadata, countDupe, isDupe
 import re
 import functools
@@ -164,7 +164,7 @@ async def emails(ctx: Context):
     await filter_command(ctx, 'emails', (lambda ctx, rip_info: "email" in rip_info["Author"].lower()), True)
 
 
-@bot.command(name='events', brief='displays event rips')
+@bot.command(name='events', aliases = ['event'], brief='displays event rips')
 async def events(ctx: Context, event: str = None):
     """
     Retrieve all messages that are tagged as for an event.
@@ -611,12 +611,14 @@ async def peek_msg(ctx: Context, msg_link: str = None):
         rip_title = get_rip_title(message)
         
         urls = extract_rip_link(message.content)
+        errs = []
         for url in urls:
             code, msg = await run_blocking(getFileMetadata, url)
             if code != -1:
                 break
+            errs.append(msg)
         if code == -1:
-            await ctx.channel.send("Error reading message: {}".format(msg))
+            await ctx.channel.send("Error reading message:\n{}".format('\n'.join(errs)))
         else:
             await ctx.channel.send("**Rip**: **{}**\n**File metadata**:\n{}".format(rip_title, msg))
 
@@ -1316,6 +1318,8 @@ def code_to_verdict(code: int, msg: str) -> str:
         1: DEFAULT_FIX,
     }[code]
     if code == 1:
+        if msgContainsSigninErr(msg):
+            verdict = QOC_DEFAULT_LINKERR
         if msgContainsBitrateFix(msg):
             verdict += ' ' + QOC_DEFAULT_BITRATE
         if msgContainsClippingFix(msg):
@@ -1416,15 +1420,16 @@ async def check_qoc_and_metadata(message: Message, fullFeedback: bool = False) -
 
     # Check for lines between the rip description and link - if it does not start with "Joke", add a warning
     # in order to minimize accidental joke lines when uploading
-    try:
-        for line in message.content.split('```', 2)[2].splitlines():
-            if detectedUrl in line:
-                break
-            elif len(line) > 0 and not line.startswith('Joke'):
-                msg += "- Line not starting with ``Joke`` detected between description and rip URL. Recommend putting the URL directly under description to avoid accidentally uploading joke lines.\n"
-                break
-    except IndexError:
-        pass
+    if detectedUrl is not None:
+        try:
+            for line in message.content.split('```', 2)[2].splitlines():
+                if detectedUrl in line:
+                    break
+                elif len(line) > 0 and not line.startswith('Joke'):
+                    msg += "- Line not starting with ``Joke`` detected between description and rip URL. Recommend putting the URL directly under description to avoid accidentally uploading joke lines.\n"
+                    break
+        except IndexError:
+            pass
 
     return verdict, msg
 

@@ -608,6 +608,9 @@ def msgContainsClippingFix(msg: str) -> bool:
 def msgContainsPRVRClippingFix(msg: str) -> bool:
     return msg.find("Post-render volume reduction detected") != -1
 
+def msgContainsSigninErr(msg: str) -> bool:
+    return msg.find("Drive link is not accessible") != -1
+
 
 def getFileMetadata(url: str) -> Tuple[int, str]:
     """
@@ -669,6 +672,9 @@ def performQoC(url: str, fullFeedback: bool = True) -> Tuple[int, str]:
         DEBUG("Downloaded audio: " + Path(filepath).name)
     
     except QoCException as e:
+        if 'drive' in url and 'Sign-in' in e.message:
+            # custom return value for sign-in issues, return 1 so it doesn't get filtered
+            return (1, "Drive link is not accessible. Ask Mailroom to reupload if this is an email sub.")
         errors.append(e.message)
     
     else:
