@@ -261,9 +261,9 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
                         else:
                             temp_messages.add('Game in title does not match playlist name nor any existing videos in playlist.')
                     else:
-                        # Check that at least 50% of existing videos have the same title formatting
+                        # Check that at least one other existing video has the same title formatting
                         other_p = p.replace('[[TRACK]]', r'(?P<track>[^\n]*)').replace(r'(?P<game>[^\n]*)', re.escape(game))
-                        if len(existing_titles) > 0 and sum([re.search(other_p, t) is not None for t in existing_titles]) / len(existing_titles) < 0.5:
+                        if len(existing_titles) > 0 and not any([re.search(other_p, t) is not None for t in existing_titles]):
                             game = None
                             continue
                         good_match = True
