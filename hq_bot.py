@@ -422,12 +422,13 @@ async def vet_url(ctx: Context, url: str = None):
     if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("vet_url", ctx.message.author.name)
 
-    if url is None:
+    urls = extract_rip_link(url)
+    if len(urls) == 0:
         await ctx.channel.send("Error: Please provide an URL to rip.")
         return
 
     async with ctx.channel.typing():
-        code, msg = await run_blocking(performQoC, url)
+        code, msg = await run_blocking(performQoC, urls[0])
         verdict = code_to_verdict(code, msg)
 
         await ctx.channel.send("**Verdict**: {}\n**Comments**:\n{}".format(verdict, msg))
@@ -631,12 +632,13 @@ async def peek_url(ctx: Context, url: str = None):
     if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("peek_url", ctx.message.author.name)
 
-    if url is None:
+    urls = extract_rip_link(url)
+    if len(urls) == 0:
         await ctx.channel.send("Error: Please provide an URL to rip.")
         return
 
     async with ctx.channel.typing():
-        code, msg = await run_blocking(getFileMetadata, url)
+        code, msg = await run_blocking(getFileMetadata, urls[0])
         if code == -1:
             await ctx.channel.send("Error reading URL: {}".format(msg))
         else:
