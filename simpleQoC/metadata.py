@@ -256,7 +256,9 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
                         game_match = True
                     
                     if len(existing_titles) > 0 and (game != playlist_name) and not game_match:
-                        if len(title) < 100 and (game in playlist_name or any([game in video for video in existing_titles])):
+                        if title[-1] == ' ':
+                            temp_messages.add('Trailing whitespace detected at end of title.')
+                        elif len(title) < 100 and (game in playlist_name or any([game in video for video in existing_titles])):
                             temp_messages.add('Game in title appears to be cut off. Ignore if this was intentional to go under 100-character limit.')
                         else:
                             temp_messages.add('Game in title does not match playlist name nor any existing videos in playlist.')
@@ -272,7 +274,10 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
                 adv_messages = adv_messages.union(temp_messages)
             
             if game is None:
-                adv_messages.add('Title format does not match {}, or Music line is incorrect (e.g. missing mixname, leftover game part).'.format('existing videos in playlist' if len(videos) > 0 else 'any known pattern'))
+                if title == track:
+                    adv_messages.add('Game name in Music field should be removed.')
+                else:
+                    adv_messages.add('Title format does not match {}, or Music line is incorrect (e.g. missing mixname).'.format('existing videos in playlist' if len(videos) > 0 else 'any known pattern'))
     
     if advanced: messages = messages.union(adv_messages)
     return int(len(messages) > 0), list(messages)

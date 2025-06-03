@@ -74,7 +74,7 @@ class TestMetadata(unittest.TestCase):
                 "Irregular line without : found in description: \"dummy l...s — lol\"",
                 "``Arrangement`` field not present in any existing videos in playlist.",
                 "``Platlist`` field not present in any existing videos in playlist.",
-                "Title format does not match existing videos in playlist, or Music line is incorrect (e.g. missing mixname, leftover game part).",
+                "Title format does not match existing videos in playlist, or Music line is incorrect (e.g. missing mixname).",
             ]
         )
 
