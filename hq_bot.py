@@ -1076,7 +1076,7 @@ def extract_playlist_id(text: str) -> str:
         return ""  # Return empty string if no valid links are found
 
 
-def get_rip_title(message: Message) -> str:
+def get_raw_rip_title(message: Message) -> str:
     """
     Return the rip title line of a Discord message.
     Assumes the message follows the format where the rip title is after the first instance of ```
@@ -1084,19 +1084,26 @@ def get_rip_title(message: Message) -> str:
     # Update: now use regex to find the first instance of "```[\n][text][\n]"
     pattern = r'\`\`\`\n*.*\n'
     rip_title = re.search(pattern, message.content)
-    if rip_title is None:
-        return "`[Unusual Pin Format]"
-
-    rip_title = rip_title.group(0)
-    rip_title = rip_title.replace('`', '')
-    rip_title = rip_title.replace('\n', '')
-
-    # if || is detected in the message before the first ```, make the rip title into spoiler
-    splits = message.content.split('```')
-    if '||' in splits[0]:
-        rip_title = "`[Rip Contains Spoiler]`"
+    if rip_title is not None:
+        rip_title = rip_title.group(0)
+        rip_title = rip_title.replace('`', '')
+        rip_title = rip_title.replace('\n', '')
 
     return rip_title
+
+
+def get_rip_title(message: Message) -> str:
+    """
+    Wrapper function to format unusual or spoiler rip titles
+    """
+    rip_title = get_raw_rip_title(message)
+    if rip_title is None:
+        return "`[Unusual Pin Format]`"
+    elif '||' in message.content.split('```')[0]:
+        # if || is detected in the message before the first ```, make the rip title into spoiler
+        return "`[Rip Contains Spoiler]`"
+    else:
+        return rip_title
 
 
 def get_rip_author(message: Message) -> str:
@@ -1369,13 +1376,13 @@ async def check_metadata(message: Message, fullFeedback: bool = False) -> typing
         for queue_channel_id in queue_channels:
             queue_channel = server.get_channel(queue_channel_id)
             queue_rips = await get_rips(queue_channel, 'msg')
-            if any([get_rip_title(message) == get_rip_title(r) for r in queue_rips[queue_channel_id] if r.id != message.id]):
+            if any([get_raw_rip_title(message) == get_raw_rip_title(r) for r in queue_rips[queue_channel_id] if r.id != message.id]):
                 mtCode = 1
                 mtMsgs.append(f"Video title already exists in <#{queue_channel_id}>.")
 
             queue_thread_rips = await get_rips(queue_channel, 'thread')
             for thread, rips in queue_thread_rips.items():
-                if any([get_rip_title(message) == get_rip_title(r) for r in rips if r.id != message.id]):
+                if any([get_raw_rip_title(message) == get_raw_rip_title(r) for r in rips if r.id != message.id]):
                     mtCode = 1
                     mtMsgs.append(f"Video title already exists in <#{thread}>.")
         
@@ -1383,7 +1390,7 @@ async def check_metadata(message: Message, fullFeedback: bool = False) -> typing
         for qoc_channel_id in qoc_channels:
             qoc_channel = server.get_channel(qoc_channel_id)
             qoc_rips = await get_rips(qoc_channel, 'pin')
-            if any([get_rip_title(message) == get_rip_title(r) for r in qoc_rips[qoc_channel_id] if r.id != message.id]):
+            if any([get_raw_rip_title(message) == get_raw_rip_title(r) for r in qoc_rips[qoc_channel_id] if r.id != message.id]):
                 mtCode = 1
                 mtMsgs.append(f"Video title already exists in <#{qoc_channel_id}>.")      
 
