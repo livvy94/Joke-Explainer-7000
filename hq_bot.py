@@ -1195,8 +1195,12 @@ def react_name(react: Reaction) -> str:
 def react_is_goldcheck(react: Reaction) -> bool:
     return any([r in react_name(react).lower() for r in ["goldcheck", DEFAULT_GOLDCHECK]])
 
+def react_is_checkreq(react: Reaction) -> bool:
+    return react_name(react).lower().endswith("check") and react_name(react).lower()[0].isdigit()
+
 def react_is_check(react: Reaction) -> bool:
-    return not react_is_goldcheck(react) and any([r in react_name(react).lower() for r in ["check", DEFAULT_CHECK]])
+    return not react_is_goldcheck(react) and not react_is_checkreq(react) \
+            and any([r in react_name(react).lower() for r in ["check", DEFAULT_CHECK]])
 
 def react_is_fix(react: Reaction) -> bool:
     return any([r in react_name(react).lower() for r in ["fix", "wrench", DEFAULT_FIX]])
@@ -1213,9 +1217,6 @@ def react_is_alert(react: Reaction) -> bool:
 def react_is_qoc(react: Reaction) -> bool:
     return any([r in react_name(react).lower() for r in ["qoc", DEFAULT_QOC]])
 
-def react_is_checkreq(react: Reaction) -> bool:
-    # TBA
-    return False
 
 KEYCAP_EMOJIS = {'2️⃣': 2, '3️⃣': 3, '4️⃣': 4, '5️⃣': 5, '6️⃣': 6, '7️⃣': 7, '8️⃣': 8, '9️⃣': 9, '🔟': 10}
 def react_is_number(react: Reaction) -> bool:
@@ -1255,13 +1256,15 @@ async def get_reactions(channel: TextChannel, message: Message) -> typing.Tuple[
 
     for react in message.reactions:
         if react_is_goldcheck(react): num_goldchecks += react.count
+        elif react_is_checkreq(react): 
+            try:
+                checks_required = int(react_name(react).split("check")[0])
+            except ValueError:
+                print("Error parsing checkreq react: {}".format(react_name(react)))
         elif react_is_check(react): num_checks += react.count
         elif react_is_reject(react): num_rejects += react.count
         elif react_is_fix(react) or react_is_alert(react): fix_or_alert = True
         elif react_is_stop(react): specs_needed = True
-        elif react_is_checkreq(react):
-            # TODO
-            pass
         elif react_is_number(react):
             specs_required = KEYCAP_EMOJIS[react_name(react)]
         
