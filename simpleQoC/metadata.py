@@ -258,10 +258,10 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
                     if len(existing_titles) > 0 and (game != playlist_name) and not game_match:
                         if title[-1] == ' ':
                             temp_messages.add('Trailing whitespace detected at end of title.')
-                        elif len(title) < 100 and (game in playlist_name or any([game in video for video in existing_titles])):
+                        elif len(title) == 100 or (game in playlist_name or any([game in video for video in existing_titles])):
                             temp_messages.add('Game in title appears to be cut off. Ignore if this was intentional to go under 100-character limit.')
                         else:
-                            temp_messages.add('Game in title does not match playlist name nor any existing videos in playlist.')
+                            temp_messages.add(f'Game in title does not match playlist name (``{playlist_name}``) nor any existing videos in playlist.')
                     else:
                         # Check that at least one other existing video has the same title formatting
                         other_p = p.replace('[[TRACK]]', r'(?P<track>[^\n]*)').replace(r'(?P<game>[^\n]*)', re.escape(game))

@@ -88,7 +88,7 @@ class TestMetadata(unittest.TestCase):
             "Super \u2588\u2588\u2588\u2588\u2588 4D All Stars Music S\u258864 Super \u2588\u2588\u2588\u2588\u2588 64 Main Theme (JP Version)\n\nMusic: S\u258864 Super \u2588\u2588\u2588\u2588\u2588 64 Main Theme (JP Version)\nComposer: Koji Kondo\nPlaylist: https://www.youtube.com/playlist?list=PLL0CQjrcN8D0RpfnKPuj8anigmMCnbJpF\nPlatform: Nintendo Switch\r\n\r\nPlease read the channel description.",
             "PLL0CQjrcN8D0RpfnKPuj8anigmMCnbJpF",
             [
-                "Game in title does not match playlist name nor any existing videos in playlist.",
+                "Game in title does not match playlist name (``Super \u2588\u2588\u2588\u2588\u2588 3D All Stars``) nor any existing videos in playlist.",
             ]
         )
 
