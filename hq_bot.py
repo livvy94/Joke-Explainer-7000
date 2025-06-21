@@ -1362,7 +1362,7 @@ async def check_metadata(message: Message, fullFeedback: bool = False) -> typing
     playlistId = extract_playlist_id('\n'.join(message.content.splitlines()[1:])) # ignore author line
     description = get_rip_description(message)
     advancedCheck = get_config('metadata')
-    skipCheck = "unusual metadata" in description.lower()
+    skipCheck = "unusual metadata" in message.content.lower()
     if not skipCheck and len(description) > 0:
         mtCode, mtMsgs = await run_blocking(checkMetadata, description, YOUTUBE_CHANNEL_NAME, playlistId, YOUTUBE_API_KEY, advancedCheck)
     else:
