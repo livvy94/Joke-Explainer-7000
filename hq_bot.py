@@ -106,16 +106,8 @@ async def roundup(ctx: Context, optional_time = None):
     if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("roundup", ctx.message.author.name)
 
-    if optional_time is not None:
-        try:
-            time = float(optional_time) * 60 * 60
-            if math.isnan(time) or math.isinf(time) or time < 1:
-                raise ValueError
-        except ValueError:
-            await ctx.channel.send("Error: Cannot parse argument - make sure it is a valid value.")
-            return
-    else:
-        time = PROXY_MESSAGE_SECONDS if channel_is_type(ctx.channel, 'PROXY_ROUNDUP') else MESSAGE_SECONDS
+    time, msg = parse_optional_time(ctx.channel, optional_time)
+    if msg is not None: await ctx.channel.send(msg)
 
     channel = await get_roundup_channel(ctx)
     if channel is None: return
@@ -129,12 +121,15 @@ async def roundup(ctx: Context, optional_time = None):
 
 
 @bot.command(name='links', aliases = ['list', 'ls'], brief='roundup but quicker')
-async def links(ctx: Context):
+async def links(ctx: Context, optional_time = None):
     """
     Retrieve all pinned messages (except the first one) without showing reactions.
     """
     if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("links", ctx.message.author.name)
+
+    time, msg = parse_optional_time(ctx.channel, optional_time)
+    if msg is not None: await ctx.channel.send(msg)
 
     channel = await get_roundup_channel(ctx)
     if channel is None: return
@@ -144,28 +139,35 @@ async def links(ctx: Context):
         result = ""
         for rip_id, rip_info in all_pins.items():
             result += make_markdown(rip_info, False)
-        await send_embed(ctx, result)
+        await send_embed(ctx, result, time)
 
 
 @bot.command(name='mypins', brief='displays rips you\'ve pinned')
-async def mypins(ctx: Context, optional_arg = None):
+async def mypins(ctx: Context, optional_time = None):
     """
     Retrieve all messages pinned by the command author.
-    Accepts an optional argument to "hide" the reactions (legacy behavior).
     """
-    await filter_command(ctx, 'mypins', (lambda ctx, rip_info: rip_info["PinMiser"] == ctx.author.name), optional_arg is None)
+    await filter_command(ctx, 'mypins', (lambda ctx, rip_info: rip_info["PinMiser"] == ctx.author.name), True, optional_time)
+
+
+@bot.command(name='mypins_legacy', brief='displays rips you\'ve pinned (without reacts)')
+async def mypins_legacy(ctx: Context, optional_time = None):
+    """
+    Retrieve all messages pinned by the command author without reacts (legacy behaviour).
+    """
+    await filter_command(ctx, 'mypins', (lambda ctx, rip_info: rip_info["PinMiser"] == ctx.author.name), False, optional_time)
 
 
 @bot.command(name='emails', brief='displays emails')
-async def emails(ctx: Context):
+async def emails(ctx: Context, optional_time = None):
     """
     Retrieve all messages that are tagged as email.
     """
-    await filter_command(ctx, 'emails', (lambda ctx, rip_info: "email" in rip_info["Author"].lower()), True)
+    await filter_command(ctx, 'emails', (lambda ctx, rip_info: "email" in rip_info["Author"].lower()), True, optional_time)
 
 
 @bot.command(name='events', aliases = ['event'], brief='displays event rips')
-async def events(ctx: Context, event: str = None):
+async def events(ctx: Context, event: str = None, optional_time = None):
     """
     Retrieve all messages that are tagged as for an event.
     The provided string must appear in the rip's author label (case insensitive)
@@ -174,16 +176,19 @@ async def events(ctx: Context, event: str = None):
         await ctx.channel.send("Error: Please indicate the event name. Rips should be tagged with this name.")
         return
     
-    await filter_command(ctx, 'events', (lambda ctx, rip_info: event.lower() in rip_info["Author"].lower()), True)
+    await filter_command(ctx, 'events', (lambda ctx, rip_info: event.lower() in rip_info["Author"].lower()), True, optional_time)
 
 
 @bot.command(name="fresh", aliases = ['blank', 'bald', 'clean', 'noreacts'], brief='rips with no reacts yet')
-async def fresh(ctx: Context):
+async def fresh(ctx: Context, optional_time = None):
     """
     Retrieve all pinned messages (except the first one) with 0 reactions.
     """
     if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("fresh", ctx.message.author.name)
+
+    time, msg = parse_optional_time(ctx.channel, optional_time)
+    if msg is not None: await ctx.channel.send(msg)
 
     channel = await get_roundup_channel(ctx)
     if channel is None: return
@@ -202,42 +207,42 @@ async def fresh(ctx: Context):
                 result = result + f'**[{title}]({link})**\n'
 
         if result != "":
-            await send_embed(ctx, result)
+            await send_embed(ctx, result, time)
         else:
             await ctx.channel.send("No fresh rips.")
 
 
 @bot.command(name='wrenches', aliases = ['fix'])
-async def wrenches(ctx: Context):
+async def wrenches(ctx: Context, optional_time = None):
     """
     Retrieve all pinned messages (except the first one) with :fix: reactions.
     """
-    await react_command(ctx, 'fix', react_is_fix, "No wrenches found.")
+    await react_command(ctx, 'fix', react_is_fix, "No wrenches found.", optional_time)
 
 @bot.command(name='stops')
-async def stops(ctx: Context):
+async def stops(ctx: Context, optional_time = None):
     """
     Retrieve all pinned messages (except the first one) with :stop: reactions.
     """
-    await react_command(ctx, 'stop', react_is_stop, "No octogons found.")
+    await react_command(ctx, 'stop', react_is_stop, "No octogons found.", optional_time)
 
 @bot.command(name='checks')
-async def checks(ctx: Context):
+async def checks(ctx: Context, optional_time = None):
     """
     Retrieve all pinned messages (except the first one) with :check: reactions.
     """
-    await react_command(ctx, 'check', react_is_check, "No checks found.")
+    await react_command(ctx, 'check', react_is_check, "No checks found.", optional_time)
 
 @bot.command(name='rejects')
-async def rejects(ctx: Context):
+async def rejects(ctx: Context, optional_time = None):
     """
     Retrieve all pinned messages (except the first one) with :reject: reactions.
     """
-    await react_command(ctx, 'reject', react_is_reject, "No rejected rips found.")
+    await react_command(ctx, 'reject', react_is_reject, "No rejected rips found.", optional_time)
 
 
 @bot.command(name='overdue', brief=f'display rips that have been pinned for over {OVERDUE_DAYS} days')
-async def overdue(ctx: Context):
+async def overdue(ctx: Context, optional_time = None):
     """
     Retrieve all pinned messages (except the first one) that are overdue.
     """
@@ -246,6 +251,9 @@ async def overdue(ctx: Context):
 
     channel = await get_roundup_channel(ctx)
     if channel is None: return
+
+    time, msg = parse_optional_time(ctx.channel, optional_time)
+    if msg is not None: await ctx.channel.send(msg)
 
     result = ""
 
@@ -256,7 +264,7 @@ async def overdue(ctx: Context):
         for rip_id, rip_info in all_pins.items():
             if rip_info["Indicator"] == OVERDUE_INDICATOR:
                 result += make_markdown(rip_info, True)
-        await send_embed(ctx, result)
+        await send_embed(ctx, result, time)
 
 
 # ============ Pin count commands ============== #
@@ -358,7 +366,7 @@ async def vet(ctx: Context, optional_arg = None):
 
 
 @bot.command(name='vet_all', brief='vet all pinned messages and show summary')
-async def vet_all(ctx: Context):
+async def vet_all(ctx: Context, optional_time = None):
     """
     Retrieve all pinned messages (except the first one) and perform basic QoC, giving emoji labels.
     """
@@ -367,6 +375,9 @@ async def vet_all(ctx: Context):
 
     channel = await get_roundup_channel(ctx)
     if channel is None: return
+
+    time, msg = parse_optional_time(ctx.channel, optional_time)
+    if msg is not None: await ctx.channel.send(msg)
 
     if not ffmpegExists():
         await ctx.channel.send("WARNING: ffmpeg command not found on the bot's server. Please contact the developers.")
@@ -378,7 +389,7 @@ async def vet_all(ctx: Context):
         for rip_id, rip_info in all_pins.items():
             result += make_markdown(rip_info, True)
         result += f"```\nLEGEND:\n{QOC_DEFAULT_LINKERR}: Link cannot be parsed\n{DEFAULT_CHECK}: Rip is OK\n{DEFAULT_FIX}: Rip has potential issues, see below\n{QOC_DEFAULT_BITRATE}: Bitrate is not 320kbps\n{QOC_DEFAULT_CLIPPING}: Clipping```"
-        await send_embed(ctx, result)
+        await send_embed(ctx, result, time)
 
 
 @bot.command(name='vet_msg', brief='vet a single message link')
@@ -722,9 +733,9 @@ def get_config(config: str):
 @bot.command(name='help', aliases = ['commands', 'halp', 'test'])
 async def help(ctx: Context):    
     async with ctx.channel.typing():
-        result = "_**YOU ARE NOW QoCING:**_\n`!roundup [embed_hours: float]`" + roundup.brief \
+        result = "_**YOU ARE NOW QoCING:**_\n`!roundup [embed_minutes: float]`" + roundup.brief \
             + "\n`!links` " + links.brief \
-            + "\n_**Special lists:**_\n`!mypins [no_react: any]`" + mypins.brief \
+            + "\n_**Special lists:**_\n`!mypins`" + mypins.brief \
             + "\n`!emails` " + emails.brief + "\n`!events <name: str>` " + events.brief \
             + "\n`!checks`\n`!rejects`\n`!wrenches`\n`!stops`" \
             + "\n`!overdue` " + overdue.brief \
@@ -927,13 +938,16 @@ def make_markdown(rip_info: dict, display_reacts: bool) -> str:
     return result
 
 
-async def react_command(ctx: Context, cmd_name: str, check_func: typing.Callable, not_found_message: str): # I've been meaning to simplify this for AGES (7/7/24)
+async def react_command(ctx: Context, cmd_name: str, check_func: typing.Callable, not_found_message: str, optional_time = None): # I've been meaning to simplify this for AGES (7/7/24)
     """
     Unified command to only return messages with specific reactions.
     Uses the react_is_ABC helper functions to filter reacts.
     """
     if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command(cmd_name, ctx.message.author.name)
+
+    time, msg = parse_optional_time(ctx.channel, optional_time)
+    if msg is not None: await ctx.channel.send(msg)
 
     channel = await get_roundup_channel(ctx)
     if channel is None: return
@@ -955,16 +969,19 @@ async def react_command(ctx: Context, cmd_name: str, check_func: typing.Callable
         if result == "":
             await ctx.channel.send(not_found_message)
         else:
-            await send_embed(ctx, result)
+            await send_embed(ctx, result, time)
 
 
-async def filter_command(ctx: Context, cmd_name: str, filter_func: typing.Callable, display_reacts: bool):
+async def filter_command(ctx: Context, cmd_name: str, filter_func: typing.Callable, display_reacts: bool, optional_time = None):
     """
     Unified command to only return messages according to a predicate.
     `filter_func` is a function accepting 2 parameters: `ctx`, `rip_info`
     """
     if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command(cmd_name, ctx.message.author.name)
+
+    time, msg = parse_optional_time(ctx.channel, optional_time)
+    if msg is not None: await ctx.channel.send(msg)
 
     channel = await get_roundup_channel(ctx)
     if channel is None: return
@@ -978,7 +995,7 @@ async def filter_command(ctx: Context, cmd_name: str, filter_func: typing.Callab
         if result == "":
             await ctx.channel.send("No rips found.")
         else:
-            await send_embed(ctx, result)
+            await send_embed(ctx, result, time)
 
 
 def split_long_message(a_message: str) -> list[str]:  # avoid Discord's character limit
@@ -1033,6 +1050,25 @@ async def get_roundup_channel(ctx: Context):
 def heard_command(command_name: str, user: str):
     today = datetime.now() # Technically not useful, but it looks gorgeous on my CRT monitor
     print(f"{today.strftime('%m/%d/%y %I:%M %p')}  ~~~  Heard {command_name} command from {user}!")
+
+
+def parse_optional_time(channel: TextChannel, optional_time):
+    """
+    Get the number of houminutesrs from user input for roundup embed commands.
+    """
+    time = PROXY_MESSAGE_SECONDS if channel_is_type(channel, 'PROXY_ROUNDUP') else MESSAGE_SECONDS
+    msg = None
+    if optional_time is not None:
+        try:
+            new_time = float(optional_time) * 60
+            if math.isnan(new_time) or math.isinf(new_time) or new_time < 1:
+                raise ValueError
+        except ValueError:
+            msg = "Warning: Cannot parse time argument - make sure it is a valid value. Using default time of {:.2f} minutes.".format(time / 60)
+        else:
+            time = new_time
+    
+    return time, msg    
 
 
 # https://stackoverflow.com/a/65882269
