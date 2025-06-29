@@ -323,7 +323,7 @@ async def limitcheck(ctx: Context):
 
 
 @bot.command(name='scout', brief='find approved rips with specific title prefix')
-async def scout(ctx: Context, prefix: str = None, channel_link: str = None):
+async def scout(ctx: Context, prefix: str = None, channel_link: str = None, optional_time = None):
     """
     Search queue channel for rips starting with the specific prefix (e.g. letter E).
     The prefix is case insensitive.
@@ -339,6 +339,9 @@ async def scout(ctx: Context, prefix: str = None, channel_link: str = None):
     if len(msg) > 0:
         await ctx.channel.send(msg)
         return
+
+    time, msg = parse_optional_time(ctx.channel, optional_time)
+    if msg is not None: await ctx.channel.send(msg)
     
     channel = bot.get_channel(channel_id)
     async with ctx.channel.typing():
@@ -358,11 +361,11 @@ async def scout(ctx: Context, prefix: str = None, channel_link: str = None):
         if len(result) == 0:
             await ctx.channel.send("No rips found.")
         else:
-            await send_embed(ctx, result)
+            await send_embed(ctx, result, time)
 
 
 @bot.command(name='frames', brief='find approved rips with thumbnail reacts')
-async def frames(ctx: Context, channel_link: str = None):
+async def frames(ctx: Context, channel_link: str = None, optional_time = None):
     """
     Search queue channel for rips with "thumbnail needed" react.
     """
@@ -373,6 +376,9 @@ async def frames(ctx: Context, channel_link: str = None):
     if len(msg) > 0:
         await ctx.channel.send(msg)
         return
+
+    time, msg = parse_optional_time(ctx.channel, optional_time)
+    if msg is not None: await ctx.channel.send(msg)
     
     channel = bot.get_channel(channel_id)
     async with ctx.channel.typing():
@@ -392,7 +398,7 @@ async def frames(ctx: Context, channel_link: str = None):
         if len(result) == 0:
             await ctx.channel.send("No rips found.")
         else:
-            await send_embed(ctx, result)
+            await send_embed(ctx, result, time)
 
 
 # ============ Basic QoC commands ============== #
