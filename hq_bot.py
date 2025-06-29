@@ -372,9 +372,9 @@ async def frames(ctx: Context, channel_link: str = None, optional_time = None):
     heard_command("frames", ctx.message.author.name)
 
     channel_id, msg = parse_channel_link(channel_link, ['QUEUE'])
-    if len(msg) > 0:
+    if len(msg) > 0 or channel_link is None:
         if channel_link is not None:
-            ctx.channel.send("Warning: something went wrong parsing channel link. Defaulting to showing from all known queues.")
+            await ctx.channel.send("Warning: something went wrong parsing channel link. Defaulting to showing from all known queues.")
         queue_channel_ids = [k for k, v in CHANNELS.items() if 'QUEUE' in v]
     else:
         queue_channel_ids = [channel_id]
