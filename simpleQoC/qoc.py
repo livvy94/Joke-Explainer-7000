@@ -201,6 +201,7 @@ def downloadAudioFromUrl(validUrl: str) -> str:
                 raise QoCException('Unknown error trying to parse filename.')
         filename = validUrl.split('/')[-1]
     
+    filename = filename.replace('/', '_')
     filepath = DOWNLOAD_DIR / filename
     save_response_content(response, filepath)
     
