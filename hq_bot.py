@@ -373,19 +373,23 @@ async def frames(ctx: Context, channel_link: str = None, optional_time = None):
 
     channel_id, msg = parse_channel_link(channel_link, ['QUEUE'])
     if len(msg) > 0:
-        await ctx.channel.send(msg)
-        return
+        if channel_link is not None:
+            ctx.channel.send("Warning: something went wrong parsing channel link. Defaulting to showing from all known queues.")
+        queue_channel_ids = [k for k, v in CHANNELS.items() if 'QUEUE' in v]
+    else:
+        queue_channel_ids = [channel_id]
 
     time, msg = parse_optional_time(ctx.channel, optional_time)
     if msg is not None: await ctx.channel.send(msg)
-    
-    channel = bot.get_channel(channel_id)
+
     async with ctx.channel.typing():
         rips: typing.List[Message] = []
-        for t in ['msg', 'thread']:
-            t_rips = await get_rips(channel, t)
-            for k, v in t_rips.items():
-                rips.extend(v)
+        for queue_channel_id in queue_channel_ids:
+            for t in ['msg', 'thread']:
+                channel = bot.get_channel(queue_channel_id)
+                t_rips = await get_rips(channel, t)
+                for k, v in t_rips.items():
+                    rips.extend(v)
         
         result = ""
         for rip in rips:
