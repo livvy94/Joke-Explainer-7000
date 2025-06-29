@@ -35,6 +35,7 @@ DEFAULT_REJECT = '❌'
 DEFAULT_ALERT = '❗'
 DEFAULT_QOC = '🛃'
 DEFAULT_METADATA = '📝'
+DEFAULT_THUMBNAIL = '🖼️'
 
 QOC_DEFAULT_LINKERR = '🔗'
 QOC_DEFAULT_BITRATE = '🔢'
@@ -319,6 +320,79 @@ async def limitcheck(ctx: Context):
 
         result += proxy
         await ctx.channel.send(result)
+
+
+@bot.command(name='scout', brief='find approved rips with specific title prefix')
+async def scout(ctx: Context, prefix: str = None, channel_link: str = None):
+    """
+    Search queue channel for rips starting with the specific prefix (e.g. letter E).
+    The prefix is case insensitive.
+    """
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
+    heard_command("scout", ctx.message.author.name)
+
+    if prefix is None:
+        await ctx.channel.send("Error: Please provide a prefix string.")
+        return
+
+    channel_id, msg = parse_channel_link(channel_link, ['QUEUE'])
+    if len(msg) > 0:
+        await ctx.channel.send(msg)
+        return
+    
+    channel = bot.get_channel(channel_id)
+    async with ctx.channel.typing():
+        rips: typing.List[Message] = []
+        for t in ['msg', 'thread']:
+            t_rips = await get_rips(channel, t)
+            for k, v in t_rips.items():
+                rips.extend(v)
+        
+        result = ""
+        for rip in rips:
+            rip_title = get_rip_title(rip)
+            rip_link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(channel_id)}/{str(rip.id)}>"
+            if rip_title.lower().startswith(prefix.lower()):
+                result += f'**[{rip_title}]({rip_link})**\n'
+
+        if len(result) == 0:
+            await ctx.channel.send("No rips found.")
+        else:
+            await send_embed(ctx, result)
+
+
+@bot.command(name='frames', brief='find approved rips with thumbnail reacts')
+async def frames(ctx: Context, channel_link: str = None):
+    """
+    Search queue channel for rips with "thumbnail needed" react.
+    """
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
+    heard_command("frames", ctx.message.author.name)
+
+    channel_id, msg = parse_channel_link(channel_link, ['QUEUE'])
+    if len(msg) > 0:
+        await ctx.channel.send(msg)
+        return
+    
+    channel = bot.get_channel(channel_id)
+    async with ctx.channel.typing():
+        rips: typing.List[Message] = []
+        for t in ['msg', 'thread']:
+            t_rips = await get_rips(channel, t)
+            for k, v in t_rips.items():
+                rips.extend(v)
+        
+        result = ""
+        for rip in rips:
+            rip_title = get_rip_title(rip)
+            rip_link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(channel_id)}/{str(rip.id)}>"
+            if any(react_is_thumbnail(r) for r in rip.reactions):
+                result += f'**[{rip_title}]({rip_link})**\n'
+
+        if len(result) == 0:
+            await ctx.channel.send("No rips found.")
+        else:
+            await send_embed(ctx, result)
 
 
 # ============ Basic QoC commands ============== #
@@ -656,44 +730,6 @@ async def peek_url(ctx: Context, url: str = None):
             await ctx.channel.send("**File metadata**:\n{}".format(msg))
 
 
-@bot.command(name='scout', brief='find approved rips with specific title prefix')
-async def scout(ctx: Context, prefix: str = None, channel_link: str = None):
-    """
-    Search queue channel for rips starting with the specific prefix (e.g. letter E).
-    The prefix is case insensitive.
-    """
-    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
-    heard_command("scout", ctx.message.author.name)
-
-    if prefix is None:
-        await ctx.channel.send("Error: Please provide a prefix string.")
-        return
-
-    channel_id, msg = parse_channel_link(channel_link, ['QUEUE'])
-    if len(msg) > 0:
-        await ctx.channel.send(msg)
-        return
-    
-    channel = bot.get_channel(channel_id)
-    async with ctx.channel.typing():
-        rips: typing.List[Message] = []
-        for t in ['msg', 'thread']:
-            t_rips = await get_rips(channel, t)
-            for k, v in t_rips.items():
-                rips.extend(v)
-        
-        result = ""
-        for rip in rips:
-            rip_title = get_rip_title(rip)
-            rip_link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(channel_id)}/{str(rip.id)}>"
-            if rip_title.lower().startswith(prefix.lower()):
-                result += f'**[{rip_title}]({rip_link})**\n'
-
-        if len(result) == 0:
-            await ctx.channel.send("No rips found.")
-        else:
-            await send_embed(ctx, result)
-
 # ============ Config commands ============== #
 
 @bot.command(name='enable_metadata')
@@ -745,11 +781,12 @@ async def help(ctx: Context):
             + "\n`!stats [show_queues: any]`" + stats.brief \
             + "\n`!channel_list`" + channel_list.brief \
             + "\n`!cleanup [search_limit: int]`" + cleanup.brief \
+            + "\n`!scout <prefix: str> [channel: link]`" + scout.brief \
+            + "\n`!frames [channel: link]`" + frames.brief \
             + "\n_**Auto QoC tools:**_\n`!vet` " + vet.brief + "\n`!vet_all` " + vet_all.brief \
             + "\n`!vet_msg <message: link>` " + vet_msg.brief + "\n`!vet_url <URL: link>` " + vet_url.brief \
             + "\n`!peek_msg <message: link>` " + peek_msg.brief + "\n`!peek_url <URL: link>` " + peek_url.brief \
             + "\n`!count_dupe <message: link> [count_queues: any]`" + count_dupe.brief \
-            + "\n`!scout <prefix: str> [channel: link]`" + scout.brief \
             + "\n_**Experimental tools:**_\n`!scan <channel: link> [start_index: int] [end_index: int]`" + scan.brief \
             + "\n_**Config:**_\n`![enable/disable]_metadata` enables/disables advanced metadata checking (currently {})".format("enabled" if get_config('metadata') else "disabled")
         await send_embed(ctx, result, delete_after=None)
@@ -1252,6 +1289,9 @@ def react_is_alert(react: Reaction) -> bool:
 
 def react_is_qoc(react: Reaction) -> bool:
     return any([r in react_name(react).lower() for r in ["qoc", DEFAULT_QOC]])
+
+def react_is_thumbnail(react: Reaction) -> bool:
+    return any([r in react_name(react).lower() for r in ["thumbnail", DEFAULT_THUMBNAIL]])
 
 
 KEYCAP_EMOJIS = {'2️⃣': 2, '3️⃣': 3, '4️⃣': 4, '5️⃣': 5, '6️⃣': 6, '7️⃣': 7, '8️⃣': 8, '9️⃣': 9, '🔟': 10}
