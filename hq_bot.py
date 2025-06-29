@@ -369,7 +369,6 @@ async def frames(ctx: Context, channel_link: str = None, optional_time = None):
     """
     Search queue channel for rips with "thumbnail needed" react.
     """
-    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("frames", ctx.message.author.name)
 
     channel_id, msg = parse_channel_link(channel_link, ['QUEUE'])
