@@ -228,10 +228,10 @@ def checkBitrateFromFile(file: FileType) -> Tuple[bool, str]:
     # seems video files show lower bitrate on properties view for some reason, shouldn't be an issue generally
     if hasattr(file.info, 'bitrate'):
         bitrate = file.info.bitrate
-        if bitrate < 300000:    # Apparently some weird files can have bitrate at 317kbps or even 319.999kbps. Let's say 300k is good enough
-            return (False, "The {} file's bitrate is {}kbps. Please re-render at 320kbps.".format(type(file).__name__, bitrate // 1000))
-        elif bitrate == 0:      # Some MP4 files have 0 kbps bitrate?
+        if bitrate == 0:      # Some MP4 files have 0 kbps bitrate?
             return (True, "Bitrate is OK (0 kbps detected).")
+        elif bitrate < 300000:    # Apparently some weird files can have bitrate at 317kbps or even 319.999kbps. Let's say 300k is good enough
+            return (False, "The {} file's bitrate is {}kbps. Please re-render at 320kbps.".format(type(file).__name__, bitrate // 1000))
         else:
             return (True, "Bitrate is OK.")
     
@@ -262,10 +262,10 @@ def checkBitrateFromUrl(validUrl: str) -> Tuple[bool, str]:
     except KeyError:
         filetype = "[TYPE UNKNOWN]"
 
-    if bitrate < 300000:    # Apparently some weird files can have bitrate at 317kbps or even 319.999kbps. Let's say 300k is good enough
-        return (False, "The {} file's bitrate is {}kbps. Please re-render at 320kbps.".format(filetype, bitrate // 1000))
-    elif bitrate == 0:      # Some MP4 files have 0 kbps bitrate?
+    if bitrate == 0:      # Some MP4 files have 0 kbps bitrate?
         return (True, "Bitrate is OK (0 kbps detected).")
+    elif bitrate < 300000:    # Apparently some weird files can have bitrate at 317kbps or even 319.999kbps. Let's say 300k is good enough
+        return (False, "The {} file's bitrate is {}kbps. Please re-render at 320kbps.".format(filetype, bitrate // 1000))
     else:
         return (True, "Bitrate is OK.")
 
