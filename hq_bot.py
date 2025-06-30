@@ -370,7 +370,7 @@ async def frames(ctx: Context, channel_link: str = None, optional_time = None):
     Search queue channel for rips with "thumbnail needed" react.
     """
     heard_command("frames", ctx.message.author.name)
-    fetch_command(ctx, react_is_thumbnail, channel_link, optional_time)
+    await fetch_command(ctx, react_is_thumbnail, channel_link, optional_time)
 
 
 @bot.command(name='alerts', brief='find approved rips with alert reacts')
@@ -378,8 +378,9 @@ async def alerts(ctx: Context, channel_link: str = None, optional_time = None):
     """
     Search queue channel for rips with alert react.
     """
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("alerts", ctx.message.author.name)
-    fetch_command(ctx, react_is_alert, channel_link, optional_time)
+    await fetch_command(ctx, react_is_alert, channel_link, optional_time)
 
 
 @bot.command(name='metadata', brief='find approved rips with metadata reacts')
@@ -387,8 +388,9 @@ async def metadata(ctx: Context, channel_link: str = None, optional_time = None)
     """
     Search queue channel for rips with alert react.
     """
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
     heard_command("metadata", ctx.message.author.name)
-    fetch_command(ctx, react_is_alert, channel_link, optional_time)
+    await fetch_command(ctx, react_is_alert, channel_link, optional_time)
 
 
 # ============ Basic QoC commands ============== #
