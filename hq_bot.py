@@ -370,38 +370,25 @@ async def frames(ctx: Context, channel_link: str = None, optional_time = None):
     Search queue channel for rips with "thumbnail needed" react.
     """
     heard_command("frames", ctx.message.author.name)
+    fetch_command(ctx, react_is_thumbnail, channel_link, optional_time)
 
-    channel_id, msg = parse_channel_link(channel_link, ['QUEUE'])
-    if len(msg) > 0 or channel_link is None:
-        if channel_link is not None:
-            await ctx.channel.send("Warning: something went wrong parsing channel link. Defaulting to showing from all known queues.")
-        queue_channel_ids = [k for k, v in CHANNELS.items() if 'QUEUE' in v]
-    else:
-        queue_channel_ids = [channel_id]
 
-    time, msg = parse_optional_time(ctx.channel, optional_time)
-    if msg is not None: await ctx.channel.send(msg)
+@bot.command(name='alerts', brief='find approved rips with alert reacts')
+async def alerts(ctx: Context, channel_link: str = None, optional_time = None):
+    """
+    Search queue channel for rips with alert react.
+    """
+    heard_command("alerts", ctx.message.author.name)
+    fetch_command(ctx, react_is_alert, channel_link, optional_time)
 
-    async with ctx.channel.typing():
-        rips: typing.List[Message] = []
-        for queue_channel_id in queue_channel_ids:
-            for t in ['msg', 'thread']:
-                channel = bot.get_channel(queue_channel_id)
-                t_rips = await get_rips(channel, t)
-                for k, v in t_rips.items():
-                    rips.extend(v)
-        
-        result = ""
-        for rip in rips:
-            rip_title = get_rip_title(rip)
-            rip_link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(channel_id)}/{str(rip.id)}>"
-            if any(react_is_thumbnail(r) for r in rip.reactions):
-                result += f'**[{rip_title}]({rip_link})**\n'
 
-        if len(result) == 0:
-            await ctx.channel.send("No rips found.")
-        else:
-            await send_embed(ctx, result, time)
+@bot.command(name='metadata', brief='find approved rips with metadata reacts')
+async def metadata(ctx: Context, channel_link: str = None, optional_time = None):
+    """
+    Search queue channel for rips with alert react.
+    """
+    heard_command("metadata", ctx.message.author.name)
+    fetch_command(ctx, react_is_alert, channel_link, optional_time)
 
 
 # ============ Basic QoC commands ============== #
@@ -782,21 +769,21 @@ async def help(ctx: Context):
             + "\n`!links` " + links.brief \
             + "\n_**Special lists:**_\n`!mypins`" + mypins.brief \
             + "\n`!emails` " + emails.brief + "\n`!events <name: str>` " + events.brief \
-            + "\n`!checks`\n`!rejects`\n`!wrenches`\n`!stops`" \
+            + "\n`!checks`, `!rejects`, `!wrenches`, `!stops`" \
             + "\n`!overdue` " + overdue.brief \
             + "\n_**Misc. tools:**_\n`!count` " + count.brief \
             + "\n`!limitcheck` " + limitcheck.brief \
-            + "\n`!count_subs [channel: link]` " + count_subs.brief \
+            + "\n`!count_subs [sub_channel: link]` " + count_subs.brief \
             + "\n`!stats [show_queues: any]`" + stats.brief \
             + "\n`!channel_list`" + channel_list.brief \
             + "\n`!cleanup [search_limit: int]`" + cleanup.brief \
-            + "\n`!scout <prefix: str> [channel: link]`" + scout.brief \
-            + "\n`!frames [channel: link]`" + frames.brief \
+            + "\n`!scout <prefix: str> [queue_channel: link]`" + scout.brief \
+            + "\n`!frames, !alerts, !metadata [queue_channel: link]`" \
             + "\n_**Auto QoC tools:**_\n`!vet` " + vet.brief + "\n`!vet_all` " + vet_all.brief \
             + "\n`!vet_msg <message: link>` " + vet_msg.brief + "\n`!vet_url <URL: link>` " + vet_url.brief \
             + "\n`!peek_msg <message: link>` " + peek_msg.brief + "\n`!peek_url <URL: link>` " + peek_url.brief \
             + "\n`!count_dupe <message: link> [count_queues: any]`" + count_dupe.brief \
-            + "\n_**Experimental tools:**_\n`!scan <channel: link> [start_index: int] [end_index: int]`" + scan.brief \
+            + "\n_**Experimental tools:**_\n`!scan <queue_channel: link> [start_index: int] [end_index: int]`" + scan.brief \
             + "\n_**Config:**_\n`![enable/disable]_metadata` enables/disables advanced metadata checking (currently {})".format("enabled" if get_config('metadata') else "disabled")
         await send_embed(ctx, result, delete_after=None)
 
@@ -986,7 +973,7 @@ def make_markdown(rip_info: dict, display_reacts: bool) -> str:
 
 async def react_command(ctx: Context, cmd_name: str, check_func: typing.Callable, not_found_message: str, optional_time = None): # I've been meaning to simplify this for AGES (7/7/24)
     """
-    Unified command to only return messages with specific reactions.
+    Unified command to roundup messages with specific reactions in QoC channels.
     Uses the react_is_ABC helper functions to filter reacts.
     """
     if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
@@ -1020,7 +1007,7 @@ async def react_command(ctx: Context, cmd_name: str, check_func: typing.Callable
 
 async def filter_command(ctx: Context, cmd_name: str, filter_func: typing.Callable, display_reacts: bool, optional_time = None):
     """
-    Unified command to only return messages according to a predicate.
+    Unified command to roundup messages according to a predicate in QoC channels.
     `filter_func` is a function accepting 2 parameters: `ctx`, `rip_info`
     """
     if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
@@ -1039,6 +1026,44 @@ async def filter_command(ctx: Context, cmd_name: str, filter_func: typing.Callab
             if filter_func(ctx, rip_info):
                 result += make_markdown(rip_info, display_reacts) # a match!
         if result == "":
+            await ctx.channel.send("No rips found.")
+        else:
+            await send_embed(ctx, result, time)
+
+
+async def fetch_command(ctx: Context, react_func: typing.Callable, channel_link = None, optional_time = None):
+    """
+    Unified command to roundup messages with specific reactions in queues.
+    Uses the react_is_ABC helper functions to filter reacts.
+    """
+    channel_id, msg = parse_channel_link(channel_link, ['QUEUE'])
+    if len(msg) > 0 or channel_link is None:
+        if channel_link is not None:
+            await ctx.channel.send("Warning: something went wrong parsing channel link. Defaulting to showing from all known queues.")
+        queue_channel_ids = [k for k, v in CHANNELS.items() if 'QUEUE' in v]
+    else:
+        queue_channel_ids = [channel_id]
+
+    time, msg = parse_optional_time(ctx.channel, optional_time)
+    if msg is not None: await ctx.channel.send(msg)
+
+    async with ctx.channel.typing():
+        rips: typing.List[Message] = []
+        for queue_channel_id in queue_channel_ids:
+            for t in ['msg', 'thread']:
+                channel = bot.get_channel(queue_channel_id)
+                t_rips = await get_rips(channel, t)
+                for k, v in t_rips.items():
+                    rips.extend(v)
+        
+        result = ""
+        for rip in rips:
+            rip_title = get_rip_title(rip)
+            rip_link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(rip.channel.id)}/{str(rip.id)}>"
+            if any(react_func(r) for r in rip.reactions):
+                result += f'**[{rip_title}]({rip_link})**\n'
+
+        if len(result) == 0:
             await ctx.channel.send("No rips found.")
         else:
             await send_embed(ctx, result, time)
@@ -1298,6 +1323,9 @@ def react_is_alert(react: Reaction) -> bool:
 
 def react_is_qoc(react: Reaction) -> bool:
     return any([r in react_name(react).lower() for r in ["qoc", DEFAULT_QOC]])
+
+def react_is_metadata(react: Reaction) -> bool:
+    return any([r in react_name(react).lower() for r in ["metadata", DEFAULT_METADATA]])
 
 def react_is_thumbnail(react: Reaction) -> bool:
     return any([r in react_name(react).lower() for r in ["thumbnail", DEFAULT_THUMBNAIL]])
