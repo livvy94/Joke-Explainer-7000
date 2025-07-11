@@ -20,11 +20,13 @@ MESSAGE_SECONDS = 2700  # 45 minutes
 PROXY_MESSAGE_SECONDS = 43200  # 12 hours
 DISCORD_CHARACTER_LIMIT = 4000 # Lower this to 2000 if we lose boosts (TODO: move to bot_secrets?)
 EMBED_COLOR = 0x481761
-OVERDUE_DAYS = 30
+SPECS_OVERDUE_DAYS = 3
+OVERDUE_DAYS = 7
 
 # Emoji definitions
 APPROVED_INDICATOR = '🔥'
 AWAITING_SPECIALIST_INDICATOR = '♨️'
+SPECS_OVERDUE_INDICATOR = '🟢'
 OVERDUE_INDICATOR = '🕒'
 
 DEFAULT_CHECK = '✅'
@@ -1338,6 +1340,12 @@ def react_is_number(react: Reaction) -> bool:
     return react_name(react) in KEYCAP_EMOJIS
 
 
+def rip_is_spec_overdue(message: Message) -> bool:
+    """
+    Returns true if the message is older than SPEC_OVERDUE_DAYS
+    """
+    return datetime.now(timezone.utc) - message.created_at > timedelta(days=SPECS_OVERDUE_DAYS)
+
 def rip_is_overdue(message: Message) -> bool:
     """
     Returns true if the message is older than OVERDUE_DAYS
@@ -1396,6 +1404,8 @@ async def get_reactions(channel: TextChannel, message: Message) -> typing.Tuple[
 
     if check_passed:
         indicator = APPROVED_INDICATOR if specs_passed else AWAITING_SPECIALIST_INDICATOR
+    elif specs_needed and rip_is_spec_overdue(message):
+        indicator = SPECS_OVERDUE_INDICATOR
     elif rip_is_overdue(message):
         indicator = OVERDUE_INDICATOR
 
