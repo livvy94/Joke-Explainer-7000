@@ -1052,20 +1052,24 @@ async def fetch_command(ctx: Context, react_func: typing.Callable, channel_link 
     if msg is not None: await ctx.channel.send(msg)
 
     async with ctx.channel.typing():
-        rips: typing.List[Message] = []
+        result = ""
+
         for queue_channel_id in queue_channel_ids:
+            rips: typing.List[Message] = []
             for t in ['msg', 'thread']:
                 channel = bot.get_channel(queue_channel_id)
                 t_rips = await get_rips(channel, t)
                 for k, v in t_rips.items():
                     rips.extend(v)
         
-        result = ""
-        for rip in rips:
-            rip_title = get_rip_title(rip)
-            rip_link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(rip.channel.id)}/{str(rip.id)}>"
-            if any(react_func(r) for r in rip.reactions):
-                result += f'**[{rip_title}]({rip_link})**\n'
+            result += f'<#{queue_channel_id}>:\n'
+            for rip in rips:
+                rip_title = get_rip_title(rip)
+                rip_link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(rip.channel.id)}/{str(rip.id)}>"
+                if any(react_func(r) for r in rip.reactions):
+                    result += f'**[{rip_title}]({rip_link})**\n'
+            
+            result += '------------------------------\n'
 
         if len(result) == 0:
             await ctx.channel.send("No rips found.")
