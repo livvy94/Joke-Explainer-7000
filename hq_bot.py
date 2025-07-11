@@ -1344,9 +1344,9 @@ def react_is_number(react: Reaction) -> bool:
     return react_name(react) in KEYCAP_EMOJIS
 
 
-def rip_is_spec_overdue(message: Message) -> bool:
+def rip_is_specs_overdue(message: Message) -> bool:
     """
-    Returns true if the message is older than SPEC_OVERDUE_DAYS
+    Returns true if the message is older than SPECS_OVERDUE_DAYS
     """
     return datetime.now(timezone.utc) - message.created_at > timedelta(days=SPECS_OVERDUE_DAYS)
 
@@ -1408,7 +1408,7 @@ async def get_reactions(channel: TextChannel, message: Message) -> typing.Tuple[
 
     if check_passed:
         indicator = APPROVED_INDICATOR if specs_passed else AWAITING_SPECIALIST_INDICATOR
-    elif specs_needed and rip_is_spec_overdue(message):
+    elif specs_needed and not specs_passed and rip_is_specs_overdue(message):
         indicator = SPECS_OVERDUE_INDICATOR
     elif rip_is_overdue(message):
         indicator = OVERDUE_INDICATOR
