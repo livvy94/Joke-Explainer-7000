@@ -23,6 +23,9 @@ EMBED_COLOR = 0x481761
 SPECS_OVERDUE_DAYS = 3
 OVERDUE_DAYS = 7
 
+PIN_LIMIT = 250
+SOFT_PIN_LIMIT = 50
+
 # Emoji definitions
 APPROVED_INDICATOR = '🔥'
 AWAITING_SPECIALIST_INDICATOR = '♨️'
@@ -83,8 +86,13 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
     else:
         latest_pin_time = last_pin
         pin_list = await channel.pins()
-        latest_msg = pin_list[0]
+
+        if len(pin_list) < 1: return
+        oldest_msg = pin_list[-1]   # TODO: change this when the API updates to return more than 50 pins
+        if " [Unusual Pin Format]" not in get_rip_author(oldest_msg):
+            await channel.send(f"**Warning**: More than {SOFT_PIN_LIMIT} rips pinned - please handle them first :(\n-# Note: As of now I can only display up to 49 rips in !roundup commands.")
     
+        latest_msg = pin_list[0]
         verdict, msg = await check_qoc_and_metadata(latest_msg)
 
         # Send msg
@@ -120,7 +128,11 @@ async def roundup(ctx: Context, optional_time = None):
         result = ""
         for rip_id, rip_info in all_pins.items():
             result += make_markdown(rip_info, True)
-        await send_embed(ctx, result, time)
+        
+        if result != "":
+            await send_embed(ctx, result, time)
+        else:
+            await ctx.channel.send("No rips.")
 
 
 @bot.command(name='links', aliases = ['list', 'ls'], brief='roundup but quicker')
@@ -142,7 +154,11 @@ async def links(ctx: Context, optional_time = None):
         result = ""
         for rip_id, rip_info in all_pins.items():
             result += make_markdown(rip_info, False)
-        await send_embed(ctx, result, time)
+        
+        if result != "":
+            await send_embed(ctx, result, time)
+        else:
+            await ctx.channel.send("No rips.")
 
 
 @bot.command(name='mypins', brief='displays rips you\'ve pinned')
@@ -267,7 +283,11 @@ async def overdue(ctx: Context, optional_time = None):
         for rip_id, rip_info in all_pins.items():
             if rip_info["Indicator"] == OVERDUE_INDICATOR:
                 result += make_markdown(rip_info, True)
-        await send_embed(ctx, result, time)
+        
+        if result != "":
+            await send_embed(ctx, result, time)
+        else:
+            await ctx.channel.send("No overdue rips.")
 
 
 # ============ Pin count commands ============== #
@@ -293,7 +313,7 @@ async def count(ctx: Context):
         if (pincount < 1):
             result = "`* Determination.`"
         else:
-            result = f"`* {pincount} left.`"
+            result = f"`* {pincount} left.`\n-# Note: As of now I cannot retrieve more than 50 pins - the displayed count may be inaccurate."
 
         result += proxy
         await ctx.channel.send(result)
@@ -305,7 +325,6 @@ async def limitcheck(ctx: Context):
     Count the number of available pin slots.
     """
     heard_command("limitcheck", ctx.message.author.name)
-    max_pins = 50
 
     if channel_is_type(ctx.channel, 'PROXY_ROUNDUP'):
         channel = await get_roundup_channel(ctx)
@@ -318,7 +337,8 @@ async def limitcheck(ctx: Context):
     async with ctx.channel.typing():
         pin_list = await channel.pins()
         pincount = len(pin_list)
-        result = f"You can pin {max_pins - pincount} more rips until hitting Discord's pin limit."
+        # result = f"You can pin {PIN_LIMIT - pincount} more rips until hitting Discord's pin limit."
+        result = f"You can pin {SOFT_PIN_LIMIT - pincount} more rips until I start complaining about pin space."
 
         result += proxy
         await ctx.channel.send(result)
