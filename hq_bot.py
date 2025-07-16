@@ -74,6 +74,24 @@ async def on_ready():
     latest_pin_time = datetime.now(timezone.utc)
 
 
+# Temporary pin count patch
+import requests
+import json
+def count_pins(bot_token, channel_id):
+  def _get_pins(before=None):
+    res = requests.get(f'https://discord.com/api/channels/{channel_id}/messages/pins', headers={
+      "authorization": f"Bot {bot_token}"
+    }, params = {
+      'before': before
+    })
+    j = json.loads(res.content)
+    items = j.get('items')
+    if j.get('has_more'):
+      items += _get_pins(before=items[len(items) - 1]['pinned_at'])
+    return items
+  return(len(_get_pins()))
+
+
 @bot.event
 async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Thread], last_pin: datetime):
     if not channel_is_type(channel, 'ROUNDUP'):
@@ -86,13 +104,12 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
     else:
         latest_pin_time = last_pin
         pin_list = await channel.pins()
-
         if len(pin_list) < 1: return
-        oldest_msg = pin_list[-1]   # TODO: change this when the API updates to return more than 50 pins
-        if " [Unusual Pin Format]" not in get_rip_author(oldest_msg):
+        latest_msg = pin_list[0]
+
+        if count_pins(TOKEN, channel.id) > SOFT_PIN_LIMIT:
             await channel.send(f"**Warning**: More than {SOFT_PIN_LIMIT} rips pinned - please handle them first :(\n-# Note: As of now I can only display up to 49 rips in !roundup commands.")
     
-        latest_msg = pin_list[0]
         verdict, msg = await check_qoc_and_metadata(latest_msg)
 
         # Send msg
@@ -308,7 +325,8 @@ async def count(ctx: Context):
         proxy = ""
 
     async with ctx.channel.typing():
-        pincount = await count_rips(channel, 'pin')
+        # pincount = await count_rips(channel, 'pin')
+        pincount = count_pins(TOKEN, channel.id)
 
         if (pincount < 1):
             result = "`* Determination.`"
