@@ -16,16 +16,6 @@ import math
 import json
 import os
 
-MESSAGE_SECONDS = 2700  # 45 minutes
-PROXY_MESSAGE_SECONDS = 43200  # 12 hours
-DISCORD_CHARACTER_LIMIT = 4000 # Lower this to 2000 if we lose boosts (TODO: move to bot_secrets?)
-EMBED_COLOR = 0x481761
-SPECS_OVERDUE_DAYS = 3
-OVERDUE_DAYS = 7
-
-PIN_LIMIT = 250
-SOFT_PIN_LIMIT = 50
-
 # Emoji definitions
 APPROVED_INDICATOR = '🔥'
 AWAITING_SPECIALIST_INDICATOR = '♨️'
@@ -107,6 +97,7 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
         if len(pin_list) < 1: return
         latest_msg = pin_list[0]
 
+        SOFT_PIN_LIMIT = get_config('soft_pin_limit')
         if count_pins(TOKEN, channel.id) > SOFT_PIN_LIMIT:
             await channel.send(f"**Warning**: More than {SOFT_PIN_LIMIT} rips pinned - please handle them first :(\n-# Note: As of now I can only display up to 49 rips in !roundup commands.")
     
@@ -277,7 +268,7 @@ async def rejects(ctx: Context, optional_time = None):
     await react_command(ctx, 'reject', react_is_reject, "No rejected rips found.", optional_time)
 
 
-@bot.command(name='overdue', brief=f'display rips that have been pinned for over {OVERDUE_DAYS} days')
+@bot.command(name='overdue', brief=f'display rips that have been pinned for over X days')
 async def overdue(ctx: Context, optional_time = None):
     """
     Retrieve all pinned messages (except the first one) that are overdue.
@@ -355,8 +346,8 @@ async def limitcheck(ctx: Context):
     async with ctx.channel.typing():
         pin_list = await channel.pins()
         pincount = len(pin_list)
-        # result = f"You can pin {PIN_LIMIT - pincount} more rips until hitting Discord's pin limit."
-        result = f"You can pin {SOFT_PIN_LIMIT - pincount} more rips until I start complaining about pin space."
+        # result = f"You can pin {get_config('pin_limit') - pincount} more rips until hitting Discord's pin limit."
+        result = f"You can pin {get_config('soft_pin_limit') - pincount} more rips until I start complaining about pin space."
 
         result += proxy
         await ctx.channel.send(result)
@@ -862,7 +853,7 @@ async def help(ctx: Context):
             + "\n_**Special lists:**_\n`!mypins`" + mypins.brief \
             + "\n`!emails` " + emails.brief + "\n`!events <name: str>` " + events.brief \
             + "\n`!checks`, `!rejects`, `!wrenches`, `!stops`" \
-            + "\n`!overdue` " + overdue.brief \
+            + "\n`!overdue` " + overdue.brief.replace('X', get_config('overdue_days')) \
             + "\n_**Misc. tools:**_\n`!count` " + count.brief \
             + "\n`!limitcheck` " + limitcheck.brief \
             + "\n`!count_subs [sub_channel: link]` " + count_subs.brief \
@@ -1176,7 +1167,7 @@ def split_long_message(a_message: str) -> list[str]:  # avoid Discord's characte
     for line in all_lines:
         line = line.replace('@', '')  # no more pings lol
         next_length = len(wall_of_text) + len(line)
-        if next_length > DISCORD_CHARACTER_LIMIT:
+        if next_length > get_config('character_limit'):
             result.append(wall_of_text[:-1])  # append and get rid of the last newline
             wall_of_text = line + '\n'
         else:
@@ -1186,7 +1177,7 @@ def split_long_message(a_message: str) -> list[str]:  # avoid Discord's characte
     return result
 
 
-async def send_embed(ctx: Context, message: str, delete_after: float = MESSAGE_SECONDS):
+async def send_embed(ctx: Context, message: str, delete_after: float = None):
     """
     Send a long message as embed.
 
@@ -1195,7 +1186,7 @@ async def send_embed(ctx: Context, message: str, delete_after: float = MESSAGE_S
     """
     long_message = split_long_message(message)
     for line in long_message:
-        fancy_message = discord.Embed(description=line, color=EMBED_COLOR)
+        fancy_message = discord.Embed(description=line, color=get_config('embed_color'))
         await ctx.channel.send(embed=fancy_message, delete_after=delete_after)
 
 def channel_is_type(channel: TextChannel, type: str):
@@ -1224,7 +1215,7 @@ def parse_optional_time(channel: TextChannel, optional_time):
     """
     Get the number of houminutesrs from user input for roundup embed commands.
     """
-    time = PROXY_MESSAGE_SECONDS if channel_is_type(channel, 'PROXY_ROUNDUP') else MESSAGE_SECONDS
+    time = get_config('proxy_embed_seconds') if channel_is_type(channel, 'PROXY_ROUNDUP') else get_config('embed_seconds')
     msg = None
     if optional_time is not None:
         try:
@@ -1437,13 +1428,13 @@ def rip_is_specs_overdue(message: Message) -> bool:
     """
     Returns true if the message is older than SPECS_OVERDUE_DAYS
     """
-    return datetime.now(timezone.utc) - message.created_at > timedelta(days=SPECS_OVERDUE_DAYS)
+    return datetime.now(timezone.utc) - message.created_at > timedelta(days=get_config('spec_overdue_days'))
 
 def rip_is_overdue(message: Message) -> bool:
     """
     Returns true if the message is older than OVERDUE_DAYS
     """
-    return datetime.now(timezone.utc) - message.created_at > timedelta(days=OVERDUE_DAYS)
+    return datetime.now(timezone.utc) - message.created_at > timedelta(days=get_config('overdue_days'))
 
 
 async def get_reactions(channel: TextChannel, message: Message) -> typing.Tuple[str, str]:
