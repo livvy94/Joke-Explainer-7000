@@ -326,12 +326,12 @@ async def count(ctx: Context):
 
     async with ctx.channel.typing():
         # pincount = await count_rips(channel, 'pin')
-        pincount = count_pins(TOKEN, channel.id)
+        pincount = count_pins(TOKEN, channel.id) - 1
 
         if (pincount < 1):
             result = "`* Determination.`"
         else:
-            result = f"`* {pincount} left.`\n-# Note: As of now I cannot retrieve more than 50 pins - the displayed count may be inaccurate."
+            result = f"`* {pincount} left.`"
 
         result += proxy
         await ctx.channel.send(result)
@@ -399,6 +399,56 @@ async def scout(ctx: Context, prefix: str = None, channel_link: str = None, opti
                 result += f'**[{rip_title}]({rip_link})**\n'
 
         if len(result) == 0:
+            await ctx.channel.send("No rips found.")
+        else:
+            await send_embed(ctx, result, time)
+
+
+@bot.command(name='scout_stats', brief='summarize approved rips with specific letter prefix')
+async def scout_stats(ctx: Context, channel_link: str = None, optional_time = None):
+    """
+    Display count of rips starting with each letter.
+    """
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
+    heard_command("scout_stats", ctx.message.author.name)
+
+    channel_id, msg = parse_channel_link(channel_link, ['QUEUE'])
+    if len(msg) > 0:
+        await ctx.channel.send(msg)
+        return
+
+    time, msg = parse_optional_time(ctx.channel, optional_time)
+    if msg is not None: await ctx.channel.send(msg)
+
+    channel = bot.get_channel(channel_id)
+    async with ctx.channel.typing():
+        rips: typing.List[Message] = []
+        for t in ['msg', 'thread']:
+            t_rips = await get_rips(channel, t)
+            for k, v in t_rips.items():
+                rips.extend(v)
+        
+        count = {}
+        for letter in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ': # could have done string.ascii_uppercase but i dont think the alphabet is getting any updates
+            count[letter] = 0
+
+        for rip in rips:
+            rip_title = get_rip_title(rip)
+            prefix = rip_title.lower()[0]
+            if prefix.isalpha():
+                count[prefix.upper()] += 1
+            else:
+                if prefix in count.keys():
+                    count[prefix] += 1
+                else:
+                    count[prefix] = 1
+        
+        result = ""
+        maxCount = max(max(count.values()), 20)
+        for k, v in sorted(count.items()):
+            result += f"{k}: " + ("▮" * int(v / maxCount * 20)) + f" ({v})\n"
+
+        if len(rips) == 0:
             await ctx.channel.send("No rips found.")
         else:
             await send_embed(ctx, result, time)
