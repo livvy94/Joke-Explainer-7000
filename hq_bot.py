@@ -435,7 +435,7 @@ async def scout_stats(ctx: Context, channel_link: str = None, optional_time = No
         for rip in rips:
             rip_title = get_rip_title(rip)
             prefix = rip_title.lower()[0]
-            if prefix.isalpha():
+            if prefix in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ':  # isalpha becomes fucked with unicode characters i think
                 count[prefix.upper()] += 1
             else:
                 if prefix in count.keys():
@@ -869,8 +869,9 @@ async def help(ctx: Context):
             + "\n`!stats [show_queues: any]`" + stats.brief \
             + "\n`!channel_list`" + channel_list.brief \
             + "\n`!cleanup [search_limit: int]`" + cleanup.brief \
-            + "\n`!scout <prefix: str> [queue_channel: link]`" + scout.brief \
             + "\n`!frames, !alerts, !metadata [queue_channel: link]`" \
+            + "\n`!scout <prefix: str> [queue_channel: link]`" + scout.brief \
+            + "\n`!scout_stats [show_queues: any]`" + scout_stats.brief \
             + "\n_**Auto QoC tools:**_\n`!vet` " + vet.brief + "\n`!vet_all` " + vet_all.brief \
             + "\n`!vet_msg <message: link>` " + vet_msg.brief + "\n`!vet_url <URL: link>` " + vet_url.brief \
             + "\n`!peek_msg <message: link>` " + peek_msg.brief + "\n`!peek_url <URL: link>` " + peek_url.brief \
