@@ -375,6 +375,8 @@ async def scout(ctx: Context, prefix: str = None, channel_link: str = None, opti
     if msg is not None: await ctx.channel.send(msg)
     
     channel = bot.get_channel(channel_id)
+    if channel is None: await ctx.channel.send("Error: Invalid channel found. Contact bot developers to update list of channels.")
+
     async with ctx.channel.typing():
         rips: typing.List[Message] = []
         for t in ['msg', 'thread']:
@@ -412,6 +414,8 @@ async def scout_stats(ctx: Context, channel_link: str = None, optional_time = No
     if msg is not None: await ctx.channel.send(msg)
 
     channel = bot.get_channel(channel_id)
+    if channel is None: await ctx.channel.send("Error: Invalid channel found. Contact bot developers to update list of channels.")
+
     async with ctx.channel.typing():
         rips: typing.List[Message] = []
         for t in ['msg', 'thread']:
@@ -683,6 +687,8 @@ async def scan(ctx: Context, channel_link: str = None, start_index: int = None, 
         return
     
     channel = bot.get_channel(channel_id)
+    if channel is None: await ctx.channel.send("Error: Invalid channel found. Contact bot developers to update list of channels.")
+    
     if channel_is_type(channel, 'SUBS'): types = ['msg']
     elif channel_is_type(channel, 'SUBS_PIN'): types = ['pin']
     elif channel_is_type(channel, 'SUBS_THREAD'): types = ['thread']
@@ -1138,6 +1144,7 @@ async def fetch_command(ctx: Context, react_func: typing.Callable, channel_link 
             rips: typing.List[Message] = []
             for t in ['msg', 'thread']:
                 channel = bot.get_channel(queue_channel_id)
+                if channel is None: continue
                 t_rips = await get_rips(channel, t)
                 for k, v in t_rips.items():
                     rips.extend(v)
