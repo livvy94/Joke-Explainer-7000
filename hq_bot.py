@@ -1116,6 +1116,7 @@ async def fetch_command(ctx: Context, react_func: typing.Callable, channel_link 
 
     async with ctx.channel.typing():
         result = ""
+        count = 0
 
         for queue_channel_id in queue_channel_ids:
             rips: typing.List[Message] = []
@@ -1127,6 +1128,8 @@ async def fetch_command(ctx: Context, react_func: typing.Callable, channel_link 
                     rips.extend(v)
         
             result += f'<#{queue_channel_id}>:\n'
+            count += len(rips)
+
             for rip in rips:
                 rip_title = get_rip_title(rip)
                 rip_link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(rip.channel.id)}/{str(rip.id)}>"
@@ -1135,7 +1138,7 @@ async def fetch_command(ctx: Context, react_func: typing.Callable, channel_link 
             
             result += '------------------------------\n'
 
-        if len(result) == 0:
+        if count == 0:
             await ctx.channel.send("No rips found.")
         else:
             await send_embed(ctx, result, time)
@@ -1174,10 +1177,10 @@ async def send_embed(ctx: Context, message: str, delete_after: float = None):
         await ctx.channel.send(embed=fancy_message, delete_after=delete_after)
 
 def channel_is_type(channel: TextChannel | Thread, type: str):
-    return channel.id in CHANNELS.keys() and type in CHANNELS[channel.id] or hasattr(channel, "parent") and channel_is_type(channel.parent)
+    return channel.id in CHANNELS.keys() and type in CHANNELS[channel.id] or hasattr(channel, "parent") and channel_is_type(channel.parent, type)
 
 def channel_is_types(channel: TextChannel | Thread, types: typing.List[str]):
-    return channel.id in CHANNELS.keys() and any([t in CHANNELS[channel.id] for t in types]) or hasattr(channel, "parent") and channel_is_types(channel.parent)
+    return channel.id in CHANNELS.keys() and any([t in CHANNELS[channel.id] for t in types]) or hasattr(channel, "parent") and channel_is_types(channel.parent, types)
 
 async def get_roundup_channel(ctx: Context):
     if channel_is_type(ctx.channel, 'PROXY_ROUNDUP'):
