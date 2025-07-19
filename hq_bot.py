@@ -563,18 +563,10 @@ async def vet_msg(ctx: Context, msg_link: str = None):
         return
 
     async with ctx.channel.typing():
-        try:
-            ids = msg_link.split('/')
-            server_id = int(ids[4])
-            channel_id = int(ids[5])
-            msg_id = int(ids[6])
-        except IndexError:
-            await ctx.channel.send("Error: Cannot parse argument - make sure it is a valid link to message.")
+        server, channel, message, status = await parse_message_link(msg_link)
+        if message is None:
+            await ctx.channel.send(status)
             return
-        
-        server = bot.get_guild(server_id)
-        channel = server.get_channel(channel_id)
-        message = await channel.fetch_message(msg_id)
 
         verdict, msg = await check_qoc_and_metadata(message, True)
         rip_title = get_rip_title(message)
@@ -616,18 +608,10 @@ async def count_dupe(ctx: Context, msg_link: str = None, check_queues: str = Non
         return
 
     async with ctx.channel.typing():
-        try:
-            ids = msg_link.split('/')
-            server_id = int(ids[4])
-            channel_id = int(ids[5])
-            msg_id = int(ids[6])
-        except IndexError:
-            await ctx.channel.send("Error: Cannot parse argument - make sure it is a valid link to message.")
+        server, channel, message, status = await parse_message_link(msg_link)
+        if message is None:
+            await ctx.channel.send(status)
             return
-        
-        server = bot.get_guild(server_id)
-        channel = server.get_channel(channel_id)
-        message = await channel.fetch_message(msg_id)
 
         playlistId = extract_playlist_id('\n'.join(message.content.splitlines()[1:])) # ignore author line
         description = get_rip_description(message)
@@ -644,11 +628,11 @@ async def count_dupe(ctx: Context, msg_link: str = None, check_queues: str = Non
             for queue_channel_id in queue_channels:
                 queue_channel = server.get_channel(queue_channel_id)
                 queue_rips = await get_rips(queue_channel, 'msg')
-                q += sum([isDupe(description, get_rip_description(r)) for r in queue_rips[queue_channel_id] if r.id != msg_id])
+                q += sum([isDupe(description, get_rip_description(r)) for r in queue_rips[queue_channel_id] if r.id != message.id])
 
                 queue_thread_rips = await get_rips(queue_channel, 'thread')
                 for thread, rips in queue_thread_rips.items():
-                    q += sum([isDupe(description, get_rip_description(r)) for r in rips if r.id != msg_id])
+                    q += sum([isDupe(description, get_rip_description(r)) for r in rips if r.id != message.id])
 
         # https://codegolf.stackexchange.com/questions/4707/outputting-ordinal-numbers-1st-2nd-3rd#answer-4712 how
         ordinal = lambda n: "%d%s" % (n,"tsnrhtdd"[(n//10%10!=1)*(n%10<4)*n%10::4])
@@ -688,7 +672,7 @@ async def scan(ctx: Context, channel_link: str = None, start_index: int = None, 
     
     channel = bot.get_channel(channel_id)
     if channel is None: await ctx.channel.send("Error: Invalid channel found. Contact bot developers to update list of channels.")
-    
+
     if channel_is_type(channel, 'SUBS'): types = ['msg']
     elif channel_is_type(channel, 'SUBS_PIN'): types = ['pin']
     elif channel_is_type(channel, 'SUBS_THREAD'): types = ['thread']
@@ -767,18 +751,11 @@ async def peek_msg(ctx: Context, msg_link: str = None):
         return
 
     async with ctx.channel.typing():
-        try:
-            ids = msg_link.split('/')
-            server_id = int(ids[4])
-            channel_id = int(ids[5])
-            msg_id = int(ids[6])
-        except IndexError:
-            await ctx.channel.send("Error: Cannot parse argument - make sure it is a valid link to message.")
+        server, channel, message, status = await parse_message_link(msg_link)
+        if message is None:
+            await ctx.channel.send(status)
             return
         
-        server = bot.get_guild(server_id)
-        channel = server.get_channel(channel_id)
-        message = await channel.fetch_message(msg_id)
         rip_title = get_rip_title(message)
         
         urls = extract_rip_link(message.content)
@@ -1196,11 +1173,11 @@ async def send_embed(ctx: Context, message: str, delete_after: float = None):
         fancy_message = discord.Embed(description=line, color=get_config('embed_color'))
         await ctx.channel.send(embed=fancy_message, delete_after=delete_after)
 
-def channel_is_type(channel: TextChannel, type: str):
-    return channel.id in CHANNELS.keys() and type in CHANNELS[channel.id]
+def channel_is_type(channel: TextChannel | Thread, type: str):
+    return channel.id in CHANNELS.keys() and type in CHANNELS[channel.id] or hasattr(channel, "parent") and channel_is_type(channel.parent)
 
-def channel_is_types(channel: TextChannel, types: typing.List[str]):
-    return channel.id in CHANNELS.keys() and any([t in CHANNELS[channel.id] for t in types])
+def channel_is_types(channel: TextChannel | Thread, types: typing.List[str]):
+    return channel.id in CHANNELS.keys() and any([t in CHANNELS[channel.id] for t in types]) or hasattr(channel, "parent") and channel_is_types(channel.parent)
 
 async def get_roundup_channel(ctx: Context):
     if channel_is_type(ctx.channel, 'PROXY_ROUNDUP'):
@@ -1739,6 +1716,25 @@ def parse_channel_link(link: str | None, types: typing.List[str]) -> typing.Tupl
         return arg, ""
     else:
         return default_id, f"Warning: Link is not a valid roundup channel, defaulting to <#{default_id}>."
+
+
+async def parse_message_link(link: str):
+    """
+    Parse the message link and return the server, channel and message objects.
+    """
+    try:
+        ids = link.split('/')
+        server_id = int(ids[4])
+        channel_id = int(ids[5])
+        msg_id = int(ids[6])
+    except IndexError:
+        return None, None, None, "Error: Cannot parse argument - make sure it is a valid link to message (right click > Copy Link)."
+
+    server = bot.get_guild(server_id)
+    channel = server.get_channel_or_thread(channel_id)
+    message = await channel.fetch_message(msg_id)
+
+    return server, channel, message, ""
 
 
 def write_log(msg: str):
