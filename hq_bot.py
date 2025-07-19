@@ -64,11 +64,10 @@ async def on_ready():
     latest_pin_time = datetime.now(timezone.utc)
 
 
-# Temporary pin count patch
+# Temporary pin fetch patch
 import requests
 import json
-def count_pins(bot_token, channel_id):
-  def _get_pins(before=None):
+def _get_pins(bot_token, channel_id, before=None):
     res = requests.get(f'https://discord.com/api/channels/{channel_id}/messages/pins', headers={
       "authorization": f"Bot {bot_token}"
     }, params = {
@@ -79,7 +78,9 @@ def count_pins(bot_token, channel_id):
     if j.get('has_more'):
       items += _get_pins(before=items[len(items) - 1]['pinned_at'])
     return items
-  return(len(_get_pins()))
+
+def count_pins(bot_token, channel_id):
+  return(len(_get_pins(bot_token, channel_id)))
 
 
 @bot.event
@@ -93,13 +94,14 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
         pass
     else:
         latest_pin_time = last_pin
-        pin_list = await channel.pins()
+        # pin_list = await channel.pins()
+        pin_list = _get_pins(TOKEN, channel)
         if len(pin_list) < 1: return
         latest_msg = pin_list[0]
 
         SOFT_PIN_LIMIT = get_config('soft_pin_limit')
         if count_pins(TOKEN, channel.id) > SOFT_PIN_LIMIT:
-            await channel.send(f"**Warning**: More than {SOFT_PIN_LIMIT} rips pinned - please handle them first :(\n-# Note: As of now I can only display up to 49 rips in !roundup commands.")
+            await channel.send(f"**Warning**: More than {SOFT_PIN_LIMIT} rips pinned - please handle them first :(")
     
         verdict, msg = await check_qoc_and_metadata(latest_msg)
 
@@ -223,7 +225,8 @@ async def fresh(ctx: Context, optional_time = None):
     result = ""
 
     async with ctx.channel.typing():
-        pin_list = await channel.pins()
+        # pin_list = await channel.pins()
+        pin_list = _get_pins(TOKEN, channel)
         pin_list.pop(-1) # get rid of a certain post about reading the rules
 
         for pinned_message in pin_list:
@@ -344,10 +347,10 @@ async def limitcheck(ctx: Context):
         proxy = ""
 
     async with ctx.channel.typing():
-        pin_list = await channel.pins()
-        pincount = len(pin_list)
+        # pin_list = await channel.pins()
+        # pincount = len(pin_list)
         # result = f"You can pin {get_config('pin_limit') - pincount} more rips until hitting Discord's pin limit."
-        result = f"You can pin {get_config('soft_pin_limit') - pincount} more rips until I start complaining about pin space."
+        result = f"You can pin {get_config('soft_pin_limit') - count_pins(TOKEN, channel)} more rips until I start complaining about pin space."
 
         result += proxy
         await ctx.channel.send(result)
@@ -504,7 +507,8 @@ async def vet(ctx: Context, optional_arg = None):
         return
 
     async with ctx.channel.typing():
-        pin_list = await channel.pins()
+        # pin_list = await channel.pins()
+        pin_list = _get_pins(TOKEN, channel)
         pin_list.pop(-1) # get rid of a certain post about reading the rules
 
         for pinned_message in pin_list:
@@ -956,7 +960,8 @@ async def stats(ctx: Context, optional_arg = None):
             email_count = 0
 
             channel = server.get_channel(channel_id)
-            pin_list = await channel.pins()
+            # pin_list = await channel.pins()
+            pin_list = _get_pins(TOKEN, channel)
             pin_list.pop(-1) # get rid of a certain post about reading the rules
 
             for pinned_message in pin_list:
@@ -1331,7 +1336,8 @@ async def get_pinned_msgs_and_react(channel: TextChannel, react_func: typing.Cal
     
     Returns a dictionary of pinned messages.
     """
-    pin_list = await channel.pins()
+    # pin_list = await channel.pins()
+    pin_list = _get_pins(TOKEN, channel)
 
     pin_list.pop(-1) # get rid of a certain post about reading the rules
 
@@ -1674,7 +1680,8 @@ async def get_rips(channel: TextChannel, type: typing.Literal['pin', 'msg', 'thr
         channel.id: []
     }
     if type == 'pin':
-        pins = await channel.pins()
+        # pins = await channel.pins()
+        pins = _get_pins(TOKEN, channel)
         rips[channel.id] = pins[:-1]
     elif type == 'msg':
         async for message in channel.history(limit = None):
