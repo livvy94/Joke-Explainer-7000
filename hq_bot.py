@@ -350,7 +350,7 @@ async def limitcheck(ctx: Context):
         # pin_list = await channel.pins()
         # pincount = len(pin_list)
         # result = f"You can pin {get_config('pin_limit') - pincount} more rips until hitting Discord's pin limit."
-        result = f"You can pin {get_config('soft_pin_limit') - count_pins(TOKEN, channel)} more rips until I start complaining about pin space."
+        result = f"You can pin {get_config('soft_pin_limit') - count_pins(TOKEN, channel.id)} more rips until I start complaining about pin space."
 
         result += proxy
         await ctx.channel.send(result)
