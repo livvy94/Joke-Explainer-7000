@@ -95,7 +95,7 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
     else:
         latest_pin_time = last_pin
         # pin_list = await channel.pins()
-        pin_list = _get_pins(TOKEN, channel)
+        pin_list = _get_pins(TOKEN, channel.id)
         if len(pin_list) < 1: return
         latest_msg = pin_list[0]
 
@@ -226,7 +226,7 @@ async def fresh(ctx: Context, optional_time = None):
 
     async with ctx.channel.typing():
         # pin_list = await channel.pins()
-        pin_list = _get_pins(TOKEN, channel)
+        pin_list = _get_pins(TOKEN, channel.id)
         pin_list.pop(-1) # get rid of a certain post about reading the rules
 
         for pinned_message in pin_list:
@@ -508,7 +508,7 @@ async def vet(ctx: Context, optional_arg = None):
 
     async with ctx.channel.typing():
         # pin_list = await channel.pins()
-        pin_list = _get_pins(TOKEN, channel)
+        pin_list = _get_pins(TOKEN, channel.id)
         pin_list.pop(-1) # get rid of a certain post about reading the rules
 
         for pinned_message in pin_list:
@@ -961,7 +961,7 @@ async def stats(ctx: Context, optional_arg = None):
 
             channel = server.get_channel(channel_id)
             # pin_list = await channel.pins()
-            pin_list = _get_pins(TOKEN, channel)
+            pin_list = _get_pins(TOKEN, channel.id)
             pin_list.pop(-1) # get rid of a certain post about reading the rules
 
             for pinned_message in pin_list:
@@ -1337,7 +1337,7 @@ async def get_pinned_msgs_and_react(channel: TextChannel, react_func: typing.Cal
     Returns a dictionary of pinned messages.
     """
     # pin_list = await channel.pins()
-    pin_list = _get_pins(TOKEN, channel)
+    pin_list = _get_pins(TOKEN, channel.id)
 
     pin_list.pop(-1) # get rid of a certain post about reading the rules
 
@@ -1681,7 +1681,7 @@ async def get_rips(channel: TextChannel, type: typing.Literal['pin', 'msg', 'thr
     }
     if type == 'pin':
         # pins = await channel.pins()
-        pins = _get_pins(TOKEN, channel)
+        pins = _get_pins(TOKEN, channel.id)
         rips[channel.id] = pins[:-1]
     elif type == 'msg':
         async for message in channel.history(limit = None):
