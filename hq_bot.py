@@ -76,7 +76,7 @@ def _get_pins(bot_token, channel_id, before=None):
     j = json.loads(res.content)
     items = j.get('items')
     if j.get('has_more'):
-      items += _get_pins(before=items[len(items) - 1]['pinned_at'])
+      items += _get_pins(bot_token, channel_id, before=items[len(items) - 1]['pinned_at'])
     return items
 
 def count_pins(bot_token, channel_id):
