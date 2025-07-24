@@ -840,7 +840,7 @@ async def help(ctx: Context):
             + "\n_**Special lists:**_\n`!mypins`" + mypins.brief \
             + "\n`!emails` " + emails.brief + "\n`!events <name: str>` " + events.brief \
             + "\n`!checks`, `!rejects`, `!wrenches`, `!stops`" \
-            + "\n`!overdue` " + overdue.brief.replace('X', get_config('overdue_days')) \
+            + "\n`!overdue` " + overdue.brief.replace('X', str(get_config('overdue_days'))) \
             + "\n_**Misc. tools:**_\n`!count` " + count.brief \
             + "\n`!limitcheck` " + limitcheck.brief \
             + "\n`!count_subs [sub_channel: link]` " + count_subs.brief \
