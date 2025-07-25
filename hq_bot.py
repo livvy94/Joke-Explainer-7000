@@ -1721,8 +1721,8 @@ def parse_channel_link(link: str | None, types: typing.List[str]) -> typing.Tupl
     except IndexError:
         return -1, "Error: Cannot parse argument - make sure it is a valid link to channel."
 
-    # this is same as channel_is_type, but we only have the ID number
-    if arg in CHANNELS.keys() and any(t in CHANNELS[arg] for t in types):
+    channel = bot.get_channel(arg)
+    if channel_is_types(channel, types):
         return arg, ""
     else:
         return default_id, f"Warning: Link is not a valid roundup channel, defaulting to <#{default_id}>."
