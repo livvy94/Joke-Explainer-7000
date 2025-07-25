@@ -227,7 +227,9 @@ async def fresh(ctx: Context, optional_time = None):
     async with ctx.channel.typing():
         pin_list = await channel.pins()
         # pin_list = _get_pins(TOKEN, channel.id)
-        pin_list.pop(-1) # get rid of a certain post about reading the rules
+
+        if get_config('qoc_contains_pinned_rule'):
+            pin_list.pop(-1) # get rid of a certain post about reading the rules
 
         for pinned_message in pin_list:
             mesg = await channel.fetch_message(pinned_message.id)
@@ -509,7 +511,9 @@ async def vet(ctx: Context, optional_arg = None):
     async with ctx.channel.typing():
         pin_list = await channel.pins()
         # pin_list = _get_pins(TOKEN, channel.id)
-        pin_list.pop(-1) # get rid of a certain post about reading the rules
+
+        if get_config('qoc_contains_pinned_rule'):
+            pin_list.pop(-1) # get rid of a certain post about reading the rules
 
         for pinned_message in pin_list:
             qcCode, qcMsg, _ = await check_qoc(pinned_message, False)
@@ -962,7 +966,9 @@ async def stats(ctx: Context, optional_arg = None):
             channel = server.get_channel(channel_id)
             pin_list = await channel.pins()
             # pin_list = _get_pins(TOKEN, channel.id)
-            pin_list.pop(-1) # get rid of a certain post about reading the rules
+
+            if get_config('qoc_contains_pinned_rule'):
+                pin_list.pop(-1) # get rid of a certain post about reading the rules
 
             for pinned_message in pin_list:
                 author = get_rip_author(pinned_message)
@@ -1339,7 +1345,8 @@ async def get_pinned_msgs_and_react(channel: TextChannel, react_func: typing.Cal
     pin_list = await channel.pins()
     # pin_list = _get_pins(TOKEN, channel.id)
 
-    pin_list.pop(-1) # get rid of a certain post about reading the rules
+    if get_config('qoc_contains_pinned_rule'):
+        pin_list.pop(-1) # get rid of a certain post about reading the rules
 
     dict_index = 1
     pins_in_message = {}  # make a dict for everything
@@ -1682,7 +1689,7 @@ async def get_rips(channel: TextChannel, type: typing.Literal['pin', 'msg', 'thr
     if type == 'pin':
         pins = await channel.pins()
         # pins = _get_pins(TOKEN, channel.id)
-        rips[channel.id] = pins[:-1]
+        rips[channel.id] = pins[:-1] if get_config('qoc_contains_pinned_rule') else pins
     elif type == 'msg':
         async for message in channel.history(limit = None):
             if channel is Thread or not (message.channel is Thread):
