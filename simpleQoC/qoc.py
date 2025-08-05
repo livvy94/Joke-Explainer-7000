@@ -696,7 +696,12 @@ def getFileMetadataFfprobe(url: str) -> Tuple[int, str]:
     except QoCException as e:
         errors.append(e.message)
     else:
-        metadata = json.dumps(ffprobeUrl(filepath), indent=2)
+        probeOutput = ffprobeUrl(filepath)
+        try:
+            probeOutput['format']['filename'] = "[REDACTED]"
+        except KeyError:
+            pass
+        metadata = json.dumps(probeOutput, indent=2)
     finally:
         if filepath:
             os.remove(filepath)
