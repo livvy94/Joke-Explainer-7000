@@ -4,7 +4,8 @@
     "embed_seconds": 2700,
     "proxy_embed_seconds": 10800,
 
-    "character_limit": 4000,
+    "character_limit": 2000,
+    "embed_character_limit": 4000,
 
     "embed_color": 4724577,
 

@@ -783,7 +783,7 @@ async def peek_msg(ctx: Context, msg_link: str = None, use_ffprobe = None):
         if code == -1:
             await ctx.channel.send("Error reading message:\n{}".format('\n'.join(errs)))
         else:
-            long_message = split_long_message("**Rip**: **{}**\n**File metadata**:\n{}".format(rip_title, msg))
+            long_message = split_long_message("**Rip**: **{}**\n**File metadata**:\n{}".format(rip_title, msg), get_config('character_limit'))
             for line in long_message:
                 await ctx.channel.send(line)
 
@@ -813,7 +813,7 @@ async def peek_url(ctx: Context, url: str = None, use_ffprobe = None):
         if code == -1:
             await ctx.channel.send("Error reading URL: {}".format(msg))
         else:
-            long_message = split_long_message("**File metadata**:\n{}".format(msg))
+            long_message = split_long_message("**File metadata**:\n{}".format(msg), get_config('character_limit'))
             for line in long_message:
                 await ctx.channel.send(line)
 
@@ -1028,7 +1028,7 @@ async def stats(ctx: Context, optional_arg = None):
                     if count > 0:
                         ret += f"  - <#{thread}>: **{count}** rips\n"
 
-        long_message = split_long_message(ret)
+        long_message = split_long_message(ret, get_config('character_limit'))
         for line in long_message:
             await ctx.channel.send(line)
 
@@ -1173,9 +1173,10 @@ async def fetch_command(ctx: Context, react_func: typing.Callable, channel_link 
             await send_embed(ctx, result, time)
 
 
-def split_long_message(a_message: str) -> list[str]:  # avoid Discord's character limit
+def split_long_message(a_message: str, character_limit: int) -> list[str]:  # avoid Discord's character limit
     """
     Split a long message to fit Discord's character limit.
+    Aug 6 2025: apparently embeds have a higher character limit?
     """
     result = []
     all_lines = a_message.splitlines()
@@ -1183,7 +1184,7 @@ def split_long_message(a_message: str) -> list[str]:  # avoid Discord's characte
     for line in all_lines:
         line = line.replace('@', '')  # no more pings lol
         next_length = len(wall_of_text) + len(line)
-        if next_length > get_config('character_limit'):
+        if next_length > character_limit:
             result.append(wall_of_text[:-1])  # append and get rid of the last newline
             wall_of_text = line + '\n'
         else:
@@ -1200,7 +1201,7 @@ async def send_embed(ctx: Context, message: str, delete_after: float = None):
     - message: Text to send as embed
     - delete_after: Number of seconds to automatically remove the message. Defaults to constant at the beginning of file. If set to None, message will not delete.
     """
-    long_message = split_long_message(message)
+    long_message = split_long_message(message, get_config('embed_character_limit'))
     for line in long_message:
         fancy_message = discord.Embed(description=line, color=get_config('embed_color'))
         await ctx.channel.send(embed=fancy_message, delete_after=delete_after)
