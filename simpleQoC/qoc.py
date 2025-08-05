@@ -63,7 +63,7 @@ def ffprobeUrl(validUrl: str):
         probeOutput = subprocess.check_output([
             'ffprobe',
             '-v', 'quiet',
-            '-select_streams', 'a:0',
+            # '-select_streams', 'a:0',
             '-print_format', 'json',
             '-show_format',
             '-show_streams',
@@ -449,7 +449,7 @@ def checkClippingFromUrl(validUrl: str, threshold: int = DEFAULT_CLIPPING_THRESH
 
 
 #=======================================#
-#         DLS CLIPPING CHECKING          #
+#         DLS CLIPPING CHECKING         #
 #=======================================#
 """
 Same idea behind checking clipping, but not limited to min/max values.
@@ -599,6 +599,31 @@ def checkDLSClippingFromUrl(validUrl: str, threshold: int = DEFAULT_DS_CLIPPING_
 
 
 #=======================================#
+#            VIDEO RESOLUTION           #
+#=======================================#
+"""
+Verify that video files are at least 1080p
+"""
+
+def checkResolution(filepath: str) -> Tuple[bool, str]:
+    probeOutput = ffprobeUrl(filepath)
+    height = None
+    for stream in probeOutput['streams']:
+        try:
+            height = stream['height']
+        except KeyError:
+            continue
+    
+    if height is None:
+        return (True, "No video streams detected")  
+    else:
+        if height < 1080:
+            return (False, f"The video file is in {height}p. Please re-render at 1080p, unless intentional.")
+        else:
+            return (True, f"The video file is in {height}p.")
+
+
+#=======================================#
 #                Utility                #
 #=======================================#
 """
@@ -617,10 +642,9 @@ def msgContainsSigninErr(msg: str) -> bool:
     return msg.find("Drive link is not accessible") != -1
 
 
-def getFileMetadata(url: str) -> Tuple[int, str]:
+def getFileMetadataMutagen(url: str) -> Tuple[int, str]:
     """
-    Returns the metadata of file at given URL.
-    File metadata acquired via mutagen's `pprint()` function.
+    Returns the metadata of file at given URL via mutagen's `pprint()` function.
     """
     try:
         downloadableUrl = parseUrl(url)
@@ -649,6 +673,31 @@ def getFileMetadata(url: str) -> Tuple[int, str]:
         return (-1, '\n'.join(errors))
 
     return (0, metadata)
+
+
+def getFileMetadataFfprobe(url: str) -> Tuple[int, str]:
+    """
+    Returns the metadata of file at given URL via ffprobe.
+    """
+    try:
+        downloadableUrl = parseUrl(url)
+    except QoCException as e:
+        return (-1, e.message)
+
+    # check if link is valid
+    response = getResponseFromUrl(downloadableUrl)
+    try:
+        _, params = cgi.parse_header(response.headers['Content-Disposition'])
+    except KeyError:
+        if not ('audio' in response.headers['Content-Type'] or 'video' in response.headers['Content-Type']):
+            if 'html' in response.headers['Content-Type']:
+                text = response.text
+                title = re.search(r'<\W*title\W*(.*)</title', text, re.IGNORECASE)
+                return (-1, 'Filename cannot be parsed from the URL (server response: {}).'.format(title.group(1) if title else None))
+            else:
+                return (-1, 'Unknown error trying to parse filename.')
+    
+    return (0, json.dumps(ffprobeUrl(downloadableUrl), indent=2))
 
 
 #=======================================#
@@ -695,6 +744,8 @@ def performQoC(url: str, fullFeedback: bool = True) -> Tuple[int, str]:
             clippingCheck, clippingMsg = checkClippingFromFile(file, filepath)
         except QoCException as e:
             errors.append(e.message)
+
+        resolutionCheck, resolutionMsg = checkResolution(filepath)
     
     finally:
         if filepath:
@@ -703,15 +754,13 @@ def performQoC(url: str, fullFeedback: bool = True) -> Tuple[int, str]:
     if len(errors) > 0:
         return (-1, '\n'.join(errors))
     
-    message = ""
-    if fullFeedback or not bitrateCheck: 
-        message += "- {}".format(bitrateMsg)
-    if fullFeedback or (not bitrateCheck and not clippingCheck):
-        message += "\n"
-    if fullFeedback or not clippingCheck: 
-        message += "- {}".format(clippingMsg)
+    msgs = []
+    if fullFeedback or not bitrateCheck: msgs.append(bitrateMsg)
+    if fullFeedback or not clippingCheck: msgs.append(clippingMsg)
+    if fullFeedback or not resolutionCheck: msgs.append(resolutionMsg)
+    message = "\n".join("- " + msg for msg in msgs)
 
-    return (0 if (bitrateCheck and clippingCheck) else 1, message)
+    return (0 if (bitrateCheck and clippingCheck and resolutionCheck) else 1, message)
 
 """
 Commented this out to work on it later

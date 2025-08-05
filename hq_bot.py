@@ -7,7 +7,7 @@ from discord.ext.commands import Context
 from bot_secrets import TOKEN, YOUTUBE_API_KEY, YOUTUBE_CHANNEL_NAME, CHANNELS
 from datetime import datetime, timezone, timedelta
 
-from simpleQoC.qoc import performQoC, msgContainsBitrateFix, msgContainsClippingFix, msgContainsSigninErr, ffmpegExists, getFileMetadata
+from simpleQoC.qoc import performQoC, msgContainsBitrateFix, msgContainsClippingFix, msgContainsSigninErr, ffmpegExists, getFileMetadataMutagen, getFileMetadataFfprobe
 from simpleQoC.metadata import checkMetadata, countDupe, isDupe
 import re
 import functools
@@ -746,7 +746,7 @@ async def scan(ctx: Context, channel_link: str = None, start_index: int = None, 
 
 
 @bot.command(name='peek_msg', brief='print file metadata from message link')
-async def peek_msg(ctx: Context, msg_link: str = None):
+async def peek_msg(ctx: Context, msg_link: str = None, use_ffprobe = None):
     """
     Prints the file metadata of the rip at linked message.
     The first non-YouTube link found in the message is treated as the rip URL.
@@ -769,18 +769,27 @@ async def peek_msg(ctx: Context, msg_link: str = None):
         urls = extract_rip_link(message.content)
         errs = []
         for url in urls:
-            code, msg = await run_blocking(getFileMetadata, url)
+            if use_ffprobe is not None:
+                if not ffmpegExists():
+                    await ctx.channel.send("ffmpeg not found on remote. Please contact developers, or run this command without the extra argument.")
+                    return
+                code, msg = await run_blocking(getFileMetadataFfprobe, url)
+            else:
+                code, msg = await run_blocking(getFileMetadataMutagen, url)
+            
             if code != -1:
                 break
             errs.append(msg)
         if code == -1:
             await ctx.channel.send("Error reading message:\n{}".format('\n'.join(errs)))
         else:
-            await ctx.channel.send("**Rip**: **{}**\n**File metadata**:\n{}".format(rip_title, msg))
+            long_message = split_long_message("**Rip**: **{}**\n**File metadata**:\n{}".format(rip_title, msg))
+            for line in long_message:
+                await ctx.channel.send(line)
 
 
 @bot.command(name='peek_url', brief='print file metadata from url')
-async def peek_url(ctx: Context, url: str = None):
+async def peek_url(ctx: Context, url: str = None, use_ffprobe = None):
     """
     Prints the file metadata of the rip at linked URL.
     """
@@ -793,11 +802,20 @@ async def peek_url(ctx: Context, url: str = None):
         return
 
     async with ctx.channel.typing():
-        code, msg = await run_blocking(getFileMetadata, urls[0])
+        if use_ffprobe is not None:
+            if not ffmpegExists():
+                await ctx.channel.send("ffmpeg not found on remote. Please contact developers, or run this command without the extra argument.")
+                return
+            code, msg = await run_blocking(getFileMetadataFfprobe, url)
+        else:
+            code, msg = await run_blocking(getFileMetadataMutagen, url)
+        
         if code == -1:
             await ctx.channel.send("Error reading URL: {}".format(msg))
         else:
-            await ctx.channel.send("**File metadata**:\n{}".format(msg))
+            long_message = split_long_message("**File metadata**:\n{}".format(msg))
+            for line in long_message:
+                await ctx.channel.send(line)
 
 
 # ============ Config commands ============== #
@@ -856,7 +874,7 @@ async def help(ctx: Context):
             + "\n`!scout_stats [queue_channel: link]`" + scout_stats.brief \
             + "\n_**Auto QoC tools:**_\n`!vet` " + vet.brief + "\n`!vet_all` " + vet_all.brief \
             + "\n`!vet_msg <message: link>` " + vet_msg.brief + "\n`!vet_url <URL: link>` " + vet_url.brief \
-            + "\n`!peek_msg <message: link>` " + peek_msg.brief + "\n`!peek_url <URL: link>` " + peek_url.brief \
+            + "\n`!peek_msg <message: link> [ffprobe: any]` " + peek_msg.brief + "\n`!peek_url <URL: link> [ffprobe: any]` " + peek_url.brief \
             + "\n`!count_dupe <message: link> [count_queues: any]`" + count_dupe.brief \
             + "\n_**Experimental tools:**_\n`!scan <queue_channel: link> [start_index: int] [end_index: int]`" + scan.brief \
             + "\n_**Config:**_\n`![enable/disable]_metadata` enables/disables advanced metadata checking (currently {})".format("enabled" if get_config('metadata') else "disabled")
