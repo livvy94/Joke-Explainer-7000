@@ -618,9 +618,9 @@ def checkResolution(filepath: str) -> Tuple[bool, str]:
         return (True, "No video streams detected")  
     else:
         if height < 1080:
-            return (False, f"The video file is in {height}p. Please re-render at 1080p, unless intentional.")
+            return (False, f"The video file height is {height}. Please re-render at 1080p, unless intentional.")
         else:
-            return (True, f"The video file is in {height}p.")
+            return (True, f"The video file height is {height}.")
 
 
 #=======================================#
@@ -684,20 +684,27 @@ def getFileMetadataFfprobe(url: str) -> Tuple[int, str]:
     except QoCException as e:
         return (-1, e.message)
 
-    # check if link is valid
-    response = getResponseFromUrl(downloadableUrl)
-    try:
-        _, params = cgi.parse_header(response.headers['Content-Disposition'])
-    except KeyError:
-        if not ('audio' in response.headers['Content-Type'] or 'video' in response.headers['Content-Type']):
-            if 'html' in response.headers['Content-Type']:
-                text = response.text
-                title = re.search(r'<\W*title\W*(.*)</title', text, re.IGNORECASE)
-                return (-1, 'Filename cannot be parsed from the URL (server response: {}).'.format(title.group(1) if title else None))
-            else:
-                return (-1, 'Unknown error trying to parse filename.')
+    if not os.path.exists(DOWNLOAD_DIR):
+        os.mkdir(DOWNLOAD_DIR)
     
-    return (0, json.dumps(ffprobeUrl(downloadableUrl), indent=2))
+    filepath = None
+    errors = []
+
+    try:
+        filepath = downloadAudioFromUrl(downloadableUrl)
+        DEBUG("Downloaded audio: " + Path(filepath).name)
+    except QoCException as e:
+        errors.append(e.message)
+    else:
+        metadata = json.dumps(ffprobeUrl(filepath), indent=2)
+    finally:
+        if filepath:
+            os.remove(filepath)
+
+    if len(errors) > 0:
+        return (-1, '\n'.join(errors))
+
+    return (0, metadata)
 
 
 #=======================================#
