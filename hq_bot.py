@@ -255,7 +255,8 @@ async def event_subs(ctx: Context, event: str = None, sub_channel_link: str = No
             if event.lower() in rip_author.lower():
                 if any([react_is_qoc(r) for r in rip.reactions]):
                     result += f"{qoc_emote} "
-                result += f'**[{rip_title}]({rip_link})** (by {str(rip.author).split('#')[0]})\n'
+                author = str(rip.author).split('#')[0]
+                result += f'**[{rip_title}]({rip_link})** (by {author})\n'
 
         if len(result) == 0:
             await ctx.channel.send("No rips found.")
