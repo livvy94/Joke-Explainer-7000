@@ -249,7 +249,7 @@ async def event_subs(ctx: Context, event: str = None, sub_channel_link: str = No
         
         result = ""
         for rip in rips:
-            rip_author = get_rip_author(rip)
+            rip_author = rip.content.split("```")[0]
             rip_title = get_rip_title(rip)
             rip_link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(sub_channel)}/{str(rip.id)}>"
             if line_contains_substring(rip_author, event):
