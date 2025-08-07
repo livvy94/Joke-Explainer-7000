@@ -19,7 +19,7 @@ import os
 # Emoji definitions
 APPROVED_INDICATOR = '🔥'
 AWAITING_SPECIALIST_INDICATOR = '♨️'
-SPECS_OVERDUE_INDICATOR = '🟢'
+SPECS_OVERDUE_INDICATOR = '🫑'
 OVERDUE_INDICATOR = '🕒'
 
 DEFAULT_CHECK = '✅'
@@ -192,7 +192,7 @@ async def emails(ctx: Context, optional_time = None):
     """
     Retrieve all messages that are tagged as email.
     """
-    await filter_command(ctx, 'emails', (lambda ctx, rip_info: "email" in rip_info["Author"].lower()), True, optional_time)
+    await events(ctx, "email", optional_time)
 
 
 @bot.command(name='events', aliases = ['event'], brief='displays event rips')
@@ -205,7 +205,62 @@ async def events(ctx: Context, event: str = None, optional_time = None):
         await ctx.channel.send("Error: Please indicate the event name. Rips should be tagged with this name.")
         return
     
-    await filter_command(ctx, 'events', (lambda ctx, rip_info: event.lower() in rip_info["Author"].lower()), True, optional_time)
+    await filter_command(ctx, 'events', (lambda ctx, rip_info: line_contains_substring(rip_info["Author"], event)), True, optional_time)
+
+
+@bot.command(name='event_subs', brief='displays event submissions from linked channel')
+async def event_subs(ctx: Context, event: str = None, sub_channel_link: str = None, optional_time = None):
+    """
+    Retrieve all messages in a submission channel that are tagged as for an event.
+    The provided string must appear in the rip's author label (case insensitive)
+    """
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
+    heard_command("event_subs", ctx.message.author.name)
+
+    if event is None:
+        await ctx.channel.send("Error: Please indicate the event name. Rips should be tagged with this name.")
+        return
+
+    time, msg = parse_optional_time(ctx.channel, optional_time)
+    if msg is not None: await ctx.channel.send(msg)
+
+    sub_channel, msg = parse_channel_link(sub_channel_link, ['SUBS', 'SUBS_PIN', 'SUBS_THREAD'])
+    if len(msg) > 0:
+        await ctx.channel.send(msg)
+        if sub_channel == -1: return
+
+    async with ctx.channel.typing():
+        server = ctx.guild
+        channel = server.get_channel(sub_channel)
+
+        qoc_emote = DEFAULT_QOC
+        for e in server.emojis:
+            if e.name.lower() == "qoc":
+                qoc_emote = e
+
+        if channel_is_type(channel, 'SUBS'): t = 'msg'
+        elif channel_is_type(channel, 'SUBS_PIN'): t = 'pin'
+        elif channel_is_type(channel, 'SUBS_THREAD'): t = 'thread'
+
+        rips: typing.List[Message] = []
+        t_rips = await get_rips(channel, t)
+        for k, v in t_rips.items():
+            rips.extend(v)
+        
+        result = ""
+        for rip in rips:
+            rip_author = get_rip_author(rip)
+            rip_title = get_rip_title(rip)
+            rip_link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(sub_channel)}/{str(rip.id)}>"
+            if event.lower() in rip_author.lower():
+                if any([react_is_qoc(r) for r in rip.reactions]):
+                    result += f"{qoc_emote} "
+                result += f'**[{rip_title}]({rip_link})** (by {str(rip.author).split('#')[0]})\n'
+
+        if len(result) == 0:
+            await ctx.channel.send("No rips found.")
+        else:
+            await send_embed(ctx, result, time)
 
 
 @bot.command(name="fresh", aliases = ['blank', 'bald', 'clean', 'noreacts'], brief='rips with no reacts yet')
@@ -866,6 +921,7 @@ async def help(ctx: Context):
             + "\n_**Misc. tools:**_\n`!count` " + count.brief \
             + "\n`!limitcheck` " + limitcheck.brief \
             + "\n`!count_subs [sub_channel: link]` " + count_subs.brief \
+            + "\n`!event_subs <name: str> [sub_channel: link]` " + event_subs.brief \
             + "\n`!stats [show_queues: any]`" + stats.brief \
             + "\n`!channel_list`" + channel_list.brief \
             + "\n`!cleanup [search_limit: int]`" + cleanup.brief \
@@ -877,7 +933,10 @@ async def help(ctx: Context):
             + "\n`!peek_msg <message: link> [ffprobe: any]` " + peek_msg.brief + "\n`!peek_url <URL: link> [ffprobe: any]` " + peek_url.brief \
             + "\n`!count_dupe <message: link> [count_queues: any]`" + count_dupe.brief \
             + "\n_**Experimental tools:**_\n`!scan <queue_channel: link> [start_index: int] [end_index: int]`" + scan.brief \
-            + "\n_**Config:**_\n`![enable/disable]_metadata` enables/disables advanced metadata checking (currently {})".format("enabled" if get_config('metadata') else "disabled")
+            + "\n_**Config:**_\n`![enable/disable]_metadata` enables/disables advanced metadata checking (currently {})".format("enabled" if get_config('metadata') else "disabled") \
+            + "\n=====================================" \
+            + "\n_**Legend:**_\n`<argument: type>` Mandatory argument\n`[argument: type]` Optional argument" \
+            + "\n_**Tips:**_\nUse quotes for string arguments with spaces, e.g. \"Main Theme\"\nAll embed commands accept the [embed_minutes] optional argument"
         await send_embed(ctx, result, delete_after=None)
 
 
@@ -1759,7 +1818,7 @@ async def parse_message_link(link: str):
     Parse the message link and return the server, channel and message objects.
     """
     try:
-        ids = link.split('/')
+        ids = link.replace('>', '').split('/')
         server_id = int(ids[4])
         channel_id = int(ids[5])
         msg_id = int(ids[6])
@@ -1771,6 +1830,13 @@ async def parse_message_link(link: str):
     message = await channel.fetch_message(msg_id)
 
     return server, channel, message, ""
+
+
+def line_contains_substring(line: str, substring: str) -> bool:
+    """
+    Helper function to search substrings in Discord markdown-formatted line, ignoring case and formatting
+    """
+    return substring.lower() in line.replace('*', '').replace('_', '').replace('|', '').replace('#', '').lower()
 
 
 def write_log(msg: str):
