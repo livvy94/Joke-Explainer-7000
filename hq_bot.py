@@ -252,7 +252,7 @@ async def event_subs(ctx: Context, event: str = None, sub_channel_link: str = No
             rip_author = get_rip_author(rip)
             rip_title = get_rip_title(rip)
             rip_link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(sub_channel)}/{str(rip.id)}>"
-            if event.lower() in rip_author.lower():
+            if line_contains_substring(rip_author, event):
                 if any([react_is_qoc(r) for r in rip.reactions]):
                     result += f"{qoc_emote} "
                 author = str(rip.author).split('#')[0]
