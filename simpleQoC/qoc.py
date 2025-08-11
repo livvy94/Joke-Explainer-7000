@@ -701,6 +701,30 @@ def getFileMetadataFfprobe(url: str) -> Tuple[int, str]:
             probeOutput['format']['filename'] = "[REDACTED]"
         except KeyError:
             pass
+
+        # some entries in the json may be too long to be sent on Discord
+        def redactLongStrings(obj, max_length = 300):
+            if max_length < 11:
+                raise ValueError("Cannot shorten more than the [LONG TEXT] message")
+            if isinstance(obj, dict):
+                keys_to_delete = []
+                for key, value in obj.items():
+                    if isinstance(value, str) and len(value) > max_length:
+                        keys_to_delete.append(key)
+                    else:
+                        redactLongStrings(value, max_length) # Recurse for nested objects/lists
+                for key in keys_to_delete:
+                    obj[key] = "[LONG TEXT]"
+            elif isinstance(obj, list):
+                i = 0
+                while i < len(obj):
+                    if isinstance(obj[i], str) and len(obj[i]) > max_length:
+                        obj[i] = "[LONG TEXT]"
+                    else:
+                        redactLongStrings(obj[i], max_length) # Recurse for nested objects/lists
+                        i += 1
+
+        redactLongStrings(probeOutput)
         metadata = json.dumps(probeOutput, indent=2)
     finally:
         if filepath:
