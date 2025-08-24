@@ -89,7 +89,7 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
         return
     
     global latest_pin_time
-    if last_pin <= latest_pin_time:
+    if last_pin is None or last_pin <= latest_pin_time:
         # print("Seems to be a message being unpinned")
         pass
     else:
