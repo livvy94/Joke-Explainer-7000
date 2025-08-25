@@ -64,25 +64,6 @@ async def on_ready():
     latest_pin_time = datetime.now(timezone.utc)
 
 
-# Temporary pin fetch patch
-import requests
-import json
-def _get_pins(bot_token, channel_id, before=None):
-    res = requests.get(f'https://discord.com/api/channels/{channel_id}/messages/pins', headers={
-      "authorization": f"Bot {bot_token}"
-    }, params = {
-      'before': before
-    })
-    j = json.loads(res.content)
-    items = j.get('items')
-    if j.get('has_more'):
-      items += _get_pins(bot_token, channel_id, before=items[len(items) - 1]['pinned_at'])
-    return items
-
-def count_pins(bot_token, channel_id):
-  return(len(_get_pins(bot_token, channel_id)))
-
-
 @bot.event
 async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Thread], last_pin: datetime):
     if not channel_is_type(channel, 'ROUNDUP'):
@@ -94,13 +75,12 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
         pass
     else:
         latest_pin_time = last_pin
-        pin_list = await channel.pins()
-        # pin_list = _get_pins(TOKEN, channel.id)
+        pin_list = [message async for message in channel.pins(limit=None)]
         if len(pin_list) < 1: return
         latest_msg = pin_list[0]
 
         SOFT_PIN_LIMIT = get_config('soft_pin_limit')
-        if count_pins(TOKEN, channel.id) > SOFT_PIN_LIMIT:
+        if len(pin_list) > SOFT_PIN_LIMIT:
             await channel.send(f"**Warning**: More than {SOFT_PIN_LIMIT} rips pinned - please handle them first :(")
     
         verdict, msg = await check_qoc_and_metadata(latest_msg)
@@ -281,11 +261,7 @@ async def fresh(ctx: Context, optional_time = None):
     result = ""
 
     async with ctx.channel.typing():
-        pin_list = await channel.pins()
-        # pin_list = _get_pins(TOKEN, channel.id)
-
-        if get_config('qoc_contains_pinned_rule'):
-            pin_list.pop(-1) # get rid of a certain post about reading the rules
+        pin_list = await get_pins(channel)
 
         for pinned_message in pin_list:
             mesg = await channel.fetch_message(pinned_message.id)
@@ -377,8 +353,8 @@ async def count(ctx: Context):
         proxy = ""
 
     async with ctx.channel.typing():
-        # pincount = await count_rips(channel, 'pin')
-        pincount = count_pins(TOKEN, channel.id) - 1
+        pin_list = await get_pins(channel)
+        pincount = len(pin_list)
 
         if (pincount < 1):
             result = "`* Determination.`"
@@ -405,10 +381,8 @@ async def limitcheck(ctx: Context):
         proxy = ""
 
     async with ctx.channel.typing():
-        # pin_list = await channel.pins()
-        # pincount = len(pin_list)
-        # result = f"You can pin {get_config('pin_limit') - pincount} more rips until hitting Discord's pin limit."
-        result = f"You can pin {get_config('soft_pin_limit') - count_pins(TOKEN, channel.id)} more rips until I start complaining about pin space."
+        pin_list = [message async for message in channel.pins(limit=None)]
+        result = f"You can pin {get_config('soft_pin_limit') - len(pin_list)} more rips until I start complaining about pin space."
 
         result += proxy
         await ctx.channel.send(result)
@@ -565,11 +539,7 @@ async def vet(ctx: Context, optional_arg = None):
         return
 
     async with ctx.channel.typing():
-        pin_list = await channel.pins()
-        # pin_list = _get_pins(TOKEN, channel.id)
-
-        if get_config('qoc_contains_pinned_rule'):
-            pin_list.pop(-1) # get rid of a certain post about reading the rules
+        pin_list = await get_pins(channel)
 
         for pinned_message in pin_list:
             qcCode, qcMsg, _ = await check_qoc(pinned_message, False)
@@ -1042,11 +1012,7 @@ async def stats(ctx: Context, optional_arg = None):
             email_count = 0
 
             channel = server.get_channel(channel_id)
-            pin_list = await channel.pins()
-            # pin_list = _get_pins(TOKEN, channel.id)
-
-            if get_config('qoc_contains_pinned_rule'):
-                pin_list.pop(-1) # get rid of a certain post about reading the rules
+            pin_list = await get_pins(channel)
 
             for pinned_message in pin_list:
                 author = get_rip_author(pinned_message)
@@ -1421,11 +1387,7 @@ async def get_pinned_msgs_and_react(channel: TextChannel, react_func: typing.Cal
     
     Returns a dictionary of pinned messages.
     """
-    pin_list = await channel.pins()
-    # pin_list = _get_pins(TOKEN, channel.id)
-
-    if get_config('qoc_contains_pinned_rule'):
-        pin_list.pop(-1) # get rid of a certain post about reading the rules
+    pin_list = await get_pins(channel)
 
     dict_index = 1
     pins_in_message = {}  # make a dict for everything
@@ -1749,6 +1711,14 @@ async def count_rips(channel: TextChannel, type: typing.Literal['pin', 'msg', 't
         return count
 
 
+async def get_pins(channel: TextChannel) -> typing.List[Message]:
+    """
+    Raw pin retrieval helper function
+    """
+    pins = [message async for message in channel.pins(limit=None)]
+    return pins[:-1] if get_config('qoc_contains_pinned_rule') else pins
+
+
 async def get_rips(channel: TextChannel, type: typing.Literal['pin', 'msg', 'thread']) -> dict[int, typing.List[Message]]:
     """
     Retrieve all rips in a channel, depending on the type: rips are in pins, messages or threads.
@@ -1766,9 +1736,7 @@ async def get_rips(channel: TextChannel, type: typing.Literal['pin', 'msg', 'thr
         channel.id: []
     }
     if type == 'pin':
-        pins = await channel.pins()
-        # pins = _get_pins(TOKEN, channel.id)
-        rips[channel.id] = pins[:-1] if get_config('qoc_contains_pinned_rule') else pins
+        rips[channel.id] = await get_pins(channel)
     elif type == 'msg':
         async for message in channel.history(limit = None):
             if channel is Thread or not (message.channel is Thread):
