@@ -1831,7 +1831,7 @@ async def write_log(msg: str = "Placeholder message", embed: bool = False):
     Also write to a log file as backup.
     """
     try:
-        log_channel = bot.fetch_channel(LOG_CHANNEL)
+        log_channel = await bot.fetch_channel(LOG_CHANNEL)
         if embed:
             await send_embed(log_channel, msg)
         else:
