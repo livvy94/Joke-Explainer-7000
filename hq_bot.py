@@ -463,7 +463,7 @@ async def scout_stats(ctx: Context, channel_link: str = None, optional_time = No
             count[letter] = 0
 
         for rip in rips:
-            rip_title = get_rip_title(rip)
+            rip_title = get_raw_rip_title(rip)
             prefix = rip_title.lower()[0]
             if prefix in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ':  # isalpha becomes fucked with unicode characters i think
                 count[prefix.upper()] += 1
