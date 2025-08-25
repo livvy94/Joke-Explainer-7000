@@ -20,3 +20,5 @@ YOUTUBE_CHANNEL_NAME = ""
 CHANNELS = {
     -1: ['ROUNDUP', 'QOC'],
 }
+
+LOG_CHANNEL = -1

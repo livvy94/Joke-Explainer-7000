@@ -4,7 +4,7 @@ from discord import Message, Thread, TextChannel, Reaction
 from discord.abc import GuildChannel
 from discord.ext import commands
 from discord.ext.commands import Context
-from bot_secrets import TOKEN, YOUTUBE_API_KEY, YOUTUBE_CHANNEL_NAME, CHANNELS
+from bot_secrets import TOKEN, YOUTUBE_API_KEY, YOUTUBE_CHANNEL_NAME, CHANNELS, LOG_CHANNEL
 from datetime import datetime, timezone, timedelta
 
 from simpleQoC.qoc import performQoC, msgContainsBitrateFix, msgContainsClippingFix, msgContainsSigninErr, ffmpegExists, getFileMetadataMutagen, getFileMetadataFfprobe
@@ -63,6 +63,21 @@ async def on_ready():
     global latest_pin_time
     latest_pin_time = datetime.now(timezone.utc)
 
+    await write_log("Good morning!")
+
+import traceback
+@bot.event
+async def on_error(event, *args, **kwargs):
+    # https://stackoverflow.com/a/60031624
+    await write_log('%s```py\n%s\n```'.format(event, traceback.format_exc()), embed=True)
+
+_bot_close = bot.close
+async def close_with_log(self: commands.Bot):
+    await write_log("Good night!")
+    return await _bot_close()
+
+bot.close = close_with_log
+
 
 @bot.event
 async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Thread], last_pin: datetime):
@@ -120,7 +135,7 @@ async def roundup(ctx: Context, optional_time = None):
             result += make_markdown(rip_info, True)
         
         if result != "":
-            await send_embed(ctx, result, time)
+            await send_embed(ctx.channel, result, time)
         else:
             await ctx.channel.send("No rips.")
 
@@ -146,7 +161,7 @@ async def links(ctx: Context, optional_time = None):
             result += make_markdown(rip_info, False)
         
         if result != "":
-            await send_embed(ctx, result, time)
+            await send_embed(ctx.channel, result, time)
         else:
             await ctx.channel.send("No rips.")
 
@@ -241,7 +256,7 @@ async def event_subs(ctx: Context, event: str = None, sub_channel_link: str = No
         if len(result) == 0:
             await ctx.channel.send("No rips found.")
         else:
-            await send_embed(ctx, result, time)
+            await send_embed(ctx.channel, result, time)
 
 
 @bot.command(name="fresh", aliases = ['blank', 'bald', 'clean', 'noreacts'], brief='rips with no reacts yet')
@@ -271,7 +286,7 @@ async def fresh(ctx: Context, optional_time = None):
                 result = result + f'**[{title}]({link})**\n'
 
         if result != "":
-            await send_embed(ctx, result, time)
+            await send_embed(ctx.channel, result, time)
         else:
             await ctx.channel.send("No fresh rips.")
 
@@ -330,7 +345,7 @@ async def overdue(ctx: Context, optional_time = None):
                 result += make_markdown(rip_info, True)
         
         if result != "":
-            await send_embed(ctx, result, time)
+            await send_embed(ctx.channel, result, time)
         else:
             await ctx.channel.send("No overdue rips.")
 
@@ -429,7 +444,7 @@ async def scout(ctx: Context, prefix: str = None, channel_link: str = None, opti
         if len(result) == 0:
             await ctx.channel.send("No rips found.")
         else:
-            await send_embed(ctx, result, time)
+            await send_embed(ctx.channel, result, time)
 
 
 @bot.command(name='scout_stats', brief='summarize approved rips with specific letter prefix')
@@ -481,7 +496,7 @@ async def scout_stats(ctx: Context, channel_link: str = None, optional_time = No
         if len(rips) == 0:
             await ctx.channel.send("No rips found.")
         else:
-            await send_embed(ctx, result, time)
+            await send_embed(ctx.channel, result, time)
 
 
 @bot.command(name='frames', brief='find approved rips with thumbnail reacts')
@@ -580,7 +595,7 @@ async def vet_all(ctx: Context, optional_time = None):
         for rip_id, rip_info in all_pins.items():
             result += make_markdown(rip_info, True)
         result += f"```\nLEGEND:\n{QOC_DEFAULT_LINKERR}: Link cannot be parsed\n{DEFAULT_CHECK}: Rip is OK\n{DEFAULT_FIX}: Rip has potential issues, see below\n{QOC_DEFAULT_BITRATE}: Bitrate is not 320kbps\n{QOC_DEFAULT_CLIPPING}: Clipping```"
-        await send_embed(ctx, result, time)
+        await send_embed(ctx.channel, result, time)
 
 
 @bot.command(name='vet_msg', brief='vet a single message link')
@@ -761,7 +776,7 @@ async def scan(ctx: Context, channel_link: str = None, start_index: int = None, 
 
             mtCode, mtMsg = await check_metadata(message)
             if mtCode == -1:
-                write_log("Warning: cannot check metadata of message\nRip: {}\n{}".format(rip_title, mtMsg))
+                await write_log("Warning: cannot check metadata of message\nRip: {}\n{}".format(rip_title, mtMsg))
 
             if mtCode == 1:
                 link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(channel_id)}/{str(message.id)}>"
@@ -908,7 +923,7 @@ async def help(ctx: Context):
             + "\n=====================================" \
             + "\n_**Legend:**_\n`<argument: type>` Mandatory argument\n`[argument: type]` Optional argument" \
             + "\n_**Tips:**_\nUse quotes for string arguments with spaces, e.g. \"Main Theme\"\nAll embed commands accept the [embed_minutes] optional argument"
-        await send_embed(ctx, result, delete_after=None)
+        await send_embed(ctx.channel, result, delete_after=None)
 
 
 @bot.command(name='channel_list', brief='show channels and their supported commands')
@@ -931,7 +946,7 @@ async def channel_list(ctx: Context):
         message.extend(channels)
         result = "\n".join(message)
         
-        await send_embed(ctx, result, delete_after=None)
+        await send_embed(ctx.channel, result, delete_after=None)
 
 
 @bot.command(name='cleanup', brief='remove bot\'s old embed messages')
@@ -1124,7 +1139,7 @@ async def react_command(ctx: Context, cmd_name: str, check_func: typing.Callable
         if result == "":
             await ctx.channel.send(not_found_message)
         else:
-            await send_embed(ctx, result, time)
+            await send_embed(ctx.channel, result, time)
 
 
 async def filter_command(ctx: Context, cmd_name: str, filter_func: typing.Callable, display_reacts: bool, optional_time = None):
@@ -1150,7 +1165,7 @@ async def filter_command(ctx: Context, cmd_name: str, filter_func: typing.Callab
         if result == "":
             await ctx.channel.send("No rips found.")
         else:
-            await send_embed(ctx, result, time)
+            await send_embed(ctx.channel, result, time)
 
 
 async def fetch_command(ctx: Context, react_func: typing.Callable, channel_link = None, optional_time = None):
@@ -1196,7 +1211,7 @@ async def fetch_command(ctx: Context, react_func: typing.Callable, channel_link 
         if count == 0:
             await ctx.channel.send("No rips found.")
         else:
-            await send_embed(ctx, result, time)
+            await send_embed(ctx.channel, result, time)
 
 
 def split_long_message(a_message: str, character_limit: int) -> list[str]:  # avoid Discord's character limit
@@ -1220,7 +1235,7 @@ def split_long_message(a_message: str, character_limit: int) -> list[str]:  # av
     return result
 
 
-async def send_embed(ctx: Context, message: str, delete_after: float = None):
+async def send_embed(channel: TextChannel, message: str, delete_after: float = None):
     """
     Send a long message as embed.
 
@@ -1230,7 +1245,7 @@ async def send_embed(ctx: Context, message: str, delete_after: float = None):
     long_message = split_long_message(message, get_config('embed_character_limit'))
     for line in long_message:
         fancy_message = discord.Embed(description=line, color=get_config('embed_color'))
-        await ctx.channel.send(embed=fancy_message, delete_after=delete_after)
+        await channel.send(embed=fancy_message, delete_after=delete_after)
 
 def channel_is_type(channel: TextChannel | Thread, type: str):
     return channel.id in CHANNELS.keys() and type in CHANNELS[channel.id] or hasattr(channel, "parent") and channel_is_type(channel.parent, type)
@@ -1556,7 +1571,7 @@ async def vet_message(channel: TextChannel, message: Message) -> typing.Tuple[st
         
         # debug
         if code == -1:
-            write_log("Message: {}\n\nURL: {}\n\nError: {}".format(message.content, url, msg))
+            await write_log("Message: {}\n\nURL: {}\n\nError: {}".format(message.content, url, msg))
         else:
             break
 
@@ -1666,7 +1681,7 @@ async def check_qoc_and_metadata(message: Message, fullFeedback: bool = False) -
     # QoC
     qcCode, qcMsg, detectedUrl = await check_qoc(message, fullFeedback)
     if qcCode == -1:
-        write_log("Warning: cannot QoC message\nRip: {}\n{}".format(rip_title, qcMsg))
+        await write_log("Warning: cannot QoC message\nRip: {}\n{}".format(rip_title, qcMsg))
     elif (qcCode == 1) or fullFeedback:
         verdict += code_to_verdict(qcCode, qcMsg)
         msg += qcMsg + "\n"
@@ -1674,7 +1689,7 @@ async def check_qoc_and_metadata(message: Message, fullFeedback: bool = False) -
     # Metadata
     mtCode, mtMsg = await check_metadata(message, fullFeedback)
     if mtCode == -1:
-        write_log("Warning: cannot check metadata of message\nRip: {}\n{}".format(rip_title, mtMsg))
+        await write_log("Warning: cannot check metadata of message\nRip: {}\n{}".format(rip_title, mtMsg))
     elif mtCode == 1:
         verdict += ("" if len(verdict) == 0 else " ") + DEFAULT_METADATA
     if (mtCode == 1) or fullFeedback:
@@ -1808,11 +1823,23 @@ def line_contains_substring(line: str, substring: str) -> bool:
     return substring.lower() in line.replace('*', '').replace('_', '').replace('|', '').replace('#', '').lower()
 
 
-def write_log(msg: str):
+async def write_log(msg: str = "Placeholder message", embed: bool = False):
     """
-    Helper function to write debug text to a file so it doesn't get drowned in terminal.
-    The files should be cleaned up regularly.
+    Logging function.
+    If LOG_CHANNEL is valid, send a message there.
+    Also write to a log file as backup.
     """
+    try:
+        log_channel = bot.fetch_channel(LOG_CHANNEL)
+        if embed:
+            await send_embed(log_channel, msg)
+        else:
+            await log_channel.send(msg)
+    except (discord.InvalidData, discord.HTTPException, discord.Forbidden) as e:
+        msg += "\nError fetching log channel: {}".format(e.text)
+    except discord.NotFound:
+        pass
+    
     with open('logs.txt', 'a', encoding='utf-8') as file:
         file.write(datetime.now(timezone.utc).strftime('%m/%d/%y %I:%M %p'))
         file.write('\n')
