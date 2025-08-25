@@ -76,7 +76,8 @@ async def close_with_log(self: commands.Bot):
     await write_log("Good night!")
     return await _bot_close()
 
-bot.close = close_with_log
+import types
+bot.close = types.MethodType(close_with_log, bot)
 
 
 @bot.event
