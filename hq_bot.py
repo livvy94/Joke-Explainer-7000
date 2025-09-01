@@ -69,7 +69,7 @@ import traceback
 @bot.event
 async def on_error(event, *args, **kwargs):
     # https://stackoverflow.com/a/60031624
-    await write_log('%s```py\n%s\n```'.format(event, traceback.format_exc()), embed=True)
+    await write_log('{}```py\n{}\n```'.format(event, traceback.format_exc()), embed=True)
 
 _bot_close = bot.close
 async def close_with_log(self: commands.Bot):
