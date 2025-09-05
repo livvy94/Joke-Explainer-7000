@@ -183,6 +183,16 @@ async def mypins_legacy(ctx: Context, optional_time = None):
     await filter_command(ctx, 'mypins', (lambda ctx, rip_info: rip_info["PinMiser"] == ctx.author.name), False, optional_time)
 
 
+@bot.command(name='search', brief='search for pinned rips with text in title')
+async def search(ctx: Context, search_key: str, optional_time = None):
+    """
+    Search for pinned messages by rip title.
+    Supports `|` for multiple search keys.
+    """
+    search_keys = search_key.split('|')
+    await filter_command(ctx, 'search', (lambda ctx, rip_info: any(key.lower() in rip_info["Title"].lower() for key in search_keys)), True, optional_time)
+
+
 @bot.command(name='emails', brief='displays emails')
 async def emails(ctx: Context, optional_time = None):
     """
@@ -902,6 +912,7 @@ async def help(ctx: Context):
         result = "_**YOU ARE NOW QoCING:**_\n`!roundup [embed_minutes: float]`" + roundup.brief \
             + "\n`!links` " + links.brief \
             + "\n_**Special lists:**_\n`!mypins`" + mypins.brief \
+            + "\n`!search` <arg1: str|arg2: str|...> " + search.brief \
             + "\n`!emails` " + emails.brief + "\n`!events <name: str>` " + events.brief \
             + "\n`!checks`, `!rejects`, `!wrenches`, `!stops`" \
             + "\n`!overdue` " + overdue.brief.replace('X', str(get_config('overdue_days'))) \
