@@ -190,7 +190,21 @@ async def search(ctx: Context, search_key: str, optional_time = None):
     Supports `|` for multiple search keys.
     """
     search_keys = search_key.split('|')
-    await filter_command(ctx, 'search', (lambda ctx, rip_info: any(key.lower() in rip_info["Title"].lower() for key in search_keys)), True, optional_time)
+    await filter_command(ctx, 'search', 
+            (lambda ctx, rip_info: any([line_contains_substring(rip_info["Title"], key) for key in search_keys])),
+            True, optional_time)
+
+
+@bot.command(name='search_subs', aliases = ['search_sub'], brief='search for submissions with text in title')
+async def search_subs(ctx: Context, search_key: str, sub_channel_link: str = None, optional_time = None):
+    """
+    Search for submissions by rip title.
+    Supports `|` for multiple search keys.
+    """
+    search_keys = search_key.split('|')
+    await filter_sub_command(ctx, 'search_subs', 
+            (lambda rip: any([line_contains_substring(rip.content.split("```")[0], key) for key in search_keys])), 
+            sub_channel_link, optional_time)
 
 
 @bot.command(name='emails', brief='displays emails')
@@ -214,60 +228,17 @@ async def events(ctx: Context, event: str = None, optional_time = None):
     await filter_command(ctx, 'events', (lambda ctx, rip_info: line_contains_substring(rip_info["Author"], event)), True, optional_time)
 
 
-@bot.command(name='event_subs', brief='displays event submissions from linked channel')
+@bot.command(name='event_subs', aliases = ['event_sub'], brief='displays event submissions from linked channel')
 async def event_subs(ctx: Context, event: str = None, sub_channel_link: str = None, optional_time = None):
     """
     Retrieve all messages in a submission channel that are tagged as for an event.
     The provided string must appear in the rip's author label (case insensitive)
     """
-    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
-    heard_command("event_subs", ctx.message.author.name)
-
-    if event is None:
+    if channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']) and event is None:
         await ctx.channel.send("Error: Please indicate the event name. Rips should be tagged with this name.")
         return
-
-    time, msg = parse_optional_time(ctx.channel, optional_time)
-    if msg is not None: await ctx.channel.send(msg)
-
-    sub_channel, msg = parse_channel_link(sub_channel_link, ['SUBS', 'SUBS_PIN', 'SUBS_THREAD'])
-    if len(msg) > 0:
-        await ctx.channel.send(msg)
-        if sub_channel == -1: return
-
-    async with ctx.channel.typing():
-        server = ctx.guild
-        channel = server.get_channel(sub_channel)
-
-        qoc_emote = DEFAULT_QOC
-        for e in server.emojis:
-            if e.name.lower() == "qoc":
-                qoc_emote = e
-
-        if channel_is_type(channel, 'SUBS'): t = 'msg'
-        elif channel_is_type(channel, 'SUBS_PIN'): t = 'pin'
-        elif channel_is_type(channel, 'SUBS_THREAD'): t = 'thread'
-
-        rips: typing.List[Message] = []
-        t_rips = await get_rips(channel, t)
-        for k, v in t_rips.items():
-            rips.extend(v)
-        
-        result = ""
-        for rip in rips:
-            rip_author = rip.content.split("```")[0]
-            rip_title = get_rip_title(rip)
-            rip_link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(sub_channel)}/{str(rip.id)}>"
-            if line_contains_substring(rip_author, event):
-                if any([react_is_qoc(r) for r in rip.reactions]):
-                    result += f"{qoc_emote} "
-                author = str(rip.author).split('#')[0]
-                result += f'**[{rip_title}]({rip_link})** (by {author})\n'
-
-        if len(result) == 0:
-            await ctx.channel.send("No rips found.")
-        else:
-            await send_embed(ctx.channel, result, time)
+    
+    await filter_sub_command(ctx, 'event_subs', (lambda rip: line_contains_substring(rip.content.split("```")[0], event)), sub_channel_link, optional_time)
 
 
 @bot.command(name="fresh", aliases = ['blank', 'bald', 'clean', 'noreacts'], brief='rips with no reacts yet')
@@ -919,6 +890,7 @@ async def help(ctx: Context):
             + "\n_**Misc. tools:**_\n`!count` " + count.brief \
             + "\n`!limitcheck` " + limitcheck.brief \
             + "\n`!count_subs [sub_channel: link]` " + count_subs.brief \
+            + "\n`!search_subs <arg1: str|arg2: str|...> [sub_channel: link]` " + search_subs.brief \
             + "\n`!event_subs <name: str> [sub_channel: link]` " + event_subs.brief \
             + "\n`!stats [show_queues: any]`" + stats.brief \
             + "\n`!channel_list`" + channel_list.brief \
@@ -1175,6 +1147,56 @@ async def filter_command(ctx: Context, cmd_name: str, filter_func: typing.Callab
             if filter_func(ctx, rip_info):
                 result += make_markdown(rip_info, display_reacts) # a match!
         if result == "":
+            await ctx.channel.send("No rips found.")
+        else:
+            await send_embed(ctx.channel, result, time)
+
+
+async def filter_sub_command(ctx: Context, cmd_name: str, filter_sub_func: typing.Callable, sub_channel_link: str = None, optional_time = None):
+    """
+    Unified command to roundup submissions according to a predicate.
+    `filter_sub_func` is a function accepting 1 parameter: `rip` (type Message)
+    """
+    if not channel_is_types(ctx.channel, ['ROUNDUP', 'PROXY_ROUNDUP']): return
+    heard_command(cmd_name, ctx.message.author.name)
+
+    time, msg = parse_optional_time(ctx.channel, optional_time)
+    if msg is not None: await ctx.channel.send(msg)
+
+    sub_channel, msg = parse_channel_link(sub_channel_link, ['SUBS', 'SUBS_PIN', 'SUBS_THREAD'])
+    if len(msg) > 0:
+        await ctx.channel.send(msg)
+        if sub_channel == -1: return
+
+    async with ctx.channel.typing():
+        server = ctx.guild
+        channel = server.get_channel(sub_channel)
+
+        qoc_emote = DEFAULT_QOC
+        for e in server.emojis:
+            if e.name.lower() == "qoc":
+                qoc_emote = e
+
+        if channel_is_type(channel, 'SUBS'): t = 'msg'
+        elif channel_is_type(channel, 'SUBS_PIN'): t = 'pin'
+        elif channel_is_type(channel, 'SUBS_THREAD'): t = 'thread'
+
+        rips: typing.List[Message] = []
+        t_rips = await get_rips(channel, t)
+        for k, v in t_rips.items():
+            rips.extend(v)
+        
+        result = ""
+        for rip in rips:
+            rip_title = get_rip_title(rip)
+            rip_link = f"<https://discordapp.com/channels/{str(ctx.guild.id)}/{str(sub_channel)}/{str(rip.id)}>"
+            if filter_sub_func(rip):
+                if any([react_is_qoc(r) for r in rip.reactions]):
+                    result += f"{qoc_emote} "
+                author = str(rip.author).split('#')[0]
+                result += f'**[{rip_title}]({rip_link})** (by {author})\n'
+
+        if len(result) == 0:
             await ctx.channel.send("No rips found.")
         else:
             await send_embed(ctx.channel, result, time)
