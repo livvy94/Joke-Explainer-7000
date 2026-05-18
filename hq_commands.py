@@ -780,8 +780,32 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
                         assert "Unimplemented SubOrQueueRipFilterType"
 
                 if is_valid:
+                    if rip_has_react([ReactType.ALERT], rip):
+                        emoji = reaction_name_to_emoji_string("alert", channel.guild)
+                        result += f"{emoji} "
+                    if rip_has_react([ReactType.STOP], rip):
+                        emoji = reaction_name_to_emoji_string("stop", channel.guild)
+                        result += f"{emoji} "
                     if rip_has_react([ReactType.QOC], rip):
                         result += f"{qoc_emote} "
+                    if rip_has_react([ReactType.THUMBNAIL], rip):
+                        emoji = reaction_name_to_emoji_string("thumbnail", channel.guild)
+                        result += f"{emoji} "
+                    if rip_has_react([ReactType.CHECK], rip):
+                        emoji = reaction_name_to_emoji_string("check", channel.guild)
+                        result += f"{emoji} "
+                    if rip_has_react([ReactType.METADATA], rip):
+                        emoji = reaction_name_to_emoji_string("metadata", channel.guild)
+                        result += f"{emoji} "
+                    if rip_has_react([ReactType.EMAILSENT], rip):
+                        emoji = reaction_name_to_emoji_string("emailsent", channel.guild)
+                        result += f"{emoji} "
+                    if rip_has_react([ReactType.SENDBACK], rip):
+                        emoji = reaction_name_to_emoji_string("sendback", channel.guild)
+                        result += f"{emoji} "
+                    if rip_has_react([ReactType.CALENDAR], rip):
+                        emoji = reaction_name_to_emoji_string("calendar", channel.guild)
+                        result += f"{emoji} "
                     rip_link = format_message_link(channel.guild.id, rip.channel_id, rip.message_id)
                     result += f'**[{rip_title}]({rip_link})**\n'
                     valid_count += 1
