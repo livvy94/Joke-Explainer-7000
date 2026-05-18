@@ -693,6 +693,7 @@ async def count_subs(args: list[str], command_context: CommandContext):
 class SubOrQueueRipFilterType(Enum):
     NULL = auto()
     HASREACT = auto()
+    SEARCH_REACTION = auto()
     UNSENT = auto()
     SEARCH_TITLE = auto()
     SEARCH_AUTHOR = auto()
@@ -703,6 +704,7 @@ class SubOrQueueRipFilterType(Enum):
 class SendSubOrQueueDesc(NamedTuple):
     suborqueue_rip_filter_type: SubOrQueueRipFilterType = SubOrQueueRipFilterType.NULL 
     reaction_type: ReactType = ReactType.NULL 
+    react_name: str = ""
     channel_link: str = ""
     channel_types: List[str] = []
     parsed_search_input: ParsedSearchInput = ParsedSearchInput([], False, "") 
@@ -759,6 +761,11 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
                 match(desc.suborqueue_rip_filter_type):
                     case SubOrQueueRipFilterType.HASREACT:
                         is_valid = rip_has_react([desc.reaction_type], rip)
+                    case SubOrQueueRipFilterType.SEARCH_REACTION:
+                        for react in rip.reacts:
+                            if desc.react_name == react.name:
+                                is_valid = True 
+                                break
                     case SubOrQueueRipFilterType.UNSENT:
                         is_valid = line_contains_substring(rip_author, 'email') and \
                                 not rip_has_react([ReactType.EMAILSENT, ReactType.ANTIMAIL], rip)
@@ -780,6 +787,13 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
                         assert "Unimplemented SubOrQueueRipFilterType"
 
                 if is_valid:
+                    shown_react_names = ["alert", "stop", "thumbnail", "check", "metadata", "emailsent", "sendback", "calendar"]
+                    if (
+                        desc.suborqueue_rip_filter_type == SubOrQueueRipFilterType.SEARCH_REACTION
+                        and desc.react_name not in shown_react_names 
+                    ):
+                        emoji = reaction_name_to_emoji_string(desc.react_name, channel.guild)
+                        result += f"{emoji} "
                     if rip_has_react([ReactType.ALERT], rip):
                         emoji = reaction_name_to_emoji_string("alert", channel.guild)
                         result += f"{emoji} "
@@ -788,17 +802,17 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
                         result += f"{emoji} "
                     if rip_has_react([ReactType.QOC], rip):
                         result += f"{qoc_emote} "
-                    if rip_has_react([ReactType.THUMBNAIL], rip):
-                        emoji = reaction_name_to_emoji_string("thumbnail", channel.guild)
+                    if rip_has_react([ReactType.EMAILSENT], rip):
+                        emoji = reaction_name_to_emoji_string("emailsent", channel.guild)
                         result += f"{emoji} "
                     if rip_has_react([ReactType.CHECK], rip):
                         emoji = reaction_name_to_emoji_string("check", channel.guild)
                         result += f"{emoji} "
+                    if rip_has_react([ReactType.THUMBNAIL], rip):
+                        emoji = reaction_name_to_emoji_string("thumbnail", channel.guild)
+                        result += f"{emoji} "
                     if rip_has_react([ReactType.METADATA], rip):
                         emoji = reaction_name_to_emoji_string("metadata", channel.guild)
-                        result += f"{emoji} "
-                    if rip_has_react([ReactType.EMAILSENT], rip):
-                        emoji = reaction_name_to_emoji_string("emailsent", channel.guild)
                         result += f"{emoji} "
                     if rip_has_react([ReactType.SENDBACK], rip):
                         emoji = reaction_name_to_emoji_string("sendback", channel.guild)
@@ -806,6 +820,7 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
                     if rip_has_react([ReactType.CALENDAR], rip):
                         emoji = reaction_name_to_emoji_string("calendar", channel.guild)
                         result += f"{emoji} "
+
                     rip_link = format_message_link(channel.guild.id, rip.channel_id, rip.message_id)
                     result += f'**[{rip_title}]({rip_link})**\n'
                     valid_count += 1
@@ -887,6 +902,26 @@ async def random_sub(args: list[str], command_context: CommandContext):
                               channel_types = ['SUBS', 'SUBS_PIN', 'SUBS_THREAD'])
     await send_suborqueue_rips(desc, command_context)
 
+
+@command(
+    command_type=CommandType.SUBS,
+    format="<emoji>",
+    public=True,
+    brief="Show submitted rips with an inputted react",
+    aliases=["hasreact_subs"],
+    examples=[":fire:", ":qoc:", ":sob:"],
+)
+async def hasreact_sub(args: list[str], command_context: CommandContext):
+
+    if not len(args): 
+        return await send("Error: Please include an emoji to search for. I'll show submitted rips reacted by that emoji", command_context.channel)
+
+    react_input = emoji_to_react_name_if_emoji(args[0])
+
+    desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.SEARCH_REACTION, \
+                              channel_types = ['SUBS', 'SUBS_PIN', 'SUBS_THREAD'], \
+                              react_name = react_input)
+    await send_suborqueue_rips(desc, command_context)
 
 
 @command(
@@ -978,6 +1013,26 @@ async def event_q(args: list[str], command_context: CommandContext):
                               channel_types = ['QUEUE'], \
                               parsed_search_input= parsed_search_input, \
                               not_found_message = f'No submissions {parsed_search_input.containing_error_string} in author line found.')
+    await send_suborqueue_rips(desc, command_context)
+
+
+@command(
+    command_type=CommandType.QUEUE,
+    public=True,
+    format="<emoji>",
+    brief="Show queued rips with an inputted react",
+    examples=[":fire:", ":check:", ":sob:"],
+)
+async def hasreact_q(args: list[str], command_context: CommandContext):
+
+    if not len(args): 
+        return await send("Error: Please include an emoji to search for. I'll show queued rips reacted by that emoji", command_context.channel)
+
+    react_input = emoji_to_react_name_if_emoji(args[0])
+
+    desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.SEARCH_REACTION, \
+                              channel_types = ['QUEUE'], \
+                              react_name = react_input)
     await send_suborqueue_rips(desc, command_context)
 
 
