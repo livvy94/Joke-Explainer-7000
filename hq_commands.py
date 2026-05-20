@@ -1707,6 +1707,7 @@ async def vet_url(args: list[str], command_context: CommandContext):
     command_type=CommandType.ANALYZE,
     format='<message url>',
     brief='Count # of dupes on YouTube and rip queues',
+    aliases=['dupe', 'dupes']
 )
 async def count_dupe(args: list[str], command_context: CommandContext):
 
