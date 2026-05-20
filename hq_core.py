@@ -827,13 +827,22 @@ def reaction_name_to_emoji_string(name: str, guild: discord.Guild | None) -> str
     return result
 
 def get_qoc_emoji(guild: discord.Guild) -> str:
-    qoc_emote = DEFAULT_QOC
+    emote = DEFAULT_QOC
     if guild:
         for e in guild.emojis:
             if e.name.lower() == "qoc":
-                qoc_emote = str(e)
+                emote = str(e)
                 break
-    return qoc_emote
+    return emote
+
+def get_bitrate_emoji(guild: discord.Guild) -> str:
+    emote = QOC_DEFAULT_BITRATE
+    if guild:
+        for e in guild.emojis:
+            if e.name.lower() == "bitrate":
+                emote = str(e)
+                break
+    return emote
 
 def parse_emojis_in_string(string: str, guild: discord.Guild):
 
@@ -1099,6 +1108,16 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc) -> StringAndErr
         elif message_has_react(QOC_DEFAULT_LINKERR, desc.message):
             errors = await discord_clear_reaction(QOC_DEFAULT_LINKERR, desc.message)
             error_strings.extend(errors)
+
+        bitrate_emoji_name = get_bitrate_emoji(desc.message.guild)
+        print(qoc_checks_dict[QoCCheckType.BITRATE])
+        if qoc_checks_dict[QoCCheckType.BITRATE].result == CheckResultType.FAIL:
+            errors = await discord_add_reaction(bitrate_emoji_name, desc.message)
+            error_strings.extend(errors)
+        else:
+            if message_has_react(bitrate_emoji_name, desc.message):
+                errors = await discord_clear_reaction(bitrate_emoji_name, desc.message)
+                error_strings.extend(errors)
 
     return_message = ""
     if desc.full_feedback or not everything_passed or past_vet_message:
