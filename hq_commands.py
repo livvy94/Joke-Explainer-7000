@@ -1839,28 +1839,34 @@ async def peek_url(args: list[str], command_context: CommandContext):
 
 @command(
     command_type=CommandType.SOURCE,
-    format='<message link | text>',
+    format='<message link/reply | text>',
     brief='Search for sources in rip msg or text',
     public=True
 )
 async def source(args: list[str], command_context: CommandContext):
 
-    if not len(args):
-        return await send("Error: Please provide a link to message or text formatted as a rip title to search for.", command_context.channel)
+    if not len(args) and not command_context.message_reference:
+        return await send("Error: Please provide a link to a rip message (or reply to one) OR text formatted as a rip title to lookup sources for. (Text example: slider - mario 64)", command_context.channel)
 
     async with command_context.channel.typing():
-
-        string_and_errors = await parse_channel_link_or_text(args)
-        if len(string_and_errors.error_strings):
-            return await send_if_errors("Unable to parse message link", string_and_errors.error_strings, command_context.channel)
+        text = ""
+        message_link = "" 
+        if len(args):
+            text = " ".join(args) 
+            message_link = extract_discord_link(args[0])
+        messageAndErrors = await get_message_from_referece_or_string(command_context.message_reference, message_link)
+        if len(messageAndErrors.error_strings):
+            return await send_if_errors("Errors during grabbing message", messageAndErrors.error_strings, command_context.channel)
+        if messageAndErrors.message:
+            text = messageAndErrors.message.content
 
         qoc_sheet_data = await get_qoc_sheet_data(GetQoCSheetDataDesc())
-        text = search_rip_sources(string_and_errors.string, qoc_sheet_data)
+        text = search_rip_sources(text, qoc_sheet_data)
         await send_embed(text, command_context.channel, EmbedDesc(title="Sources"))
 
 @command(
     command_type=CommandType.SOURCE,
-    format='<message link | text>',
+    format='<message link/reply | text>',
     brief='Search for QoC specialists',
     aliases=['specialist'],
     public=True
@@ -1879,8 +1885,8 @@ async def specialists(args: list[str], command_context: CommandContext):
         messageAndErrors = await get_message_from_referece_or_string(command_context.message_reference, message_link)
         if len(messageAndErrors.error_strings):
             return await send_if_errors("Errors during grabbing message", messageAndErrors.error_strings, command_context.channel)
-        assert messageAndErrors.message
-        text = messageAndErrors.message.content
+        if messageAndErrors.message:
+            text = messageAndErrors.message.content
 
         #NOTE: (Ahmayk) bypass cache so that we are guarenteed to get what is on the sheet right now
         qoc_sheet_data = await get_qoc_sheet_data(GetQoCSheetDataDesc(bypass_cache=True))
