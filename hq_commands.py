@@ -32,7 +32,7 @@ async def help(args: list[str], command_context: CommandContext):
     result = "" 
 
     prefix = get_config("prefix")
-    qoc_emote = get_qoc_emoji(command_context.channel.guild)
+    qoc_emote = react_type_to_react_name(ReactType.QOC, command_context.channel.guild)
 
     if len(args):
 
@@ -728,7 +728,7 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
     total_count = 0
     valid_count = 0
 
-    qoc_emote = get_qoc_emoji(command_context.channel.guild)
+    qoc_emote = react_type_to_react_name(ReactType.QOC, command_context.channel.guild)
 
     selected_rip_message_ids = [] 
     if desc.suborqueue_rip_filter_type == SubOrQueueRipFilterType.RANDOM: 
@@ -1650,7 +1650,7 @@ async def vet_from(args: list[str], command_context: CommandContext):
                 continue
 
             vet_desc = VetRipDesc(rip=rip)
-            vet_report = await vet_rip_or_url(rip.text, vet_desc)
+            vet_report = await vet_rip_or_url(rip.text, vet_desc, command_context.channel.guild)
             error_strings.extend(vet_report.error_strings)
             await send(vet_report.string, command_context.channel)
 
@@ -1678,7 +1678,7 @@ async def vet_msg(args: list[str], command_context: CommandContext):
             return await send(status, command_context.channel)
 
         vet_desc = VetRipDesc(message=message, use_youtube_api=True, full_feedback=True)
-        vet_report = await vet_rip_or_url(message.content, vet_desc)
+        vet_report = await vet_rip_or_url(message.content, vet_desc, message.guild)
         await send_and_if_errors(vet_report.string, "Errors during vetting:", vet_report.error_strings, command_context.channel)
 
 
@@ -1699,7 +1699,7 @@ async def vet_url(args: list[str], command_context: CommandContext):
 
     async with command_context.channel.typing():
         vet_desc = VetRipDesc(full_feedback=True)
-        vet_report = await vet_rip_or_url(urls[0], vet_desc)
+        vet_report = await vet_rip_or_url(urls[0], vet_desc, command_context.channel.guild)
         await send_and_if_errors(vet_report.string, "Errors during vetting:", vet_report.error_strings, command_context.channel)
 
 

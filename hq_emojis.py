@@ -43,6 +43,8 @@ class ReactType(Enum):
     ANTIMAIL = auto()
     SENDBACK = auto()
     CALENDAR = auto()
+    BITRATE = auto()
+    CLIPPING = auto()
 
 class ReactInfo(NamedTuple):
     default_names: list[str]
@@ -62,6 +64,8 @@ REACT_DATABASE: dict[ReactType, ReactInfo] = {
     ReactType.ANTIMAIL: ReactInfo([""], ["antimail"]),
     ReactType.SENDBACK: ReactInfo([DEFAULT_SENDBACK], ["sendback"]),
     ReactType.CALENDAR: ReactInfo([DEFAULT_CALENDAR_1, DEFAULT_CALENDAR_2, DEFAULT_CALENDAR_3], ["calendar"]),
+    ReactType.BITRATE: ReactInfo([QOC_DEFAULT_BITRATE], ["bitrate"]),
+    ReactType.CLIPPING: ReactInfo([QOC_DEFAULT_CLIPPING], ["clipping"]),
 }
 
 #NOTE: (Ahmayk) react categories where multiple emojis are valid

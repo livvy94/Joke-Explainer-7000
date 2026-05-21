@@ -662,7 +662,7 @@ def react_is(react_type: ReactType, name: str) -> bool:
         assert f"Unimplemented ReactionType {react_type}"
     return result
 
-def react_is_category(react_category: ReactCategory, name: str):
+def react_is_category(react_category: ReactCategory, name: str) -> bool:
     result = False
     name_lower = name.lower()
     match (react_category):
@@ -676,23 +676,18 @@ def react_is_category(react_category: ReactCategory, name: str):
             assert f"Unimplemented ReactionCategory {react_category}"
     return result
 
-def get_qoc_emoji(guild: discord.Guild) -> str:
-    emote = DEFAULT_QOC
-    if guild:
-        for e in guild.emojis:
-            if e.name.lower() == "qoc":
-                emote = str(e)
-                break
-    return emote
-
-def get_bitrate_emoji(guild: discord.Guild) -> str:
-    emote = QOC_DEFAULT_BITRATE
-    if guild:
-        for e in guild.emojis:
-            if e.name.lower() == "bitrate":
-                emote = str(e)
-                break
-    return emote
+def react_type_to_react_name(react_type: ReactType, guild: discord.Guild) -> str:
+    result = ""
+    if react_type in REACT_DATABASE:
+        if len(REACT_DATABASE[react_type].default_names):
+            result = REACT_DATABASE[react_type].default_names[0]
+        if guild:
+            for custom_name in REACT_DATABASE[react_type].custom_names:
+                for e in guild.emojis:
+                    if e.name.lower() == custom_name:
+                        result = str(e)
+                        break
+    return result 
 
 def react_is_one(reaction_type_list: List[ReactType], name: str) -> bool:
     for reaction_type in reaction_type_list:
@@ -915,6 +910,8 @@ def find_command_info(input: str) -> CommandInfo | None:
 #                  RIP VETTING                  #
 #===============================================#
 
+UNPIN_START_STRING = "-# :pushpin::x:"
+
 class VetRipDesc(NamedTuple):
     rip: Rip | None = None
     message: Message | None = None
@@ -923,7 +920,7 @@ class VetRipDesc(NamedTuple):
     full_feedback: bool = False
     is_new_pinned_message: bool = False
 
-async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc) -> StringAndErrors:
+async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.Guild) -> StringAndErrors:
     """
     Single function for vetting rip audio. Checks for metadata correctness and auto-QoCs rip audio for common issues.
     Accepts either the message text or a single URL to the rip audio and auto detects what to analyze.
@@ -1025,10 +1022,10 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc) -> StringAndErr
                 if rip.message_id != message_id:
                     rip_title = get_raw_rip_title(rip.text)
                     if title == rip_title:
-                        link = format_message_link(channel.guild.id, channel.id, rip.message_id)
+                        link = format_message_link(rip.guild_id, rip.channel_id, rip.message_id)
                         metadata_checks.append(QoCCheck(CheckResultType.FAIL, f"Video title already exists in <#{rip.channel_id}>: [{rip_title}]({link})."))
                     if isDupe(description, get_rip_description(rip.text), True):
-                        link = format_message_link(channel.guild.id, channel.id, rip.message_id)
+                        link = format_message_link(rip.guild_id, rip.channel_id, rip.message_id)
                         metadata_checks.append(QoCCheck(CheckResultType.FAIL, f"Main mix detected in <#{rip.channel_id}>: [{rip_title}]({link}). Add something on the author line to avoid uploading this early."))
 
             # Check for lines between the rip description and link - if it does not start with "Joke", add a warning
@@ -1047,6 +1044,10 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc) -> StringAndErr
 
     everything_passed = is_qoc_pass_all and not len(metadata_checks)
 
+    bitrate_emoji_name = react_type_to_react_name(ReactType.BITRATE, guild)
+    clipping_emoji_name = react_type_to_react_name(ReactType.CLIPPING, guild)
+    metadata_emoji_name = react_type_to_react_name(ReactType.METADATA, guild)
+
     past_vet_message = None 
     if desc.message and channel_is_types(desc.message.channel, ['QOC']):
 
@@ -1054,7 +1055,11 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc) -> StringAndErr
         error_strings.extend(after_messages_and_errors.error_strings)
         assert bot.user
         for message in after_messages_and_errors.messages:
-            if message.author.id == bot.user.id and desc.message.jump_url in message.content: 
+            if (
+                message.author.id == bot.user.id 
+                and desc.message.jump_url in message.content
+                and not message.content.startswith(UNPIN_START_STRING)
+            ):
                 past_vet_message = message
                 break
 
@@ -1070,8 +1075,6 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc) -> StringAndErr
             errors = await discord_clear_reaction(QOC_DEFAULT_LINKERR, desc.message)
             error_strings.extend(errors)
 
-        bitrate_emoji_name = get_bitrate_emoji(desc.message.guild)
-        print(qoc_checks_dict[QoCCheckType.BITRATE])
         if qoc_checks_dict[QoCCheckType.BITRATE].result == CheckResultType.FAIL:
             errors = await discord_add_reaction(bitrate_emoji_name, desc.message)
             error_strings.extend(errors)
@@ -1094,22 +1097,23 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc) -> StringAndErr
             intro_warnings.append(":warning: **Rip link not Auto-QoCed**")
 
         issue_list = []
+        fix_emoji_name = react_type_to_react_name(ReactType.FIX, guild)
         for qoc_check_type, qoc_check in qoc_checks_dict.items():
             if len(qoc_check.msg) and (desc.full_feedback or qoc_check.result != CheckResultType.PASS):
                 issue_list.append(qoc_check.msg)
 
-            if qoc_check.result == CheckResultType.FAIL and DEFAULT_FIX not in verdict_emojis:
-                verdict_emojis.append(DEFAULT_FIX)
+            if qoc_check.result == CheckResultType.FAIL and fix_emoji_name not in verdict_emojis:
+                verdict_emojis.append(fix_emoji_name)
                 if qoc_check_type == QoCCheckType.BITRATE:
-                    verdict_emojis.append(QOC_DEFAULT_BITRATE)
+                    verdict_emojis.append(bitrate_emoji_name)
                 if qoc_check_type == QoCCheckType.CLIPPING:
-                    verdict_emojis.append(QOC_DEFAULT_CLIPPING)
+                    verdict_emojis.append(clipping_emoji_name)
 
             if qoc_check.result == CheckResultType.ERROR and DEFAULT_ERROR not in verdict_emojis:
                 verdict_emojis += DEFAULT_ERROR
 
         if len(metadata_checks):
-            verdict_emojis.append(DEFAULT_METADATA)
+            verdict_emojis.append(metadata_emoji_name)
             for qoc_check in metadata_checks:
                 if len(qoc_check.msg):
                     issue_list.append(qoc_check.msg)
@@ -1140,11 +1144,11 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc) -> StringAndErr
                 is_metadata_updated = linkless_metadata_old != linkless_metadata_new 
 
                 if is_link_updated and is_metadata_updated:
-                    return_header_title = f'{QOC_DEFAULT_LINKERR}{DEFAULT_METADATA} Link and Metadata Updated'
+                    return_header_title = f'{QOC_DEFAULT_LINKERR}{metadata_emoji_name} Link and Metadata Updated'
                 elif is_link_updated:
                     return_header_title = f'{QOC_DEFAULT_LINKERR} Link Updated'
                 elif is_metadata_updated:
-                    return_header_title = f'{DEFAULT_METADATA} Metadata Updated'
+                    return_header_title = f'{metadata_emoji_name} Metadata Updated'
                 else:
                     return_header_title = f'Message Updated'
 

@@ -143,7 +143,7 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
                                         break
 
                                 formatted_rip = format_rip(rip, channel.guild, True, spec_overdue_days, overdue_days)
-                                txt += f'\n-# :pushpin::x: **{user_string}** unpinned\n{formatted_rip}'
+                                txt += f'\n{UNPIN_START_STRING} **{user_string}** unpinned\n{formatted_rip}'
 
                             rips_and_errors = await get_rips_fast(channel, GetRipsDesc())
                             error_strings.extend(rips_and_errors.error_strings)
@@ -220,7 +220,7 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
                             await send_embed(f'{source_text}\n\n{specialists_text}', channel, EmbedDesc(title="Sources"))
 
                         vet_desc = VetRipDesc(message=message, use_youtube_api=True, is_new_pinned_message=True)
-                        vet_report_and_errors = await vet_rip_or_url(rip.text, vet_desc)
+                        vet_report_and_errors = await vet_rip_or_url(rip.text, vet_desc, channel.guild)
                         error_strings.extend(vet_report_and_errors.error_strings)
 
                         if not len(vet_report_and_errors.string):
@@ -350,7 +350,7 @@ async def on_raw_message_edit(payload: discord.RawMessageUpdateEvent):
                 try:
                     desc = VetRipDesc(message=payload.message, use_youtube_api=True, \
                                     past_rip_message_content=old_text)
-                    vet_report = await vet_rip_or_url(payload.message.content, desc)
+                    vet_report = await vet_rip_or_url(payload.message.content, desc, payload.message.guild)
                     await send_if_errors("Errors while vetting:", vet_report.error_strings, payload.message.channel)
                 except Exception as error:
                     await send_crash(f'ERROR on rip vet after pin:', error, payload.message.channel)
