@@ -1270,6 +1270,29 @@ async def parse_channel_link_or_text(args: list[str]) -> StringAndErrors:
     return StringAndErrors(text, error_strings) 
 
 
+async def get_message_from_referece_or_string(message_reference: discord.MessageReference | None, message_link: str) -> MessageAndErrors:
+    message = None
+    error_strings = []
+    if message_reference:
+        if message_reference.cached_message:
+            message = message_reference.cached_message
+        else:
+            channel = bot.get_channel(message_reference.channel_id)
+            if channel:
+                message_and_errors = await discord_fetch_message(message_reference.message_id, channel)
+                message = message_and_errors.message
+                error_strings.extend(message_and_errors.error_strings)
+            else:
+                error_strings.extend("Error: Channel not found when parsing message reference")
+    
+    if message_link:
+        server, channel, message, status = await parse_message_link(message_link)
+        if message is None:
+            error_strings.append(status)
+
+    return MessageAndErrors(message, error_strings)
+
+
 async def get_qoc_channel(channel: TextChannel | Thread):
     """
     Gets the first channel labeled QOC in bot_secrets.py 

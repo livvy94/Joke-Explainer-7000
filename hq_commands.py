@@ -1669,16 +1669,20 @@ async def vet_from(args: list[str], command_context: CommandContext):
 )
 async def vet_msg(args: list[str], command_context: CommandContext):
 
-    if not len(args):
-        return await send("Error: Please provide a link to message.", command_context.channel)
+    if not len(args) and not command_context.message_reference:
+        return await send("Error: Please reply to a message or provide a link to message.", command_context.channel)
 
     async with command_context.channel.typing():
-        server, channel, message, status = await parse_message_link(args[0])
-        if message is None:
-            return await send(status, command_context.channel)
+        message_link = ""
+        if len(args):
+            message_link = args[0]
+        messageAndErrors = await get_message_from_referece_or_string(command_context.message_reference, message_link)
+        if len(messageAndErrors.error_strings):
+            return await send_if_errors("Errors during grabbing message")
 
-        vet_desc = VetRipDesc(message=message, use_youtube_api=True, full_feedback=True)
-        vet_report = await vet_rip_or_url(message.content, vet_desc, message.guild)
+        assert messageAndErrors.message
+        vet_desc = VetRipDesc(message=messageAndErrors.message, use_youtube_api=True, full_feedback=True)
+        vet_report = await vet_rip_or_url(messageAndErrors.message.content, vet_desc, messageAndErrors.message.guild)
         await send_and_if_errors(vet_report.string, "Errors during vetting:", vet_report.error_strings, command_context.channel)
 
 
@@ -1872,7 +1876,6 @@ async def specalists(args: list[str], command_context: CommandContext):
 
 @command(
     command_type=CommandType.SOURCE,
-    format='<message link | text>',
     brief='Post link to QoC specialist spreadsheet.',
     aliases=['specialistsheet', 'sheet'],
 )
