@@ -1663,14 +1663,14 @@ async def vet_from(args: list[str], command_context: CommandContext):
 
 @command(
     command_type=CommandType.ANALYZE,
-    format='<message link>',
+    format='<message link/reply>',
     brief='Vet rip in message link',
     desc='The first non-YouTube link found in the message is treated as the rip URL.'
 )
 async def vet_msg(args: list[str], command_context: CommandContext):
 
     if not len(args) and not command_context.message_reference:
-        return await send("Error: Please reply to a message or provide a link to message.", command_context.channel)
+        return await send("Error: Please reply to a message or provide a link to message. I'll check that message for QoC issues (clipping, low bitrate, metdata issues, etc).", command_context.channel)
 
     async with command_context.channel.typing():
         message_link = ""
@@ -1678,9 +1678,9 @@ async def vet_msg(args: list[str], command_context: CommandContext):
             message_link = args[0]
         messageAndErrors = await get_message_from_referece_or_string(command_context.message_reference, message_link)
         if len(messageAndErrors.error_strings):
-            return await send_if_errors("Errors during grabbing message")
-
+            return await send_if_errors("Errors during grabbing message", messageAndErrors.error_strings, command_context.channel)
         assert messageAndErrors.message
+
         vet_desc = VetRipDesc(message=messageAndErrors.message, use_youtube_api=True, full_feedback=True)
         vet_report = await vet_rip_or_url(messageAndErrors.message.content, vet_desc, messageAndErrors.message.guild)
         await send_and_if_errors(vet_report.string, "Errors during vetting:", vet_report.error_strings, command_context.channel)
@@ -1709,65 +1709,75 @@ async def vet_url(args: list[str], command_context: CommandContext):
 
 @command(
     command_type=CommandType.ANALYZE,
-    format='<message url>',
+    format='<message url/reply>',
     brief='Count # of dupes on YouTube and rip queues',
     aliases=['dupe', 'dupes']
 )
 async def count_dupe(args: list[str], command_context: CommandContext):
 
-    if not len(args):
-        return await send("Error: Please provide a link to message.", command_context.channel)
+    if not len(args) and not command_context.message_reference:
+        return await send("Error: Please reply to a message or provide a link to message. I'll count how many of that rip are in rip queues and on the YouTube channel.", command_context.channel)
 
-    server, channel, message, status = await parse_message_link(args[0])
-    if message is None:
-        return await send(status, command_context.channel)
+    async with command_context.channel.typing():
+        message_link = ""
+        if len(args):
+            message_link = args[0]
+        messageAndErrors = await get_message_from_referece_or_string(command_context.message_reference, message_link)
+        if len(messageAndErrors.error_strings):
+            return await send_if_errors("Errors during grabbing message", messageAndErrors.error_strings, command_context.channel)
+        message = messageAndErrors.message
+        assert message
 
-    playlistId = extract_playlist_id('\n'.join(message.content.splitlines()[1:])) # ignore author line
-    description = get_rip_description(message.content)
-    rip_title = get_rip_title(message.content)
+        playlistId = extract_playlist_id('\n'.join(message.content.splitlines()[1:])) # ignore author line
+        description = get_rip_description(message.content)
+        rip_title = get_rip_title(message.content)
 
-    p, msg = await run_blocking(countDupe, description, YOUTUBE_CHANNEL_NAME, playlistId, YOUTUBE_API_KEY)
-    if len(msg) > 0:
-        await send(msg, command_context.channel)
+        p, msg = await run_blocking(countDupe, description, YOUTUBE_CHANNEL_NAME, playlistId, YOUTUBE_API_KEY)
+        if len(msg) > 0:
+            await send(msg, command_context.channel)
 
-    error_strings = []
+        error_strings = []
 
-    q = 0
-    queue_channels = get_channel_ids_of_types(['QUEUE'])
-    for queue_channel_id in queue_channels:
-        queue_channel = server.get_channel(queue_channel_id)
-        if queue_channel:
-            rips_and_errors = await get_rips_fast(queue_channel, GetRipsDesc(typing_channel=command_context.channel))
-            error_strings.extend(rips_and_errors.error_strings)
-            #TODO: (Ahmayk) return errors
-            q += sum([isDupe(description, get_rip_description(r.text)) for r in rips_and_errors.rips if r.message_id != message.id])
+        q = 0
+        queue_channels = get_channel_ids_of_types(['QUEUE'])
+        for queue_channel_id in queue_channels:
+            queue_channel = bot.get_channel(queue_channel_id)
+            if queue_channel:
+                rips_and_errors = await get_rips_fast(queue_channel, GetRipsDesc(typing_channel=command_context.channel))
+                error_strings.extend(rips_and_errors.error_strings)
+                q += sum([isDupe(description, get_rip_description(r.text)) for r in rips_and_errors.rips if r.message_id != message.id])
 
-    # https://codegolf.stackexchange.com/questions/4707/outputting-ordinal-numbers-1st-2nd-3rd#answer-4712 how
-    ordinal = lambda n: "%d%s" % (n,"tsnrhtdd"[(n//10%10!=1)*(n%10<4)*n%10::4])
+        # https://codegolf.stackexchange.com/questions/4707/outputting-ordinal-numbers-1st-2nd-3rd#answer-4712 how
+        ordinal = lambda n: "%d%s" % (n,"tsnrhtdd"[(n//10%10!=1)*(n%10<4)*n%10::4])
 
-    txt = f"**Rip**: **{rip_title}**\nFound {p + q} rips of the same track ({p} on the channel, {q} in queues). This is the {ordinal(p + q + 1)} rip of this track." 
-    await send_and_if_errors(txt, "Errors during processing dupes.", error_strings, command_context.channel)
+        txt = f"**Rip**: **{rip_title}**\nFound {p + q} rips of the same track ({p} on the channel, {q} in queues). This is the {ordinal(p + q + 1)} rip of this track." 
+        await send_and_if_errors(txt, "Errors during processing dupes.", error_strings, command_context.channel)
 
 
 @command(
     command_type=CommandType.ANALYZE,
-    format='<message url>',
+    format='<message url/reply>',
     brief='Get rip audio metadata from message url',
     desc='The first non-YouTube link found in the message is treated as the rip URL.'
 )
 async def peek_msg(args: list[str], command_context: CommandContext):
 
-    if not len(args):
-        return await send("Error: Please provide a link to message.", command_context.channel)
+    if not len(args) and not command_context.message_reference:
+        return await send("Error: Please reply to a message or provide a link to a message. I'll lookup audio metadata info of the audio link", command_context.channel)
 
     async with command_context.channel.typing():
-        server, channel, message, status = await parse_message_link(args[0])
-        if message is None:
-            return await send(status, command_context.channel)
+        message_link = ""
+        if len(args):
+            message_link = args[0]
+        messageAndErrors = await get_message_from_referece_or_string(command_context.message_reference, message_link)
+        if len(messageAndErrors.error_strings):
+            return await send_if_errors("Errors during grabbing message", messageAndErrors.error_strings, command_context.channel)
+        message = messageAndErrors.message
+        assert message
         
         rip_title = get_rip_title(message.content)
 
-        #TODO: (Ahmayk) making a new command that uses ffprob instead
+        #TODO: (Ahmayk) making a new command that uses ffprobe instead
         use_ffprobe = len(args) > 1
         
         urls = extract_rip_link(message.content)
@@ -1855,20 +1865,26 @@ async def source(args: list[str], command_context: CommandContext):
     aliases=['specialist'],
     public=True
 )
-async def specalists(args: list[str], command_context: CommandContext):
+async def specialists(args: list[str], command_context: CommandContext):
 
-    if not len(args):
-        return await send("Error: Please provide a link to message or text formatted as a rip title to search for.", command_context.channel)
+    if not len(args) and not command_context.message_reference:
+        return await send("Error: Please provide a link to a rip message (or reply to one) OR text formatted as a rip title to lookup specialists for. (Text example: slider - mario 64)", command_context.channel)
 
     async with command_context.channel.typing():
-
-        string_and_errors = await parse_channel_link_or_text(args)
-        if len(string_and_errors.error_strings):
-            return await send_if_errors("Unable to parse message link", string_and_errors.error_strings, command_context.channel)
+        text = ""
+        message_link = "" 
+        if len(args):
+            text = " ".join(args) 
+            message_link = extract_discord_link(args[0])
+        messageAndErrors = await get_message_from_referece_or_string(command_context.message_reference, message_link)
+        if len(messageAndErrors.error_strings):
+            return await send_if_errors("Errors during grabbing message", messageAndErrors.error_strings, command_context.channel)
+        assert messageAndErrors.message
+        text = messageAndErrors.message.content
 
         #NOTE: (Ahmayk) bypass cache so that we are guarenteed to get what is on the sheet right now
         qoc_sheet_data = await get_qoc_sheet_data(GetQoCSheetDataDesc(bypass_cache=True))
-        text = search_specialists(string_and_errors.string, qoc_sheet_data, command_context.channel.guild)
+        text = search_specialists(text, qoc_sheet_data, command_context.channel.guild)
         if len(text):
             await send_embed(text, command_context.channel, EmbedDesc(title="Specialists"))
         else:
