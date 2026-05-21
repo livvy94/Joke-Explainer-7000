@@ -54,27 +54,6 @@ class Rip(NamedTuple):
     reacts: List[React]
     created_at: datetime
 
-class ReactType(Enum):
-    NULL = auto()
-    GOLDCHECK = auto()
-    CHECKREQ = auto()
-    CHECK = auto()
-    FIX = auto()
-    REJECT = auto()
-    STOP = auto()
-    ALERT = auto()
-    QOC = auto()
-    METADATA = auto()
-    THUMBNAIL = auto()
-    EMAILSENT = auto()
-    ANTIMAIL = auto()
-    SENDBACK = auto()
-    NUMBER = auto()
-    CALENDAR = auto()
-
-REVIEW_REACT_LIST = [ReactType.CHECK, ReactType.GOLDCHECK, ReactType.FIX, ReactType.ALERT, ReactType.REJECT]
-FIX_REACT_LIST = [ReactType.FIX, ReactType.ALERT]
-
 #===============================================#
 #                AndErrors Types                #
 #===============================================#
@@ -673,47 +652,47 @@ async def remove_rip_from_cache(message_id: int, channel_id: int):
 #                    REACTS
 #===============================================#
 
-KEYCAP_EMOJIS = {'2️⃣': 2, '3️⃣': 3, '4️⃣': 4, '5️⃣': 5, '6️⃣': 6, '7️⃣': 7, '8️⃣': 8, '9️⃣': 9, '🔟': 10}
-
-def react_is(reaction_type: ReactType, name: str) -> bool:
+def react_is(react_type: ReactType, name: str) -> bool:
     result = False
     name_lower = name.lower()
-    match (reaction_type):
-        case ReactType.GOLDCHECK:
-            result = name_lower == "goldcheck" or name_lower == DEFAULT_GOLDCHECK
-        case ReactType.CHECKREQ:
-            result = name_lower.endswith("check") and name_lower[0].isdigit()
-        case ReactType.CHECK:
-            if not react_is(ReactType.GOLDCHECK, name) and not react_is(ReactType.CHECKREQ, name):
-                result = name_lower == "check" or name_lower == DEFAULT_CHECK
-        case ReactType.FIX:
-            result = name_lower == "fix" or name_lower == "wrench" or name_lower == DEFAULT_FIX
-        case ReactType.REJECT:
-            result = name_lower == "reject" or name_lower == DEFAULT_REJECT
-        case ReactType.STOP:
-            result = name_lower == "stop" or name_lower == "octagonal" or name_lower == DEFAULT_STOP
-        case ReactType.ALERT:
-            result = name_lower == "alert" or name_lower == DEFAULT_ALERT
-        case ReactType.QOC:
-            result = name_lower == "qoc" or name_lower == DEFAULT_QOC
-        case ReactType.METADATA:
-            result = name_lower == "metadata" or name_lower == DEFAULT_METADATA
-        case ReactType.THUMBNAIL:
-            result = name_lower == "thumbnail" or name_lower == DEFAULT_THUMBNAIL
-        case ReactType.EMAILSENT:
-            result = name_lower == "emailsent"
-        case ReactType.ANTIMAIL:
-            result = name_lower == "antimail"
-        case ReactType.SENDBACK:
-            result = name_lower == "sendback" or name_lower == DEFAULT_SENDBACK
-        case ReactType.NUMBER:
-            result = name in KEYCAP_EMOJIS
-        case ReactType.CALENDAR:
-            result = "calendar" in name_lower or name_lower in [DEFAULT_CALENDAR_1, DEFAULT_CALENDAR_2, DEFAULT_CALENDAR_3] 
-        case _:
-            assert "Unimplemented ReactionType"
-
+    if react_type in REACT_DATABASE:
+        result = (name_lower in REACT_DATABASE[react_type].default_names) \
+                  or (name_lower in REACT_DATABASE[react_type].custom_names)
+    else:
+        assert f"Unimplemented ReactionType {react_type}"
     return result
+
+def react_is_category(react_category: ReactCategory, name: str):
+    result = False
+    name_lower = name.lower()
+    match (react_category):
+        case ReactCategory.CHECKREQ:
+            result = name_lower.endswith("check") and name_lower[0].isdigit()
+            if (result):
+                print(f"{name} is checkreq!" )
+        case ReactCategory.NUMBER:
+            result = name in KEYCAP_EMOJIS
+        case _:
+            assert f"Unimplemented ReactionCategory {react_category}"
+    return result
+
+def get_qoc_emoji(guild: discord.Guild) -> str:
+    emote = DEFAULT_QOC
+    if guild:
+        for e in guild.emojis:
+            if e.name.lower() == "qoc":
+                emote = str(e)
+                break
+    return emote
+
+def get_bitrate_emoji(guild: discord.Guild) -> str:
+    emote = QOC_DEFAULT_BITRATE
+    if guild:
+        for e in guild.emojis:
+            if e.name.lower() == "bitrate":
+                emote = str(e)
+                break
+    return emote
 
 def react_is_one(reaction_type_list: List[ReactType], name: str) -> bool:
     for reaction_type in reaction_type_list:
@@ -825,24 +804,6 @@ def reaction_name_to_emoji_string(name: str, guild: discord.Guild | None) -> str
                 result = str(emoji)
                 break
     return result
-
-def get_qoc_emoji(guild: discord.Guild) -> str:
-    emote = DEFAULT_QOC
-    if guild:
-        for e in guild.emojis:
-            if e.name.lower() == "qoc":
-                emote = str(e)
-                break
-    return emote
-
-def get_bitrate_emoji(guild: discord.Guild) -> str:
-    emote = QOC_DEFAULT_BITRATE
-    if guild:
-        for e in guild.emojis:
-            if e.name.lower() == "bitrate":
-                emote = str(e)
-                break
-    return emote
 
 def parse_emojis_in_string(string: str, guild: discord.Guild):
 
@@ -1570,11 +1531,6 @@ def format_rip(rip: Rip, guild: discord.Guild, make_smol: bool, spec_overdue_day
     for react_and_user in rip.reacts:
         if react_is(ReactType.GOLDCHECK, react_and_user.name):
             num_goldchecks += 1
-        elif react_is(ReactType.CHECKREQ, react_and_user.name):
-            try:
-                checks_required = int(react_and_user.name.split("check")[0])
-            except ValueError:
-                print("Error parsing checkreq react: {}".format(react_and_user.name))
         elif react_is(ReactType.CHECK, react_and_user.name):
             num_checks += 1
         elif react_is(ReactType.REJECT, react_and_user.name):
@@ -1583,7 +1539,12 @@ def format_rip(rip: Rip, guild: discord.Guild, make_smol: bool, spec_overdue_day
             fix_or_alert = True
         elif react_is(ReactType.STOP, react_and_user.name):
             specs_needed = True
-        elif react_is(ReactType.NUMBER, react_and_user.name):
+        elif react_is_category(ReactCategory.CHECKREQ, react_and_user.name):
+            try:
+                checks_required = int(react_and_user.name.split("check")[0])
+            except ValueError:
+                print("Error parsing checkreq react: {}".format(react_and_user.name))
+        elif react_is_category(ReactCategory.NUMBER, react_and_user.name):
             specs_required = KEYCAP_EMOJIS[react_and_user.name]
 
         reacts += reaction_name_to_emoji_string(react_and_user.name, guild) 

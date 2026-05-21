@@ -385,7 +385,7 @@ async def mysaveqoc(args: list[str], command_context: CommandContext):
 async def search(args: list[str], command_context: CommandContext):
 
     if not len(args):
-        return await send("Error: Inclue what you want to search for! I'll search for it in the titles of QoC rips.", \
+        return await send("Error: Include what you want to search for! I'll search for it in the titles of QoC rips.", \
                            command_context.channel)
 
     parsed_search_input = parse_search_input(args)
@@ -849,7 +849,7 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
 async def search_subs(args: list[str], command_context: CommandContext):
 
     if not len(args):
-        return await send("Error: Inclue what you want to search for! I'll search for it in the titles of submitted rips.", \
+        return await send("Error: Include what you want to search for! I'll search for it in the titles of submitted rips.", \
                            command_context.channel)
 
     parsed_search_input = parse_search_input(args)
@@ -983,7 +983,7 @@ async def unsent(args: list[str], command_context: CommandContext):
 async def search_q(args: list[str], command_context: CommandContext):
 
     if not len(args):
-        return await send("Error: Inclue what you want to search for! I'll search for it in the titles of accepted queued rips.", \
+        return await send("Error: Include what you want to search for! I'll search for it in the titles of accepted queued rips.", \
                            command_context.channel)
 
     parsed_search_input = parse_search_input(args)
