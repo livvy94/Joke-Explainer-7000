@@ -13,35 +13,32 @@ from hq_discord import *
 from hq_react import *
 from hq_strings import *
 
-JE_DATABASE = shelve.open("je_cache", writeback=True)
+JE_DATABASE = shelve.open("je_database", writeback=True)
 
-RIP_CACHE_KEY = "RIP_CACHE_KEY"
-USER_REACT_CACHE_KEY = "USER_REACT_CACHE_KEY"
+RIP_CACHE: dict[int, dict[int, Rip]] = {}
+USER_REACT_CACHE: dict[int, dict[React, List[int]]] = {}
 
 async def open_je_database():
-    if RIP_CACHE_KEY not in JE_DATABASE:
-        await write_log("Creating New Database...")
-        JE_DATABASE[RIP_CACHE_KEY] = {}
-        JE_DATABASE[USER_REACT_CACHE_KEY] = {}
+    pass
 
 def init_channel_cache(channel_id: int):
-    if channel_id not in JE_DATABASE[RIP_CACHE_KEY]:
-        JE_DATABASE[RIP_CACHE_KEY][channel_id] = {}
+    if channel_id not in RIP_CACHE:
+        RIP_CACHE[channel_id] = {}
 
 def cache_rip_in_message(message: Message):
     rip = init_rip(message)
     init_channel_cache(message.channel.id)
-    JE_DATABASE[RIP_CACHE_KEY][message.channel.id][message.id] = rip
+    RIP_CACHE[message.channel.id][message.id] = rip
     return rip
 
 def cache_user_react_data(user_react_data: dict[React, List[int]], message_id: int):
     if len(user_react_data):
-        if message_id not in JE_DATABASE[USER_REACT_CACHE_KEY]:
-            JE_DATABASE[USER_REACT_CACHE_KEY][message_id] = {} 
+        if message_id not in USER_REACT_CACHE:
+            USER_REACT_CACHE[message_id] = {} 
         for react, user_ids in user_react_data.items():
-            JE_DATABASE[USER_REACT_CACHE_KEY][message_id][react] = []
+            USER_REACT_CACHE[message_id][react] = []
             for user_id in user_ids:
-                JE_DATABASE[USER_REACT_CACHE_KEY][message_id][react].append(user_id) 
+                USER_REACT_CACHE[message_id][react].append(user_id) 
 
 CACHE_LOCK_CHANNEL: dict[int, asyncio.Lock] = {}
 CACHE_LOCK_MESSAGE: dict[int, asyncio.Lock] = {}
@@ -81,12 +78,6 @@ DATABASE_LOCK = asyncio.Lock()
 async def lock_channel_then_update_database(channel_id: int, error_strings: list[str], typing_channel: TextChannel | Thread | None):
     async with _lock(channel_id, CACHE_LOCK_CHANNEL, error_strings, typing_channel):
         yield
-        ##NOTE: (Ahmayk) This is the only place where the database writes to disk other than bot.close()
-        #to avoid exessive writes 
-        #This could get us into trouble if bot closes without calling it's closing function?
-        await DATABASE_LOCK.acquire()
-        JE_DATABASE.sync()
-        DATABASE_LOCK.release()
 
 @asynccontextmanager
 async def lock_message(message_id: int, error_strings: list[str], typing_channel: TextChannel | Thread | None):
@@ -155,8 +146,8 @@ def format_reaction_cache_error(text: str, post_text: str, react: React, message
 def validate_rip_message(message: Message, user_react_data: dict[React, List[int]]) -> str:
     result = ""
 
-    if message.id in JE_DATABASE[RIP_CACHE_KEY][message.channel.id]:
-        cached_rip = JE_DATABASE[RIP_CACHE_KEY][message.channel.id][message.id]
+    if message.id in RIP_CACHE[message.channel.id]:
+        cached_rip = RIP_CACHE[message.channel.id][message.id]
         refetched_rip = init_rip(message)
 
         if cached_rip.text != refetched_rip.text:
@@ -182,20 +173,20 @@ def validate_rip_message(message: Message, user_react_data: dict[React, List[int
     channel_info = get_channel_info(message.channel)
     if channel_info.is_cache_qoc:
 
-        if len(user_react_data) and message.id not in JE_DATABASE[USER_REACT_CACHE_KEY]:
+        if len(user_react_data) and message.id not in USER_REACT_CACHE:
             result += f'\n**User react dict not initialied for ${message.jump_url}**' 
-            JE_DATABASE[USER_REACT_CACHE_KEY][message.id] = {}
+            USER_REACT_CACHE[message.id] = {}
 
         for react, user_ids in user_react_data.items(): 
-            if react not in JE_DATABASE[USER_REACT_CACHE_KEY][message.id]:
+            if react not in USER_REACT_CACHE[message.id]:
                 result += format_reaction_cache_error(f'User react dict missing in user react cache.', '', react, message)
             else:
                 for user_id in user_ids:
-                    if user_id not in JE_DATABASE[USER_REACT_CACHE_KEY][message.id][react]:
+                    if user_id not in USER_REACT_CACHE[message.id][react]:
                         result += format_reaction_cache_error(f'User ID dict missing in user react cache.', f'({user_id})', react, message)
 
-        if message.id in JE_DATABASE[USER_REACT_CACHE_KEY]:
-            for react, user_ids in JE_DATABASE[USER_REACT_CACHE_KEY][message.id].copy().items():
+        if message.id in USER_REACT_CACHE:
+            for react, user_ids in USER_REACT_CACHE[message.id].copy().items():
                 if len(user_ids) and react_needs_user_cache(react):
                     if react not in user_react_data:
                         result += format_reaction_cache_error(f'User react data outdated in user react cache.', f'{user_ids}', react, message)
@@ -267,14 +258,14 @@ async def process_rip_channel(channel: TextChannel | Thread, is_validate_message
                         string_and_errors = await process_rip_channel(message.thread, False, typing_channel)
                         return_message += string_and_errors.string
                         error_strings.extend(string_and_errors.error_strings)
-                        if len(JE_DATABASE[RIP_CACHE_KEY][message.thread.id]):
-                            thread_rips = list(JE_DATABASE[RIP_CACHE_KEY][message.thread.id].values())
+                        if len(RIP_CACHE[message.thread.id]):
+                            thread_rips = list(RIP_CACHE[message.thread.id].values())
                             thread_rips.sort(key = lambda rip: rip.created_at, reverse=True)
                             #NOTE: (Ahmayk) we insert thread rips also in its parent channel dict so that
                             #we get all rips in theads when we get the parent channel's rips 
                             for thread_rip in thread_rips:
                                 async with lock_message(thread_rip.message_id, error_strings, None):
-                                    JE_DATABASE[RIP_CACHE_KEY][channel.id][thread_rip.message_id] = thread_rip 
+                                    RIP_CACHE[channel.id][thread_rip.message_id] = thread_rip 
                 else:
                     string_and_errors = await process_rip_message(message, False, is_validate_message, typing_channel)
                     return_message += string_and_errors.string
@@ -308,12 +299,12 @@ async def get_rips(channel: TextChannel | Thread, desc: GetRipsDesc) -> RipsAndE
     ## it is being updated, it would likely be incomplete or wrong! 
     async with lock_channel_then_update_database(channel.id, error_strings, desc.typing_channel):
 
-        if not len(JE_DATABASE[RIP_CACHE_KEY][channel.id]) or desc.rebuild_cache:
+        if not len(RIP_CACHE[channel.id]) or desc.rebuild_cache:
             async with desc.typing_channel.typing() if desc.typing_channel is not None else empty_async_context():
                 string_and_errors = await process_rip_channel(channel, False, desc.typing_channel)
                 error_strings.extend(string_and_errors.error_strings)
 
-    rips = list(JE_DATABASE[RIP_CACHE_KEY][channel.id].values())
+    rips = list(RIP_CACHE[channel.id].values())
 
     ##NOTE: (Ahmayk) show rips in expected order, newest at top
     rips.sort(key = lambda rip: rip.created_at, reverse=True)
@@ -338,7 +329,7 @@ async def get_rips_fast(channel: TextChannel | Thread, desc: GetRipsDesc) -> Rip
         error_strings = rips_and_errors.error_strings
 
     else:
-        if len(JE_DATABASE[RIP_CACHE_KEY][channel.id]) and (not channel.id in CACHE_LOCK_CHANNEL or not CACHE_LOCK_CHANNEL[channel.id].locked()):
+        if len(RIP_CACHE[channel.id]) and (not channel.id in CACHE_LOCK_CHANNEL or not CACHE_LOCK_CHANNEL[channel.id].locked()):
             rips_and_errors = await get_rips(channel, desc)
             rips = rips_and_errors.rips
             error_strings = rips_and_errors.error_strings
@@ -403,7 +394,7 @@ async def rebuild_cache_for_channel(channel_id: int) -> StringAndErrors:
 
     return StringAndErrors(return_message, error_strings) 
 
-async def rebuild_cache_all() -> StringAndErrors:
+async def rebuild_cache_if_needed() -> StringAndErrors:
 
     return_message = ""
     error_strings = []
@@ -429,10 +420,10 @@ async def remove_rip_from_cache(message_id: int, channel_id: int):
     ##so that we can then remove whatever was being processed
     ##TODO: (Ahmayk) return errors (tho do we need to?)
     async with lock_message(message_id, [], None):
-        if channel_id in JE_DATABASE[RIP_CACHE_KEY] and message_id in JE_DATABASE[RIP_CACHE_KEY][channel_id]: 
-            JE_DATABASE[RIP_CACHE_KEY][channel_id].pop(message_id)
-        if message_id in JE_DATABASE[USER_REACT_CACHE_KEY]:
-            JE_DATABASE[USER_REACT_CACHE_KEY].pop(message_id)
+        if channel_id in RIP_CACHE and message_id in RIP_CACHE[channel_id]: 
+            RIP_CACHE[channel_id].pop(message_id)
+        if message_id in USER_REACT_CACHE:
+            USER_REACT_CACHE.pop(message_id)
 
     CACHE_LOCK_MESSAGE.pop(message_id)
 
@@ -444,14 +435,14 @@ async def user_is_react(user_react_check_type: UserReactCheckType, user_id: int,
 
     async with lock_message(rip.message_id, error_strings, typing_channel):
 
-        if rip.message_id not in JE_DATABASE[USER_REACT_CACHE_KEY]:
-            JE_DATABASE[USER_REACT_CACHE_KEY][rip.message_id] = {} 
+        if rip.message_id not in USER_REACT_CACHE:
+            USER_REACT_CACHE[rip.message_id] = {} 
 
         react_list = user_react_check_type_to_react_list(user_react_check_type)
 
         fetch_user_ids = False 
         for react in rip.reacts:
-            if react_is_one(react_list, react.name) and react not in JE_DATABASE[USER_REACT_CACHE_KEY][rip.message_id]:
+            if react_is_one(react_list, react.name) and react not in USER_REACT_CACHE[rip.message_id]:
                 fetch_user_ids = True
                 break
 
@@ -475,8 +466,8 @@ async def user_is_react(user_react_check_type: UserReactCheckType, user_id: int,
         for react in rip.reacts:
             if react_is_one(react_list, react.name):
                 # NOTE: (Ahmayk) if the react isn't in the cache then we programmed something wrong
-                assert react in JE_DATABASE[USER_REACT_CACHE_KEY][rip.message_id]
-                if user_id in JE_DATABASE[USER_REACT_CACHE_KEY][rip.message_id][react]:
+                assert react in USER_REACT_CACHE[rip.message_id]
+                if user_id in USER_REACT_CACHE[rip.message_id][react]:
                     result = True
                     break
 

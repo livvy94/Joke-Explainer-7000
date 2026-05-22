@@ -63,14 +63,16 @@ async def on_ready():
     print(f'Logged in as {bot.user.name}')
     print('#################################')
 
-    await write_log("Good morning!")
+    await write_log("Good morning! Connecting to Google Sheets API...")
 
     #NOTE: (Ahmayk) fetch sheet data on init to initialize credentials info and make sure that works
     await get_qoc_sheet_data(GetQoCSheetDataDesc())
 
     await open_je_database()
 
-    await rebuild_cache_all()
+    await write_log("Caching rips...")
+
+    await rebuild_cache_if_needed()
 
     await write_log('Validating cache...')
     string_and_errors = await validate_cache_all()
@@ -126,8 +128,8 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
                             current_message_ids.append(message.id)
 
                         rips_to_remove: List[Rip] = []
-                        if channel.id in JE_DATABASE[RIP_CACHE_KEY]:
-                            for message_id, rip in JE_DATABASE[RIP_CACHE_KEY][channel.id].items():
+                        if channel.id in RIP_CACHE:
+                            for message_id, rip in RIP_CACHE[channel.id].items():
                                 if message_id not in current_message_ids:
                                     rips_to_remove.append(rip)
 
@@ -255,7 +257,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
         if is_qoc_channel or is_suborqueue_channel:
 
             async with lock_channel_then_update_database(payload.channel_id, error_strings, None):
-                in_cache = payload.channel_id in JE_DATABASE[RIP_CACHE_KEY] and payload.message_id in JE_DATABASE[RIP_CACHE_KEY][payload.channel_id]
+                in_cache = payload.channel_id in RIP_CACHE and payload.message_id in RIP_CACHE[payload.channel_id]
                 if in_cache: 
 
                     async with lock_message(payload.message_id, error_strings, None):
@@ -270,14 +272,14 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
                             rip = cache_rip_in_message(message)
                             if is_qoc_channel and message.pinned:
 
-                                if rip.message_id not in JE_DATABASE[USER_REACT_CACHE_KEY]: 
-                                    JE_DATABASE[USER_REACT_CACHE_KEY][rip.message_id] = {} 
+                                if rip.message_id not in USER_REACT_CACHE: 
+                                    USER_REACT_CACHE[rip.message_id] = {} 
 
                                 react = React(payload.emoji.id or 0, payload.emoji.name)
-                                if react not in JE_DATABASE[USER_REACT_CACHE_KEY][rip.message_id]: 
-                                    JE_DATABASE[USER_REACT_CACHE_KEY][rip.message_id][react] = [] 
+                                if react not in USER_REACT_CACHE[rip.message_id]: 
+                                    USER_REACT_CACHE[rip.message_id][react] = [] 
 
-                                JE_DATABASE[USER_REACT_CACHE_KEY][rip.message_id][react].append(payload.user_id) 
+                                USER_REACT_CACHE[rip.message_id][react].append(payload.user_id) 
 
 
 
@@ -288,15 +290,15 @@ async def process_suborqueue_rip_caching(message: Message):
 
 
 async def remove_reaction_from_cache(channel_id: int, message_id: int, emoji: discord.PartialEmoji, user_id: int | None, remove_all: bool):
-    in_rip_cache = channel_id in JE_DATABASE[RIP_CACHE_KEY] and message_id in JE_DATABASE[RIP_CACHE_KEY][channel_id]
-    in_user_react_cache = message_id in JE_DATABASE[USER_REACT_CACHE_KEY]
+    in_rip_cache = channel_id in RIP_CACHE and message_id in RIP_CACHE[channel_id]
+    in_user_react_cache = message_id in USER_REACT_CACHE
     if in_rip_cache or in_user_react_cache:
         async with lock_message(message_id, [], None):
 
             react = React(emoji.id or 0, emoji.name)
 
             if in_rip_cache:
-                rip = JE_DATABASE[RIP_CACHE_KEY][channel_id][message_id]
+                rip = RIP_CACHE[channel_id][message_id]
                 for cached_react in rip.reacts:
                     if cached_react == react:
                         rip.reacts.remove(cached_react)
@@ -305,12 +307,12 @@ async def remove_reaction_from_cache(channel_id: int, message_id: int, emoji: di
 
             if in_user_react_cache: 
                 if user_id and \
-                    react in JE_DATABASE[USER_REACT_CACHE_KEY][message_id] and \
-                    user_id in JE_DATABASE[USER_REACT_CACHE_KEY][message_id][react]:
-                    JE_DATABASE[USER_REACT_CACHE_KEY][message_id][react].remove(user_id)
+                    react in USER_REACT_CACHE[message_id] and \
+                    user_id in USER_REACT_CACHE[message_id][react]:
+                    USER_REACT_CACHE[message_id][react].remove(user_id)
                 
-                if remove_all or not len(JE_DATABASE[USER_REACT_CACHE_KEY][message_id]):
-                    JE_DATABASE[USER_REACT_CACHE_KEY].pop(message_id)
+                if remove_all or not len(USER_REACT_CACHE[message_id]):
+                    USER_REACT_CACHE.pop(message_id)
 
 @bot.event
 async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
@@ -322,14 +324,14 @@ async def on_raw_reaction_clear_emoji(payload: discord.RawReactionClearEmojiEven
 
 @bot.event
 async def on_raw_reaction_clear(payload: discord.RawReactionClearEvent):
-    in_rip_cache = payload.channel_id in JE_DATABASE[RIP_CACHE_KEY] and payload.message_id in JE_DATABASE[RIP_CACHE_KEY][payload.channel_id]
-    in_user_react_cache = payload.message_id in JE_DATABASE[USER_REACT_CACHE_KEY]
+    in_rip_cache = payload.channel_id in RIP_CACHE and payload.message_id in RIP_CACHE[payload.channel_id]
+    in_user_react_cache = payload.message_id in USER_REACT_CACHE
     if in_rip_cache or in_user_react_cache:
         async with lock_message(payload.message_id, [], None):
             if in_rip_cache: 
-                JE_DATABASE[RIP_CACHE_KEY][payload.channel_id][payload.message_id].reacts.clear()
+                RIP_CACHE[payload.channel_id][payload.message_id].reacts.clear()
             if in_user_react_cache: 
-                JE_DATABASE[USER_REACT_CACHE_KEY].pop(payload.message_id)
+                USER_REACT_CACHE.pop(payload.message_id)
 
 
 @bot.event
@@ -339,13 +341,13 @@ async def on_raw_message_delete(payload: discord.RawMessageDeleteEvent):
 
 @bot.event
 async def on_raw_message_edit(payload: discord.RawMessageUpdateEvent):
-    if payload.channel_id in JE_DATABASE[RIP_CACHE_KEY] and payload.message_id in JE_DATABASE[RIP_CACHE_KEY][payload.channel_id]: 
+    if payload.channel_id in RIP_CACHE and payload.message_id in RIP_CACHE[payload.channel_id]: 
         error_strings: list[str] = []
         async with lock_message(payload.message_id, error_strings, None):
-            rip = JE_DATABASE[RIP_CACHE_KEY][payload.channel_id][payload.message_id]
+            rip = RIP_CACHE[payload.channel_id][payload.message_id]
             old_text = rip.text
             rip = rip._replace(text = payload.message.content)
-            JE_DATABASE[RIP_CACHE_KEY][payload.channel_id][payload.message_id] = rip
+            RIP_CACHE[payload.channel_id][payload.message_id] = rip
         if len(error_strings):
             await send_if_errors("Error on updating edited rip:", error_strings, payload.message.channel)
 
