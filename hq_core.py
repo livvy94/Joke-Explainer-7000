@@ -1075,7 +1075,10 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
             errors = await discord_clear_reaction(QOC_DEFAULT_LINKERR, desc.message)
             error_strings.extend(errors)
 
-        if qoc_checks_dict[QoCCheckType.BITRATE].result == CheckResultType.FAIL:
+        if (
+            QoCCheckType.BITRATE in qoc_checks_dict
+            and qoc_checks_dict[QoCCheckType.BITRATE].result == CheckResultType.FAIL
+        ):
             errors = await discord_add_reaction(bitrate_emoji_name, desc.message)
             error_strings.extend(errors)
         else:
