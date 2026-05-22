@@ -16,6 +16,7 @@ from enum import Enum, auto
 from typing import NamedTuple, List, Tuple
 
 from hq_react import *
+from hq_discord import FloatAndErrors
 
 #=======================================#
 #           TYPES AND CONSTANTS         #
@@ -101,6 +102,31 @@ def ffprobeUrl(validUrl: str):
         raise QoCException("ERROR: ffprobe failed to run (make sure the command 'ffprobe' can run).")
     
     return json.loads(probeOutput)
+
+def ffprobeGetLengthInSeconds(validUrl: str) -> FloatAndErrors:
+    probeOutput: bytes = b""
+    error_strings: list[str] = []
+    try:
+        probeOutput = subprocess.check_output([
+            'ffprobe',
+            '-v', 'quiet',
+            '-show_entries',
+            'format=duration',
+            '-of',
+            'default=noprint_wrappers=1:nokey=1',
+            validUrl,
+        ])
+    except Exception as error:
+        error_strings.append(f"ERROR on ffprobe: {error}")
+
+    duration = 0.0
+    if not len(error_strings):
+        try:
+            duration = float(probeOutput.decode().strip())
+        except ValueError:
+            error_strings.append("ERROR: Could not parse duration from ffprobe output")
+
+    return FloatAndErrors(duration, error_strings)
 
 
 def ffmpegToWAV(filepath: str, wav_filepath: str):
@@ -783,6 +809,43 @@ def getFileMetadataFfprobe(url: str) -> Tuple[int, str]:
         return (-1, '\n'.join(errors))
 
     return (0, metadata)
+
+
+##TODO: (Ahmayk) Compress, enum for ffprobe or mutagen
+#single file download and remove function
+def getAudioLengthInSecondsFFprobe(url: str) -> FloatAndErrors: 
+    duration = 0.0
+    error_strings = []
+    try:
+        downloadableUrl = parseUrl(url)
+    except QoCException as e:
+        error_strings.append(e.message)
+
+    if not len(error_strings):
+
+        if not os.path.exists(DOWNLOAD_DIR):
+            os.mkdir(DOWNLOAD_DIR)
+        
+        filepath = None
+        errors = []
+
+        try:
+            filepath = downloadAudioFromUrl(downloadableUrl)
+            DEBUG("Downloaded audio: " + Path(filepath).name)
+        except QoCException as e:
+            errors.append(e.message)
+        else:
+            floatAndErrors = ffprobeGetLengthInSeconds(filepath)
+            duration = floatAndErrors.result
+            error_strings.extend(floatAndErrors.error_strings)
+        finally:
+            if filepath:
+                os.remove(filepath)
+
+        if len(errors) > 0:
+            error_strings.append('\n'.join(errors))
+
+    return FloatAndErrors(duration, error_strings) 
 
 
 #=======================================#

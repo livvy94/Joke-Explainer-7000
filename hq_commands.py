@@ -4,7 +4,7 @@ from discord import TextChannel, Thread, Guild
 from datetime import datetime, timezone, timedelta
 
 from bot_secrets import YOUTUBE_API_KEY, YOUTUBE_CHANNEL_NAME
-from simpleQoC.qoc import ffmpegExists, getFileMetadataMutagen, getFileMetadataFfprobe
+from simpleQoC.qoc import ffmpegExists, getFileMetadataMutagen, getFileMetadataFfprobe, getAudioLengthInSecondsFFprobe 
 from simpleQoC.metadata import countDupe, isDupe
 from sourceFinder import search_rip_sources 
 
@@ -1936,6 +1936,42 @@ async def peek_url(args: list[str], command_context: CommandContext):
         else:
             await send(f'**File metadata**:\n{msg}', command_context.channel)
 
+
+@command(
+    command_type=CommandType.ANALYZE,
+    format='<message url/reply>',
+    brief='Get length in seconds of rip audio in message',
+)
+async def length_msg(args: list[str], command_context: CommandContext):
+
+    if not len(args) and not command_context.message_reference:
+        return await send("Error: Please reply to a message or provide a link to a message. I'll lookup how long the audio is in the rip.", command_context.channel)
+
+    async with command_context.channel.typing():
+        message_link = ""
+        if len(args):
+            message_link = args[0]
+        messageAndErrors = await get_message_from_referece_or_string(command_context.message_reference, message_link)
+        if len(messageAndErrors.error_strings):
+            return await send_if_errors("Errors during grabbing message", messageAndErrors.error_strings, command_context.channel)
+        message = messageAndErrors.message
+        assert message
+        
+        rip_title = get_rip_title(message.content)
+
+        urls = extract_rip_link(message.content)
+        return_message = ""
+        error_strings = []
+        for url in urls:
+            if not ffmpegExists():
+                return await send("ffmpeg not found on remote. Please contact developers.", command_context.channel)
+            floatAndErrors = await run_blocking(getAudioLengthInSecondsFFprobe, url)
+            if not len(floatAndErrors.error_strings):
+                return_message += f'{rip_title}:\n**{floatAndErrors.result} seconds.**'
+            else:
+                error_strings.extend(floatAndErrors.error_strings)
+
+        await send_and_if_errors(return_message, "Errors on getting length", error_strings, command_context.channel)
 
 @command(
     command_type=CommandType.SOURCE,

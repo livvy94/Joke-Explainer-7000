@@ -50,6 +50,10 @@ class BoolAndErrors(NamedTuple):
     result: bool
     error_strings: List[str]
 
+class FloatAndErrors(NamedTuple):
+    result: float 
+    error_strings: List[str]
+
 class AuditLogEntriesAndErrors(NamedTuple):
     audit_log_entires: List[discord.AuditLogEntry] 
     error_strings: List[str]
