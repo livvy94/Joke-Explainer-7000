@@ -10,8 +10,8 @@ import traceback
 
 from contextlib import asynccontextmanager
 
-from hq_types import *
-from hq_config import *
+from hq_types import Rip, React 
+from hq_config import * 
 from hq_strings import *
 
 import discord

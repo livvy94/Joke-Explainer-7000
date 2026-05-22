@@ -4,12 +4,13 @@ from discord import TextChannel, Thread, Guild
 from datetime import datetime, timezone, timedelta
 
 from bot_secrets import YOUTUBE_API_KEY, YOUTUBE_CHANNEL_NAME
-from simpleQoC.qoc import performQoC, ffmpegExists, getFileMetadataMutagen, getFileMetadataFfprobe
+from simpleQoC.qoc import ffmpegExists, getFileMetadataMutagen, getFileMetadataFfprobe
 from simpleQoC.metadata import countDupe, isDupe
 from sourceFinder import search_rip_sources 
 
 from hq_types import *
 from hq_config import *
+from hq_discord import *
 from hq_react import *
 from hq_rip import *
 from hq_vet import * 

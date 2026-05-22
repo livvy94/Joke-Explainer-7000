@@ -1,8 +1,12 @@
-from typing import NamedTuple
+from typing import NamedTuple, List
 from enum import Enum, auto
+import discord
+from discord import Message
+import re
 
-from hq_types import * 
-from hq_discord import * 
+from hq_types import Rip, React 
+from hq_config import get_config 
+from hq_discord import UserReactDictAndErrors, log_exception 
 
 APPROVED_INDICATOR = '🔥'
 AWAITING_SPECIALIST_INDICATOR = '♨️'

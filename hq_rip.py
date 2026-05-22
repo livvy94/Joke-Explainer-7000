@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 import asyncio
 
 from hq_config import *
+from hq_types import Rip, React 
 from hq_discord import *
 from hq_react import *
 from hq_strings import *
