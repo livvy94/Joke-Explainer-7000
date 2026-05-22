@@ -7,12 +7,12 @@ from datetime import datetime, timezone, timedelta, time
 
 import typing
 from typing import List
+import random 
 
-import discord
-from discord.abc import GuildChannel
 from hq_config import *
-from hq_core import *
+from hq_vet import *
 from hq_sheets import * 
+from hq_commands import CommandContext, find_command_info
 from sourceFinder import search_rip_sources 
 
 #===============================================#

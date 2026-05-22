@@ -8,8 +8,11 @@ from simpleQoC.qoc import performQoC, ffmpegExists, getFileMetadataMutagen, getF
 from simpleQoC.metadata import countDupe, isDupe
 from sourceFinder import search_rip_sources 
 
-from hq_core import *
+from hq_types import *
 from hq_config import *
+from hq_react import *
+from hq_rip import *
+from hq_vet import * 
 from hq_sheets import * 
 
 import re
@@ -19,6 +22,88 @@ from enum import Enum, auto
 import json
 import os
 import random
+
+class CommandType(Enum):
+    NULL = auto()
+    QOC = auto()
+    SUBS = auto()
+    QUEUE = auto()
+    STATS = auto()
+    ANALYZE = auto()
+    SOURCE = auto()
+    SECRET = auto()
+    MANAGEMENT = auto()
+
+class CommandTypeData(NamedTuple):
+    desc: str
+
+COMMAND_TYPE_DATA = {}
+COMMAND_TYPE_DATA[CommandType.QOC] = CommandTypeData('get info on pinned rips in a QoC channel')
+COMMAND_TYPE_DATA[CommandType.SUBS] = CommandTypeData('get info on rips in submission channels')
+COMMAND_TYPE_DATA[CommandType.QUEUE] = CommandTypeData('get info on rips in approved queues')
+COMMAND_TYPE_DATA[CommandType.STATS] = CommandTypeData('get miscellaneous info on all rips')
+COMMAND_TYPE_DATA[CommandType.ANALYZE] = CommandTypeData('analyze rip metadata or audio for common issues')
+COMMAND_TYPE_DATA[CommandType.SOURCE] = CommandTypeData('search for rip sources from online VGM databases')
+COMMAND_TYPE_DATA[CommandType.MANAGEMENT] = CommandTypeData('manage or learn about the bot')
+
+class CommandContext(NamedTuple):
+    channel: TextChannel | Thread 
+    user: discord.User 
+    message_reference: discord.MessageReference
+
+class CommandInfo(NamedTuple):
+    name: str
+    func: typing.Callable[[list[str], CommandContext], typing.Awaitable[typing.NoReturn]]
+    command_type: CommandType
+    public: bool 
+    admin: bool 
+    brief: str
+    desc: str
+    format: str
+    aliases: List[str]
+    examples: List[str]
+
+COMMANDS: dict[str, CommandInfo] = {}
+
+##NOTE: (Ahmayk) This nonsense is so that we can have a simpler way of defining commands
+def command(
+    command_type: CommandType = CommandType.NULL,
+    public: bool = False,
+    admin: bool = False,
+    brief: str = "",
+    desc: str = "",
+    format: str = "",
+    aliases: list[str] = [],
+    examples: list[str] = [],
+) -> typing.Callable:
+    def decorator(func: typing.Callable) -> typing.Callable:
+        COMMANDS[func.__name__] = CommandInfo(
+            name=func.__name__,
+            func=func,
+            command_type=command_type,
+            public=public,
+            admin=admin,
+            brief=brief,
+            desc=desc,
+            format=format,
+            aliases=aliases,
+            examples=examples,
+        )
+        return func
+    return decorator
+
+
+def find_command_info(input: str) -> CommandInfo | None:
+    command_info = None
+    if input in COMMANDS:
+        command_info = COMMANDS[input]
+    else:
+        for info in COMMANDS.values():
+            if input in info.aliases:
+                command_info = info
+                break
+    return command_info 
+
 
 @command(
     command_type=CommandType.MANAGEMENT,
@@ -123,6 +208,15 @@ async def help(args: list[str], command_context: CommandContext):
 
 # ============ Roundup commands ============== #
 
+def choose_random_rips(rips: List[Rip], random_count: int) -> List[int]:
+    result = []
+    random.shuffle(rips)
+    ##NOTE: (Ahmayk) consider default 0 as 1, clamp by rip size
+    clamped_count = min(max(1, random_count), len(rips))
+    for i in range(clamped_count):
+        result.append(rips[i].message_id)
+    return result
+
 class RoundupFilterType(Enum):
     NULL = auto()
     MYPINS = auto()
@@ -218,8 +312,10 @@ async def send_roundup(roundup_desc: RoundupDesc, command_context: CommandContex
                 is_valid = rip_has_react([ReactType.CHECK], rip) and \
                             rip_has_react([ReactType.REJECT], rip)
             case RoundupFilterType.SEARCH_TITLE:
+                is_valid = False 
                 title = get_rip_title(rip.text)
-                is_valid = search_with_parsed_input(title, roundup_desc.parsed_search_input) 
+                if title:
+                    is_valid = search_with_parsed_input(title, roundup_desc.parsed_search_input) 
             case RoundupFilterType.SEARCH_AUTHOR:
                 author = get_rip_author(rip.text, rip.message_author_name)
                 is_valid = search_with_parsed_input(author, roundup_desc.parsed_search_input) 
@@ -770,15 +866,17 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
                         is_valid = line_contains_substring(rip_author, 'email') and \
                                 not rip_has_react([ReactType.EMAILSENT, ReactType.ANTIMAIL], rip)
                     case SubOrQueueRipFilterType.SEARCH_TITLE:
-                        is_valid = search_with_parsed_input(rip_title, desc.parsed_search_input) 
+                        if rip_title:
+                            is_valid = search_with_parsed_input(rip_title, desc.parsed_search_input) 
                     case SubOrQueueRipFilterType.SEARCH_AUTHOR:
                         is_valid = search_with_parsed_input(rip_author, desc.parsed_search_input) 
                     case SubOrQueueRipFilterType.SCOUT:
                         is_valid = False
-                        for key in desc.parsed_search_input.search_keys:
-                            if rip_title.lower().startswith(key.lower()):
-                                is_valid = True
-                                break
+                        if rip_title:
+                            for key in desc.parsed_search_input.search_keys:
+                                if rip_title.lower().startswith(key.lower()):
+                                    is_valid = True
+                                    break
                     case SubOrQueueRipFilterType.ALL:
                         is_valid = True
                     case SubOrQueueRipFilterType.RANDOM:
@@ -1088,14 +1186,15 @@ async def scout_stats(args: list[str], command_context: CommandContext):
 
     for rip in rips_and_errors.rips:
         rip_title = get_raw_rip_title(rip.text)
-        prefix = rip_title.lower()[0]
-        if prefix in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ':  # isalpha becomes fucked with unicode characters i think
-            count[prefix.upper()] += 1
-        else:
-            if prefix in count.keys():
-                count[prefix] += 1
+        if rip_title:
+            prefix = rip_title.lower()[0]
+            if prefix in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ':  # isalpha becomes fucked with unicode characters i think
+                count[prefix.upper()] += 1
             else:
-                count[prefix] = 1
+                if prefix in count.keys():
+                    count[prefix] += 1
+                else:
+                    count[prefix] = 1
     
     result = ""
     maxCount = max(max(count.values()), 20)

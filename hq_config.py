@@ -43,9 +43,6 @@ def get_channel_config(id: int):
     # dummy value
     return ChannelConfig("`[Channel Not Found]`", id, [], False)
 
-def get_log_channel():
-    configs = _read_config_file()
-    return configs[LOG_CHANNEL_KEY] if LOG_CHANNEL_KEY in configs.keys() else -1
 
 def add_channel(name: str, id: int, types: List[str]):
     configs = _read_config_file()
@@ -100,6 +97,10 @@ def set_config(config: str, value):
     
     configs[config] = value
     _write_config_file(configs)
+
+def get_log_channel():
+    configs = _read_config_file()
+    return configs[LOG_CHANNEL_KEY] if LOG_CHANNEL_KEY in configs.keys() else -1
 
 # ============ Local functions ============== #
 # hey i should probably use locks on these

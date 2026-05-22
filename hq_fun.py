@@ -1,5 +1,5 @@
-from hq_core import *
 from hq_config import *
+from hq_commands import *
 
 @command(
     command_type=CommandType.SECRET,

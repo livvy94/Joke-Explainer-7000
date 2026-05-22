@@ -15,7 +15,7 @@ import numpy as np
 from enum import Enum, auto
 from typing import NamedTuple, List, Tuple
 
-from hq_emojis import *
+from hq_react import *
 
 #=======================================#
 #           TYPES AND CONSTANTS         #

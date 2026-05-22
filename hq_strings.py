@@ -109,7 +109,8 @@ def get_raw_rip_title(text: str) -> str | None:
     return rip_title
 
 
-def get_rip_title(text: str) -> str:
+#TODO: (Ahmayk) don't return None, return empty string
+def get_rip_title(text: str) -> str | None:
     """
     Wrapper function to format unusual or spoiler rip titles
     """
