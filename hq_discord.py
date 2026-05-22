@@ -252,13 +252,12 @@ async def write_log(msg: str = "Placeholder message", embed: bool = False):
         msg += "\nError fetching log channel: {}".format(e.text)
     except discord.NotFound:
         pass
-    
-    with open('logs.txt', 'a', encoding='utf-8') as file:
+
+    with open('bot_logs.txt', 'a', encoding='utf-8') as file:
         file.write(datetime.now(timezone.utc).strftime('%m/%d/%y %I:%M %p'))
         file.write('\n')
         file.write(msg)
         file.write('\n=========================================\n')
-
 
 async def send_crash(txt: str, error: Exception, channel: TextChannel | Thread | None):
     error_string = f"{type(error).__name__}: {error}"
