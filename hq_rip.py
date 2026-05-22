@@ -17,21 +17,14 @@ from hq_strings import *
 # ===============================================#
 
 RIP_CACHE: dict[int, dict[int, Rip]] = {}
+USER_REACT_CACHE: dict[int, dict[React, List[int]]] = {}
 
 def init_channel_cache(channel_id: int):
     if channel_id not in RIP_CACHE:
         RIP_CACHE[channel_id] = {}
 
-# NOTE: (Ahmayk) Dummy async context that we can call instead in the case where
-# we do not input a channel for channel.typing()
-@asynccontextmanager
-async def empty_async_context():
-    yield
-
-
 CACHE_LOCK_CHANNEL: dict[int, asyncio.Lock] = {}
 CACHE_LOCK_MESSAGE: dict[int, asyncio.Lock] = {}
-USER_REACT_CACHE: dict[int, dict[React, List[int]]] = {}
 
 # NOTE: (Ahmayk) Locking on either a channel or message cache allows us to manage congruent process and commands
 ## without one reading from or writing into the cache with outdated info
@@ -400,23 +393,42 @@ async def rebuild_cache_for_channel(channel_id: int) -> StringAndErrors:
 
     return StringAndErrors(return_message, error_strings) 
 
+# import the Shelve module
+import shelve
+
 async def rebuild_cache_all() -> StringAndErrors:
 
     return_message = ""
     error_strings = []
 
+    # create a shelf file
+    shelve_file = shelve.open("je_cache")
+    # shelve_file = {} 
+
     channel_ids_qoc = get_channel_ids_of_types(['QOC'])
     channel_ids_all = get_channel_ids_of_types(['QOC', 'SUBS', 'SUBS_PIN', 'SUBS_THREAD', 'QUEUE'])
     for channel_id in channel_ids_all:
         if channel_id not in channel_ids_qoc:
+            if str(channel_id) in shelve_file:
+                RIP_CACHE[channel_id] = shelve_file['rip_cache'][str(channel_id)]
+            else:
+                string_and_errors = await rebuild_cache_for_channel(channel_id)
+                return_message += f'\n{string_and_errors.string}'
+                error_strings.extend(string_and_errors.error_strings)
+                if channel_id in RIP_CACHE:
+                    shelve_file['rip_cache'][str(channel_id)] = RIP_CACHE[channel_id]
+
+    for channel_id in channel_ids_qoc:
+        if str(channel_id) in shelve_file:
+            RIP_CACHE[channel_id] = shelve_file['rip_cache'][str(channel_id)]
+        else:
             string_and_errors = await rebuild_cache_for_channel(channel_id)
             return_message += f'\n{string_and_errors.string}'
             error_strings.extend(string_and_errors.error_strings)
+            if channel_id in RIP_CACHE:
+                shelve_file['rip_cache'][str(channel_id)] = RIP_CACHE[channel_id]
 
-    for channel_id in channel_ids_qoc:
-        string_and_errors = await rebuild_cache_for_channel(channel_id)
-        return_message += f'\n{string_and_errors.string}'
-        error_strings.extend(string_and_errors.error_strings)
+    shelve_file.close()
 
     return StringAndErrors(return_message, error_strings) 
 
