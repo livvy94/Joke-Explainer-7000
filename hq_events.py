@@ -68,8 +68,6 @@ async def on_ready():
     #NOTE: (Ahmayk) fetch sheet data on init to initialize credentials info and make sure that works
     await get_qoc_sheet_data(GetQoCSheetDataDesc())
 
-    await open_je_database()
-
     await write_log("Caching rips...")
 
     await rebuild_cache_if_needed()

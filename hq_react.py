@@ -28,6 +28,7 @@ DEFAULT_CALENDAR_1 = '📆'
 DEFAULT_CALENDAR_2 = '📅'
 DEFAULT_CALENDAR_3 = '🗓️' 
 DEFAULT_PIN = '📌'
+DEFAULT_JINGLE = '🔔' 
 
 QOC_DEFAULT_LINKERR = '🔗'
 QOC_DEFAULT_BITRATE = '🔢'
@@ -52,12 +53,13 @@ class ReactType(Enum):
     CALENDAR = auto()
     BITRATE = auto()
     CLIPPING = auto()
+    JINGLE = auto()
 
 class ReactInfo(NamedTuple):
     default_names: list[str]
     custom_names: list[str]
 
-REACT_DATABASE: dict[ReactType, ReactInfo] = {
+REACT_INFOS: dict[ReactType, ReactInfo] = {
     ReactType.GOLDCHECK: ReactInfo([DEFAULT_GOLDCHECK], ["goldcheck"]),
     ReactType.CHECK: ReactInfo([DEFAULT_CHECK], ["check"]),
     ReactType.FIX: ReactInfo([DEFAULT_FIX], ["fix", "wrench"]),
@@ -73,6 +75,7 @@ REACT_DATABASE: dict[ReactType, ReactInfo] = {
     ReactType.CALENDAR: ReactInfo([DEFAULT_CALENDAR_1, DEFAULT_CALENDAR_2, DEFAULT_CALENDAR_3], ["calendar"]),
     ReactType.BITRATE: ReactInfo([QOC_DEFAULT_BITRATE], ["bitrate"]),
     ReactType.CLIPPING: ReactInfo([QOC_DEFAULT_CLIPPING], ["clipping"]),
+    ReactType.JINGLE: ReactInfo([DEFAULT_JINGLE], ["jinglebell"]),
 }
 
 #NOTE: (Ahmayk) react categories where multiple emojis are valid
@@ -105,9 +108,9 @@ def init_react(reaction: discord.Reaction) -> React:
 def react_is(react_type: ReactType, name: str) -> bool:
     result = False
     name_lower = name.lower()
-    if react_type in REACT_DATABASE:
-        result = (name_lower in REACT_DATABASE[react_type].default_names) \
-                  or (name_lower in REACT_DATABASE[react_type].custom_names)
+    if react_type in REACT_INFOS:
+        result = (name_lower in REACT_INFOS[react_type].default_names) \
+                  or (name_lower in REACT_INFOS[react_type].custom_names)
     else:
         assert f"Unimplemented ReactionType {react_type}"
     return result
@@ -128,11 +131,11 @@ def react_is_category(react_category: ReactCategory, name: str) -> bool:
 
 def react_type_to_react_name(react_type: ReactType, guild: discord.Guild) -> str:
     result = ""
-    if react_type in REACT_DATABASE:
-        if len(REACT_DATABASE[react_type].default_names):
-            result = REACT_DATABASE[react_type].default_names[0]
+    if react_type in REACT_INFOS:
+        if len(REACT_INFOS[react_type].default_names):
+            result = REACT_INFOS[react_type].default_names[0]
         if guild:
-            for custom_name in REACT_DATABASE[react_type].custom_names:
+            for custom_name in REACT_INFOS[react_type].custom_names:
                 for e in guild.emojis:
                     if e.name.lower() == custom_name:
                         result = str(e)

@@ -5,7 +5,6 @@ from enum import Enum, auto
 
 from contextlib import asynccontextmanager
 import asyncio
-import shelve 
 
 from hq_config import *
 from hq_types import Rip, React 
@@ -13,13 +12,8 @@ from hq_discord import *
 from hq_react import *
 from hq_strings import *
 
-JE_DATABASE = shelve.open("je_database", writeback=True)
-
 RIP_CACHE: dict[int, dict[int, Rip]] = {}
 USER_REACT_CACHE: dict[int, dict[React, List[int]]] = {}
-
-async def open_je_database():
-    pass
 
 def init_channel_cache(channel_id: int):
     if channel_id not in RIP_CACHE:

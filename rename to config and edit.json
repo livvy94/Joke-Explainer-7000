@@ -14,6 +14,7 @@
     "pin_limit": 250,
     "soft_pin_limit": 50,
     "auto_source_on_pin": true,
+    "jingle_length_in_seconds": 30,
     "channels": [
         {
             "name": "qoc",

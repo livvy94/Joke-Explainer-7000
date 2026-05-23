@@ -4,7 +4,7 @@ from discord import TextChannel, Thread, Guild
 from datetime import datetime, timezone, timedelta
 
 from bot_secrets import YOUTUBE_API_KEY, YOUTUBE_CHANNEL_NAME
-from simpleQoC.qoc import ffmpegExists, getFileMetadataMutagen, getFileMetadataFfprobe, getAudioLengthInSecondsFFprobe 
+from simpleQoC.qoc import ffmpegExists, getFileMetadataMutagen, getFileMetadataFfprobe 
 from simpleQoC.metadata import countDupe, isDupe
 from sourceFinder import search_rip_sources 
 
@@ -15,6 +15,7 @@ from hq_react import *
 from hq_rip import *
 from hq_vet import * 
 from hq_sheets import * 
+from hq_database import * 
 
 import re
 import typing
@@ -1957,17 +1958,16 @@ async def length_msg(args: list[str], command_context: CommandContext):
         message = messageAndErrors.message
         assert message
         
-        rip_title = get_rip_title(message.content)
-
+        jingle_length_in_seconds = get_config("jingle_length_in_seconds")
         urls = extract_rip_link(message.content)
         return_message = ""
         error_strings = []
         for url in urls:
-            if not ffmpegExists():
-                return await send("ffmpeg not found on remote. Please contact developers.", command_context.channel)
-            floatAndErrors = await run_blocking(getAudioLengthInSecondsFFprobe, url)
+            floatAndErrors = await get_rip_url_length(url, GetRipUrlLengthDesc())
             if not len(floatAndErrors.error_strings):
-                return_message += f'{rip_title}:\n**{floatAndErrors.result} seconds.**'
+                rip_title = get_rip_title(message.content)
+                return_message += f'{rip_title}\n'
+                return_message += format_rip_timecode(floatAndErrors.result, command_context.channel.guild, jingle_length_in_seconds) 
             else:
                 error_strings.extend(floatAndErrors.error_strings)
 
