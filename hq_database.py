@@ -18,6 +18,7 @@ class GetRipUrlLengthDesc(NamedTuple):
     force_download: bool = False
 
 async def get_rip_url_length(url: str, desc: GetRipUrlLengthDesc) -> FloatAndErrors: 
+    duration = 0.0
     error_strings = []
 
     rip_length_key = "RIP_LENGTH"
@@ -30,6 +31,7 @@ async def get_rip_url_length(url: str, desc: GetRipUrlLengthDesc) -> FloatAndErr
         if not len(floatAndErrors.error_strings):
             await DATABASE_LOCK.acquire()
             try:
+                duration = floatAndErrors.value
                 JE_DATABASE[rip_length_key][url] = floatAndErrors.value
                 JE_DATABASE.sync()
             finally:
@@ -37,7 +39,7 @@ async def get_rip_url_length(url: str, desc: GetRipUrlLengthDesc) -> FloatAndErr
         else:
             error_strings.extend(floatAndErrors.error_strings)
 
-    return FloatAndErrors(JE_DATABASE[rip_length_key][url], error_strings)
+    return FloatAndErrors(duration, error_strings)
 
 def format_rip_timecode(seconds: float, guild: Guild, jingle_length_in_seconds: float) -> str:
     jingle_emoji = ""

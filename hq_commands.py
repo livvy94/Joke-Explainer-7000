@@ -1774,13 +1774,9 @@ async def vet_msg(args: list[str], command_context: CommandContext):
         return await send("Error: Please reply to a message or provide a link to message. I'll check that message for QoC issues (clipping, low bitrate, metdata issues, etc).", command_context.channel)
 
     async with command_context.channel.typing():
-        message_link = ""
-        if len(args):
-            message_link = args[0]
-        messageAndErrors = await get_message_from_referece_or_string(command_context.message_reference, message_link)
+        messageAndErrors = await get_message_from_referece_or_args(command_context.message_reference, args)
         if len(messageAndErrors.error_strings):
             return await send_if_errors("Errors during grabbing message", messageAndErrors.error_strings, command_context.channel)
-        assert messageAndErrors.message
 
         vet_desc = VetRipDesc(message=messageAndErrors.message, use_youtube_api=True, full_feedback=True)
         vet_report = await vet_rip_or_url(messageAndErrors.message.content, vet_desc, messageAndErrors.message.guild)
@@ -1820,14 +1816,10 @@ async def count_dupe(args: list[str], command_context: CommandContext):
         return await send("Error: Please reply to a message or provide a link to message. I'll count how many of that rip are in rip queues and on the YouTube channel.", command_context.channel)
 
     async with command_context.channel.typing():
-        message_link = ""
-        if len(args):
-            message_link = args[0]
-        messageAndErrors = await get_message_from_referece_or_string(command_context.message_reference, message_link)
+        messageAndErrors = await get_message_from_referece_or_args(command_context.message_reference, args)
         if len(messageAndErrors.error_strings):
             return await send_if_errors("Errors during grabbing message", messageAndErrors.error_strings, command_context.channel)
         message = messageAndErrors.message
-        assert message
 
         playlistId = extract_playlist_id('\n'.join(message.content.splitlines()[1:])) # ignore author line
         description = get_rip_description(message.content)
@@ -1867,14 +1859,10 @@ async def peek_msg(args: list[str], command_context: CommandContext):
         return await send("Error: Please reply to a message or provide a link to a message. I'll lookup audio metadata info of the audio link", command_context.channel)
 
     async with command_context.channel.typing():
-        message_link = ""
-        if len(args):
-            message_link = args[0]
-        messageAndErrors = await get_message_from_referece_or_string(command_context.message_reference, message_link)
+        messageAndErrors = await get_message_from_referece_or_args(command_context.message_reference, args)
         if len(messageAndErrors.error_strings):
             return await send_if_errors("Errors during grabbing message", messageAndErrors.error_strings, command_context.channel)
         message = messageAndErrors.message
-        assert message
         
         rip_title = get_rip_title(message.content)
 
@@ -1909,7 +1897,7 @@ async def peek_msg(args: list[str], command_context: CommandContext):
 async def peek_url(args: list[str], command_context: CommandContext):
 
     if not len(args):
-        return await send("Error: Please provide a link to message.", command_context.channel)
+        return await send("Error: Please provide a file url. I'll show that audio file's metadata", command_context.channel)
 
     urls = extract_rip_link(args[0])
 
@@ -1949,14 +1937,10 @@ async def length_msg(args: list[str], command_context: CommandContext):
         return await send("Error: Please reply to a message or provide a link to a message. I'll lookup how long the audio is in the rip.", command_context.channel)
 
     async with command_context.channel.typing():
-        message_link = ""
-        if len(args):
-            message_link = args[0]
-        messageAndErrors = await get_message_from_referece_or_string(command_context.message_reference, message_link)
+        messageAndErrors = await get_message_from_referece_or_args(command_context.message_reference, args)
         if len(messageAndErrors.error_strings):
             return await send_if_errors("Errors during grabbing message", messageAndErrors.error_strings, command_context.channel)
         message = messageAndErrors.message
-        assert message
         
         jingle_length_in_seconds = get_config("jingle_length_in_seconds")
         urls = extract_rip_link(message.content)
@@ -1973,6 +1957,44 @@ async def length_msg(args: list[str], command_context: CommandContext):
 
         await send_and_if_errors(return_message, "Errors on getting length", error_strings, command_context.channel)
 
+
+@command(
+    command_type=CommandType.ANALYZE,
+    format='<file url>',
+    brief='Get length in seconds of rip audio in rip URL',
+)
+async def length_url(args: list[str], command_context: CommandContext):
+
+    if not len(args):
+        return await send("Error: Please provie a file url. I'll lookup how long the audio is in the rip.", command_context.channel)
+
+    async with command_context.channel.typing():
+        jingle_length_in_seconds = get_config("jingle_length_in_seconds")
+        return_message = ""
+        error_strings = []
+        floatAndErrors = await get_rip_url_length(args[0], GetRipUrlLengthDesc())
+        if not len(floatAndErrors.error_strings):
+            return_message += format_rip_timecode(floatAndErrors.result, command_context.channel.guild, jingle_length_in_seconds) 
+        else:
+            error_strings.extend(floatAndErrors.error_strings)
+
+        await send_and_if_errors(return_message, "Errors on getting length", error_strings, command_context.channel)
+
+
+async def parse_source_input(message_reference: discord.MessageReference, args: list[str]) -> StringAndErrors:
+    text = ""
+    error_strings = []
+    message_link = "" 
+    if len(args):
+        text = " ".join(args) 
+        message_link = extract_discord_link(args[0])
+    if message_reference or message_link:
+        messageAndErrors = await get_message_from_referece_or_args(message_reference, [message_link])
+        error_strings.extend(messageAndErrors.error_strings)
+        if messageAndErrors.message:
+            text = messageAndErrors.message.content
+    return StringAndErrors(text, error_strings) 
+
 @command(
     command_type=CommandType.SOURCE,
     format='<message link/reply | text>',
@@ -1985,25 +2007,19 @@ async def source(args: list[str], command_context: CommandContext):
         return await send("Error: Please provide a link to a rip message (or reply to one) OR text formatted as a rip title to lookup sources for. (Text example: slider - mario 64)", command_context.channel)
 
     async with command_context.channel.typing():
-        text = ""
-        message_link = "" 
-        if len(args):
-            text = " ".join(args) 
-            message_link = extract_discord_link(args[0])
-        messageAndErrors = await get_message_from_referece_or_string(command_context.message_reference, message_link)
-        if len(messageAndErrors.error_strings):
-            return await send_if_errors("Errors during grabbing message", messageAndErrors.error_strings, command_context.channel)
-        if messageAndErrors.message:
-            text = messageAndErrors.message.content
+        string_and_errors = await parse_source_input(command_context.message_reference, args)
+        if len(string_and_errors.error_strings):
+            return await send_if_errors("Errors during grabbing message", string_and_errors.error_strings, command_context.channel)
 
         qoc_sheet_data = await get_qoc_sheet_data(GetQoCSheetDataDesc())
-        text = search_rip_sources(text, qoc_sheet_data)
+        text = search_rip_sources(string_and_errors.string, qoc_sheet_data)
         await send_embed(text, command_context.channel, EmbedDesc(title="Sources"))
 
 @command(
     command_type=CommandType.SOURCE,
     format='<message link/reply | text>',
     brief='Search for QoC specialists',
+    desc='The internal specialists cache is bypassed, guarenteeing that what is on the google sheet will be displayed (This is not the case elsewhere, such as when pinning a new QoC rip).',
     aliases=['specialist'],
     public=True
 )
@@ -2013,16 +2029,9 @@ async def specialists(args: list[str], command_context: CommandContext):
         return await send("Error: Please provide a link to a rip message (or reply to one) OR text formatted as a rip title to lookup specialists for. (Text example: slider - mario 64)", command_context.channel)
 
     async with command_context.channel.typing():
-        text = ""
-        message_link = "" 
-        if len(args):
-            text = " ".join(args) 
-            message_link = extract_discord_link(args[0])
-        messageAndErrors = await get_message_from_referece_or_string(command_context.message_reference, message_link)
-        if len(messageAndErrors.error_strings):
-            return await send_if_errors("Errors during grabbing message", messageAndErrors.error_strings, command_context.channel)
-        if messageAndErrors.message:
-            text = messageAndErrors.message.content
+        string_and_errors = await parse_source_input(command_context.message_reference, args)
+        if len(string_and_errors.error_strings):
+            return await send_if_errors("Errors during grabbing message", string_and_errors.error_strings, command_context.channel)
 
         #NOTE: (Ahmayk) bypass cache so that we are guarenteed to get what is on the sheet right now
         qoc_sheet_data = await get_qoc_sheet_data(GetQoCSheetDataDesc(bypass_cache=True))
