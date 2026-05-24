@@ -635,6 +635,7 @@ async def stops(args: list[str], command_context: CommandContext):
     format="<emoji>",
     brief="Show QoC rips with an inputted react",
     examples=[":fire:", ":qoc:", ":sob:"],
+    aliases=["has_react"]
 )
 async def hasreact(args: list[str], command_context: CommandContext):
 
@@ -645,6 +646,17 @@ async def hasreact(args: list[str], command_context: CommandContext):
 
     roundup_desc = RoundupDesc(roundup_filter_type = RoundupFilterType.SEARCH_REACTION, \
                                react_name=react_input, not_found_message=f'No rips with {args[0]} found.')
+    await send_roundup(roundup_desc, command_context)
+
+@command(
+    command_type=CommandType.QOC,
+    brief="Show QoC rips with a jingle emoji :jinglebell:",
+    aliases=["jingle"]
+)
+async def jingles(args: list[str], command_context: CommandContext):
+    jingle_emoji = react_type_to_react_name(ReactType.JINGLE, command_context.channel.guild)
+    roundup_desc = RoundupDesc(roundup_filter_type = RoundupFilterType.SEARCH_REACTION, \
+                               react_name=jingle_emoji, not_found_message=f'No rips with {jingle_emoji} found.')
     await send_roundup(roundup_desc, command_context)
 
 @command(
@@ -1011,7 +1023,7 @@ async def random_sub(args: list[str], command_context: CommandContext):
     format="<emoji>",
     public=True,
     brief="Show submitted rips with an inputted react",
-    aliases=["hasreact_subs"],
+    aliases=["hasreact_subs", "has_react_sub", "has_react_subs"],
     examples=[":fire:", ":qoc:", ":sob:"],
 )
 async def hasreact_sub(args: list[str], command_context: CommandContext):
@@ -1024,6 +1036,20 @@ async def hasreact_sub(args: list[str], command_context: CommandContext):
     desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.SEARCH_REACTION, \
                               channel_types = ['SUBS', 'SUBS_PIN', 'SUBS_THREAD'], \
                               react_name = react_input)
+    await send_suborqueue_rips(desc, command_context)
+
+
+@command(
+    command_type=CommandType.SUBS,
+    brief="Show submitted rips with a jingle emoji :jinglebell:",
+    public=True,
+    aliases=["jingles_subs", "jingle_sub", "jingle_subs"]
+)
+async def jingles_sub(args: list[str], command_context: CommandContext):
+    jingle_emoji = react_type_to_react_name(ReactType.JINGLE, command_context.channel.guild)
+    desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.SEARCH_REACTION, \
+                              channel_types = ['SUBS', 'SUBS_PIN', 'SUBS_THREAD'], \
+                              react_name = jingle_emoji)
     await send_suborqueue_rips(desc, command_context)
 
 
@@ -1125,6 +1151,7 @@ async def event_q(args: list[str], command_context: CommandContext):
     format="<emoji>",
     brief="Show queued rips with an inputted react",
     examples=[":fire:", ":check:", ":sob:"],
+    aliases=["has_react_q"]
 )
 async def hasreact_q(args: list[str], command_context: CommandContext):
 
@@ -1136,6 +1163,20 @@ async def hasreact_q(args: list[str], command_context: CommandContext):
     desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.SEARCH_REACTION, \
                               channel_types = ['QUEUE'], \
                               react_name = react_input)
+    await send_suborqueue_rips(desc, command_context)
+
+
+@command(
+    command_type=CommandType.QUEUE,
+    brief="Show queued rips with a jingle emoji :jinglebell:",
+    public=True,
+    aliases=["jingle_q"]
+)
+async def jingles_q(args: list[str], command_context: CommandContext):
+    jingle_emoji = react_type_to_react_name(ReactType.JINGLE, command_context.channel.guild)
+    desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.SEARCH_REACTION, \
+                              channel_types = ['QUEUE'], \
+                              react_name = jingle_emoji)
     await send_suborqueue_rips(desc, command_context)
 
 

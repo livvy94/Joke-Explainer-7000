@@ -198,7 +198,7 @@ async def process_jingle_status(message: Message) -> list[str]:
     urls = extract_rip_link(message.content)
     if len(urls):
         floatAndErrors = await get_rip_url_length(urls[0], GetRipUrlLengthDesc())
-        if not len(floatAndErrors.error_strings) :
+        if not len(floatAndErrors.error_strings) and floatAndErrors.result > 0:
             if floatAndErrors.result <= jingle_length_in_seconds:
                 await update_rip_status_reacts(message, [ReactType.JINGLE], [], message.guild)
             else:
