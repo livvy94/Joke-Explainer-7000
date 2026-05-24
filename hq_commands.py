@@ -407,7 +407,7 @@ async def myfixes(args: list[str], command_context: CommandContext):
 )
 async def myfresh(args: list[str], command_context: CommandContext):
     roundup_desc = RoundupDesc(roundup_filter_type = RoundupFilterType.MYFRESH, \
-                               user_id = command_context.user.id, not_found_message = "You haven't reviewed any rips yet.")
+                               user_id = command_context.user.id, not_found_message = "You have nothing to reveiw! Good work!")
     await send_roundup(roundup_desc, command_context)
 
 
