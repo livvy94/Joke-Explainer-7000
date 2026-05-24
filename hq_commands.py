@@ -2095,7 +2095,7 @@ async def reset_cache(args: list[str], command_context: CommandContext):
         await send(f'Rebuilding cache for all channels. This may take a few minutes...', command_context.channel)
         async with command_context.channel.typing():
             await write_log(f'`{prefix}rebuild_cache` run by {command_context.user.name} in {command_context.channel.jump_url}')
-            string_and_errors = await rebuild_cache_if_needed()
+            string_and_errors = await rebuild_cache()
 
     txt = f'Cache rebuilt!\n{string_and_errors.string}'
     await send_and_if_errors(txt, "Errors occurred during rebuild. Cache may not be accurate.", string_and_errors.error_strings, command_context.channel)

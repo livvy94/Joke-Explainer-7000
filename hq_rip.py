@@ -11,6 +11,7 @@ from hq_types import Rip, React
 from hq_discord import *
 from hq_react import *
 from hq_strings import *
+from hq_database import *
 
 RIP_CACHE: dict[int, dict[int, Rip]] = {}
 USER_REACT_CACHE: dict[int, dict[React, List[int]]] = {}
@@ -225,7 +226,17 @@ async def process_rip_message(message: Message, refetch_message: bool, is_valida
             if channel_info.is_cache_qoc:
                 cache_user_react_data(user_react_data, message.id)
 
-            channel_info = get_channel_info(message.channel)
+            jingle_length_in_seconds = get_config("jingle_length_in_seconds")
+            urls = extract_rip_link(message.content)
+            for url in urls:
+                floatAndErrors = await get_rip_url_length(url, GetRipUrlLengthDesc())
+                if not len(floatAndErrors.error_strings) :
+                    if floatAndErrors.result <= jingle_length_in_seconds:
+                        await update_rip_status_reacts(message, [ReactType.JINGLE], [], message.guild)
+                    else:
+                        await update_rip_status_reacts(message, [], [ReactType.JINGLE], message.guild)
+                else:
+                    error_strings.extend(floatAndErrors.error_strings)
 
     return StringAndErrors(return_message, error_strings) 
 
@@ -388,7 +399,7 @@ async def rebuild_cache_for_channel(channel_id: int) -> StringAndErrors:
 
     return StringAndErrors(return_message, error_strings) 
 
-async def rebuild_cache_if_needed() -> StringAndErrors:
+async def rebuild_cache() -> StringAndErrors:
 
     return_message = ""
     error_strings = []

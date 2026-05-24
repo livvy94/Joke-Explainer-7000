@@ -1,12 +1,12 @@
 from typing import NamedTuple, List
 from enum import Enum, auto
 import discord
-from discord import Message
+from discord import Message, Guild
 import re
 
 from hq_types import Rip, React 
 from hq_config import get_config 
-from hq_discord import UserReactDictAndErrors, log_exception 
+from hq_discord import UserReactDictAndErrors, log_exception, discord_add_reaction, discord_clear_reaction
 
 APPROVED_INDICATOR = '🔥'
 AWAITING_SPECIALIST_INDICATOR = '♨️'
@@ -54,6 +54,8 @@ class ReactType(Enum):
     BITRATE = auto()
     CLIPPING = auto()
     JINGLE = auto()
+    LINKERR = auto()
+    PIN = auto()
 
 class ReactInfo(NamedTuple):
     default_names: list[str]
@@ -76,6 +78,8 @@ REACT_INFOS: dict[ReactType, ReactInfo] = {
     ReactType.BITRATE: ReactInfo([QOC_DEFAULT_BITRATE], ["bitrate"]),
     ReactType.CLIPPING: ReactInfo([QOC_DEFAULT_CLIPPING], ["clipping"]),
     ReactType.JINGLE: ReactInfo([DEFAULT_JINGLE], ["jinglebell"]),
+    ReactType.LINKERR: ReactInfo([QOC_DEFAULT_LINKERR], [""]),
+    ReactType.PIN: ReactInfo([DEFAULT_PIN], [""]),
 }
 
 #NOTE: (Ahmayk) react categories where multiple emojis are valid
@@ -129,7 +133,7 @@ def react_is_category(react_category: ReactCategory, name: str) -> bool:
             assert f"Unimplemented ReactionCategory {react_category}"
     return result
 
-def react_type_to_react_name(react_type: ReactType, guild: discord.Guild) -> str:
+def react_type_to_react_name(react_type: ReactType, guild: Guild) -> str:
     result = ""
     if react_type in REACT_INFOS:
         if len(REACT_INFOS[react_type].default_names):
@@ -216,7 +220,7 @@ async def discord_get_user_react_data(react_list: List[ReactType], message: Mess
     return UserReactDictAndErrors(user_react_dict, error_strings)
 
 
-def reaction_name_to_emoji_string(name: str, guild: discord.Guild | None) -> str:
+def reaction_name_to_emoji_string(name: str, guild: Guild | None) -> str:
     result = f'{name}' 
     if guild:
         for emoji in guild.emojis:
@@ -225,7 +229,7 @@ def reaction_name_to_emoji_string(name: str, guild: discord.Guild | None) -> str
                 break
     return result
 
-def parse_emojis_in_string(string: str, guild: discord.Guild):
+def parse_emojis_in_string(string: str, guild: Guild):
 
     def emoji_match_filter(match):
         name = match.group(1)
@@ -254,3 +258,19 @@ def message_has_react(emoji: str, message: Message) -> bool:
             result = True
             break
     return result
+
+
+async def update_rip_status_reacts(message: Message, react_types_add: list[ReactType], 
+                                   react_types_remove: list[ReactType], guild: Guild) -> list[str]:
+    error_strings = []
+    for react_type in react_types_add:
+        emoji = react_type_to_react_name(react_type, guild)
+        if not message_has_react(emoji, message):
+            errors = await discord_add_reaction(emoji, message)
+            error_strings.extend(errors)
+    for react_type in react_types_remove:
+        emoji = react_type_to_react_name(react_type, guild)
+        if message_has_react(emoji, message):
+            errors = await discord_clear_reaction(emoji, message)
+            error_strings.extend(errors)
+    return error_strings

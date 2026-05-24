@@ -70,7 +70,7 @@ async def on_ready():
 
     await write_log("Caching rips...")
 
-    await rebuild_cache_if_needed()
+    await rebuild_cache()
 
     await write_log('Validating cache...')
     string_and_errors = await validate_cache_all()

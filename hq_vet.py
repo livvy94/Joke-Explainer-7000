@@ -1,5 +1,6 @@
 
 from hq_types import *
+from hq_react import *
 from hq_discord import *
 from hq_rip import *
 from hq_database import * 
@@ -73,7 +74,9 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
     link_error = QoCCheckType.LINK in qoc_checks_dict and \
         qoc_checks_dict[QoCCheckType.LINK].result == CheckResultType.ERROR
 
-    is_jingle = False
+    react_types_add: list[ReactType] = []
+    react_types_remove: list[ReactType] = []
+
     duration_string = "`[Unknown length]`"
     if (
         QoCCheckType.LENGTH in qoc_checks_dict
@@ -82,9 +85,12 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
     ):
         jingle_length_in_seconds = get_config("jingle_length_in_seconds")
         duration = qoc_checks_dict[QoCCheckType.LENGTH].value_float
-        is_jingle = duration <= jingle_length_in_seconds
         duration_string = format_rip_timecode(duration, guild, jingle_length_in_seconds)
         await store_in_database_float(duration, qoced_url, DatabaseKey.RIP_LENGTH)
+        if duration <= jingle_length_in_seconds:
+            react_types_add.append(ReactType.JINGLE)
+        #NOTE: (Ahmayk) we don't remove jingle reacts because someone might want to override bot's judgement of what a jingle is 
+        #could make logic to detect if bot has reacted themselves but that'd be a performance hit to get user react data 
 
     is_qoc_pass_all = len(qoc_checks_dict) > 0
     for qoc_check in qoc_checks_dict.values():
@@ -122,6 +128,7 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
         if not len(metadata_checks) and "[Unusual Pin Format]" in get_rip_author(rip_message_text, message_author_name):
             metadata_checks.append(QoCCheck(CheckResultType.FAIL, "Rip author is missing."))
 
+        # TODO: (Ahmayk) All of this belongs in QoC code 
         if not is_unusual_metadata:
             rips = []
             channel_ids = get_channel_ids_of_types(['QUEUE', 'QOC'])
@@ -159,11 +166,6 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
 
     everything_passed = is_qoc_pass_all and not len(metadata_checks)
 
-    bitrate_emoji_name = react_type_to_react_name(ReactType.BITRATE, guild)
-    clipping_emoji_name = react_type_to_react_name(ReactType.CLIPPING, guild)
-    metadata_emoji_name = react_type_to_react_name(ReactType.METADATA, guild)
-    jingle_emoji_name = react_type_to_react_name(ReactType.JINGLE, guild)
-
     past_vet_message = None 
     if desc.message and channel_is_types(desc.message.channel, ['QOC']):
 
@@ -179,34 +181,24 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
                 past_vet_message = message
                 break
 
-        #NOTE: (Ahmayk) remove pin react from unpinned rips from pin must die
-        if message_has_react(DEFAULT_PIN, desc.message) and desc.message.pinned:
-            errors = await discord_clear_reaction(DEFAULT_PIN, desc.message)
-            error_strings.extend(errors)
+        if desc.message.pinned:
+            react_types_remove.append(ReactType.PIN)
 
         if link_error:
-            errors = await discord_add_reaction(QOC_DEFAULT_LINKERR, desc.message)
-            error_strings.extend(errors)
-        elif message_has_react(QOC_DEFAULT_LINKERR, desc.message):
-            errors = await discord_clear_reaction(QOC_DEFAULT_LINKERR, desc.message)
-            error_strings.extend(errors)
+            react_types_add.append(ReactType.LINKERR)
+        else:
+            react_types_remove.append(ReactType.LINKERR)
 
         if (
             QoCCheckType.BITRATE in qoc_checks_dict
             and qoc_checks_dict[QoCCheckType.BITRATE].result == CheckResultType.FAIL
         ):
-            errors = await discord_add_reaction(bitrate_emoji_name, desc.message)
-            error_strings.extend(errors)
+            react_types_add.append(ReactType.BITRATE)
         else:
-            if message_has_react(bitrate_emoji_name, desc.message):
-                errors = await discord_clear_reaction(bitrate_emoji_name, desc.message)
-                error_strings.extend(errors)
+            react_types_remove.append(ReactType.BITRATE)
 
-        if is_jingle and not message_has_react(jingle_emoji_name, desc.message):
-            errors = await discord_add_reaction(jingle_emoji_name, desc.message)
-            error_strings.extend(errors)
-        #NOTE: (Ahmayk) we don't remove jingle reacts because someone might want to override bot's judgement of what a jingle is 
-        #could make logic to detect if bot has reacted themselves but that'd be a performance hit to get user react data 
+        errors = await update_rip_status_reacts(desc.message, react_types_add, react_types_remove, guild)
+        error_strings.extend(errors)
 
     return_message = ""
 
@@ -219,6 +211,10 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
     if link_error: 
         verdict_emojis.append(QOC_DEFAULT_LINKERR)
         intro_warnings.append(":warning: **Rip link not Auto-QoCed**")
+
+    bitrate_emoji_name = react_type_to_react_name(ReactType.BITRATE, guild)
+    clipping_emoji_name = react_type_to_react_name(ReactType.CLIPPING, guild)
+    metadata_emoji_name = react_type_to_react_name(ReactType.METADATA, guild)
 
     issue_list = []
     fix_emoji_name = react_type_to_react_name(ReactType.FIX, guild)
