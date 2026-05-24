@@ -485,35 +485,30 @@ async def user_is_react(user_react_check_type: UserReactCheckType, user_id: int,
     return BoolAndErrors(result, error_strings)
 
 
-def format_rip_timecode(seconds: float, use_jingle_emoji: bool, guild: Guild | None, jingle_length_in_seconds: float) -> str:
+def format_rip_timecode(seconds: float) -> str:
     result = ""
     #NOTE: (Ahmayk) 0 is stored in database when the call errors
     # we display these as blank 
     if seconds > 0:
-        jingle_emoji = ""
-        if use_jingle_emoji and seconds <= jingle_length_in_seconds and guild:
-            jingle_emoji = f'{react_type_to_react_name(ReactType.JINGLE, guild)} '
         hours = int(seconds // 3600)
         minutes = int((seconds % 3600) // 60)
         secs = int(seconds % 60)
-        time_string = f"{minutes:02d}:{secs:02d}"
+        result = f"{minutes:02d}:{secs:02d}"
         if hours > 0:
-            time_string = f"{hours:02d}:{minutes:02d}:{secs:02d}"
-        result = f'{jingle_emoji}**{time_string}**'
+            result = f"{hours:02d}:{minutes:02d}:{secs:02d}"
     return result 
 
 
 async def get_formatted_rip_length(text: str, force_download: bool, use_jingle_emoji: bool, guild: Guild) -> StringAndErrors:
-    jingle_length_in_seconds = 0 
-    if use_jingle_emoji:
-        jingle_length_in_seconds = get_config("jingle_length_in_seconds")
     urls = extract_rip_link(text)
     return_message = ""
     error_strings = []
     if len(urls):
         floatAndErrors = await get_rip_url_length(urls[0], GetRipUrlLengthDesc(force_download=force_download))
         if not len(floatAndErrors.error_strings):
-            return_message = format_rip_timecode(floatAndErrors.result, use_jingle_emoji, guild, jingle_length_in_seconds) 
+            return_message = format_rip_timecode(floatAndErrors.result) 
+            if len(return_message) and use_jingle_emoji and floatAndErrors.result <= get_config("jingle_length_in_seconds"):
+                return_message = f'{react_type_to_react_name(ReactType.JINGLE, guild)} {return_message}'
         else:
             error_strings.extend(floatAndErrors.error_strings)
     return StringAndErrors(return_message, error_strings)

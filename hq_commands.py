@@ -241,7 +241,7 @@ class RoundupFilterType(Enum):
     RANDOM = auto()
     SAVEQOC = auto()
     MYSAVEQOC = auto()
-    SORTLENGTH = auto()
+    SORTBYLENGTH = auto()
 
 class RoundupDesc(NamedTuple):
     roundup_filter_type: RoundupFilterType = RoundupFilterType.NULL
@@ -279,7 +279,7 @@ async def send_roundup(roundup_desc: RoundupDesc, command_context: CommandContex
     if roundup_desc.roundup_filter_type == RoundupFilterType.RANDOM:
         selected_rip_message_ids = choose_random_rips(rips_and_errors.rips, roundup_desc.random_count)
 
-    if roundup_desc.roundup_filter_type == RoundupFilterType.SORTLENGTH:
+    if roundup_desc.roundup_filter_type == RoundupFilterType.SORTBYLENGTH:
         errors = await sort_rips_by_duration(rips)
         error_strings.extend(errors)
 
@@ -671,7 +671,7 @@ async def jingles(args: list[str], command_context: CommandContext):
     brief="Show QoC rips sorted by rip length",
 )
 async def sortbylength(args: list[str], command_context: CommandContext):
-    roundup_desc = RoundupDesc(roundup_filter_type = RoundupFilterType.SORTLENGTH, \
+    roundup_desc = RoundupDesc(roundup_filter_type = RoundupFilterType.SORTBYLENGTH, \
                                not_found_message=f'Length of all QoC rips: **Zero Seconds!**')
     await send_roundup(roundup_desc, command_context)
 
@@ -830,7 +830,7 @@ class SubOrQueueRipFilterType(Enum):
     SCOUT = auto()
     ALL = auto()
     RANDOM = auto()
-    SORTLENGTH = auto()
+    SORTBYLENGTH = auto()
 
 class SendSubOrQueueDesc(NamedTuple):
     suborqueue_rip_filter_type: SubOrQueueRipFilterType = SubOrQueueRipFilterType.NULL 
@@ -855,8 +855,6 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
     total_count = 0
     valid_count = 0
 
-    qoc_emote = react_type_to_react_name(ReactType.QOC, command_context.channel.guild)
-
     selected_rip_message_ids = [] 
     if desc.suborqueue_rip_filter_type == SubOrQueueRipFilterType.RANDOM: 
         temp_rips_all: List[Rip] = []
@@ -878,7 +876,7 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
             error_strings.extend(rips_and_errors.error_strings)
             rips = rips_and_errors.rips
 
-            if desc.suborqueue_rip_filter_type == SubOrQueueRipFilterType.SORTLENGTH:
+            if desc.suborqueue_rip_filter_type == SubOrQueueRipFilterType.SORTBYLENGTH:
                 errors = await sort_rips_by_duration(rips)
                 error_strings.extend(errors)
 
@@ -917,15 +915,24 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
                         is_valid = True
                     case SubOrQueueRipFilterType.RANDOM:
                         is_valid = rip.message_id in selected_rip_message_ids
-                    case SubOrQueueRipFilterType.SORTLENGTH:
+                    case SubOrQueueRipFilterType.SORTBYLENGTH:
                         is_valid = True
                     case _:
                         assert "Unimplemented SubOrQueueRipFilterType"
 
                 if is_valid:
+
+                    string_and_errors = await get_formatted_rip_length(rip.text, False, False, channel.guild)  
+                    error_strings.extend(string_and_errors.error_strings)
+                    if len(string_and_errors.string):
+                        result += f"`{string_and_errors.string}` "
+                    else:
+                        result += '`??:??` '
+
                     shown_react_types = [
                         ReactType.ALERT,
                         ReactType.STOP,
+                        ReactType.JINGLE,
                         ReactType.QOC,
                         ReactType.THUMBNAIL,
                         ReactType.CHECK,
@@ -1070,7 +1077,7 @@ async def jingles_sub(args: list[str], command_context: CommandContext):
     format="[channel link]",
     brief="Show subbmited rips sorted by rip length",
 )
-async def sortlength_sub(args: list[str], command_context: CommandContext):
+async def sortbylength_sub(args: list[str], command_context: CommandContext):
 
     channel_ids = get_channel_ids_of_types(["SUBS"])
     if len(args): 
@@ -1079,7 +1086,7 @@ async def sortlength_sub(args: list[str], command_context: CommandContext):
             return await command_context.channel.send(msg)
         channel_ids = [channel_id]
 
-    desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.SORTLENGTH, \
+    desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.SORTBYLENGTH, \
                               channel_ids = channel_ids)
     await send_suborqueue_rips(desc, command_context)
 
@@ -2042,12 +2049,13 @@ async def length_url(args: list[str], command_context: CommandContext):
         return await send("Error: Please provie a file url. I'll lookup how long the audio is in the rip.", command_context.channel)
 
     async with command_context.channel.typing():
-        jingle_length_in_seconds = get_config("jingle_length_in_seconds")
         return_message = ""
         error_strings = []
         floatAndErrors = await get_rip_url_length(args[0], GetRipUrlLengthDesc(force_download=True))
         if not len(floatAndErrors.error_strings):
-            return_message += format_rip_timecode(floatAndErrors.result, True, command_context.channel.guild, jingle_length_in_seconds) 
+            return_message += format_rip_timecode(floatAndErrors.result) 
+            if len(return_message) and floatAndErrors.result <= get_config("jingle_length_in_seconds"):
+                return_message = f'{react_type_to_react_name(ReactType.JINGLE, command_context.channel.guild)} {return_message}'
         else:
             error_strings.extend(floatAndErrors.error_strings)
 
