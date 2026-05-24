@@ -19,7 +19,7 @@ from hq_database import *
 
 import re
 import typing
-from typing import NamedTuple, List
+from typing import NamedTuple, List, Tuple
 from enum import Enum, auto
 import json
 import os
