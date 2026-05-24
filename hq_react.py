@@ -119,6 +119,18 @@ def react_is(react_type: ReactType, name: str) -> bool:
         assert f"Unimplemented ReactionType {react_type}"
     return result
 
+def react_name_to_react_type(name: str) -> ReactType:
+    result = ReactType.NULL
+    name_lower = name.lower()
+    for react_type, react_info in REACT_INFOS.items():
+        if (
+            name_lower in react_info.default_names 
+            or name_lower in react_info.custom_names
+        ):
+            result = react_type
+            break
+    return result
+
 def react_is_category(react_category: ReactCategory, name: str) -> bool:
     result = False
     name_lower = name.lower()

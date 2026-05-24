@@ -923,39 +923,30 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
                         assert "Unimplemented SubOrQueueRipFilterType"
 
                 if is_valid:
-                    shown_react_names = ["alert", "stop", "thumbnail", "check", "metadata", "emailsent", "sendback", "calendar"]
+                    shown_react_types = [
+                        ReactType.ALERT,
+                        ReactType.STOP,
+                        ReactType.QOC,
+                        ReactType.THUMBNAIL,
+                        ReactType.CHECK,
+                        ReactType.METADATA,
+                        ReactType.EMAILSENT,
+                        ReactType.SENDBACK,
+                        ReactType.CALENDAR,
+                    ]
+
+                    input_react_type = react_name_to_react_type(desc.react_name) 
                     if (
                         desc.suborqueue_rip_filter_type == SubOrQueueRipFilterType.SEARCH_REACTION
-                        and desc.react_name not in shown_react_names 
+                        and input_react_type not in shown_react_types
                     ):
                         emoji = reaction_name_to_emoji_string(desc.react_name, channel.guild)
                         result += f"{emoji} "
-                    if rip_has_react([ReactType.ALERT], rip):
-                        emoji = reaction_name_to_emoji_string("alert", channel.guild)
-                        result += f"{emoji} "
-                    if rip_has_react([ReactType.STOP], rip):
-                        emoji = reaction_name_to_emoji_string("stop", channel.guild)
-                        result += f"{emoji} "
-                    if rip_has_react([ReactType.QOC], rip):
-                        result += f"{qoc_emote} "
-                    if rip_has_react([ReactType.EMAILSENT], rip):
-                        emoji = reaction_name_to_emoji_string("emailsent", channel.guild)
-                        result += f"{emoji} "
-                    if rip_has_react([ReactType.CHECK], rip):
-                        emoji = reaction_name_to_emoji_string("check", channel.guild)
-                        result += f"{emoji} "
-                    if rip_has_react([ReactType.THUMBNAIL], rip):
-                        emoji = reaction_name_to_emoji_string("thumbnail", channel.guild)
-                        result += f"{emoji} "
-                    if rip_has_react([ReactType.METADATA], rip):
-                        emoji = reaction_name_to_emoji_string("metadata", channel.guild)
-                        result += f"{emoji} "
-                    if rip_has_react([ReactType.SENDBACK], rip):
-                        emoji = reaction_name_to_emoji_string("sendback", channel.guild)
-                        result += f"{emoji} "
-                    if rip_has_react([ReactType.CALENDAR], rip):
-                        emoji = reaction_name_to_emoji_string("calendar", channel.guild)
-                        result += f"{emoji} "
+
+                    for react_type in shown_react_types:
+                        if rip_has_react([react_type], rip):
+                            emoji = react_type_to_react_name(react_type, channel.guild)
+                            result += f"{emoji} "
 
                     rip_link = format_message_link(channel.guild.id, rip.channel_id, rip.message_id)
                     result += f'**[{rip_title}]({rip_link})**\n'
