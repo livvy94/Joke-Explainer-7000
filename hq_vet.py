@@ -209,80 +209,79 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
         #could make logic to detect if bot has reacted themselves but that'd be a performance hit to get user react data 
 
     return_message = ""
-    if desc.full_feedback or not everything_passed or past_vet_message:
 
-        intro_warnings = [] 
-        if not len(qoced_url) and not link_error:
-            intro_warnings.append(":warning: No rip links detected.")
+    intro_warnings = [] 
+    if not len(qoced_url) and not link_error:
+        intro_warnings.append(":warning: No rip links detected.")
 
-        verdict_emojis: List[str] = [] 
+    verdict_emojis: List[str] = [] 
 
-        if link_error: 
-            verdict_emojis.append(QOC_DEFAULT_LINKERR)
-            intro_warnings.append(":warning: **Rip link not Auto-QoCed**")
+    if link_error: 
+        verdict_emojis.append(QOC_DEFAULT_LINKERR)
+        intro_warnings.append(":warning: **Rip link not Auto-QoCed**")
 
-        issue_list = []
-        fix_emoji_name = react_type_to_react_name(ReactType.FIX, guild)
-        for qoc_check_type, qoc_check in qoc_checks_dict.items():
-            if len(qoc_check.msg) and (desc.full_feedback or qoc_check.result != CheckResultType.PASS):
+    issue_list = []
+    fix_emoji_name = react_type_to_react_name(ReactType.FIX, guild)
+    for qoc_check_type, qoc_check in qoc_checks_dict.items():
+        if len(qoc_check.msg) and (desc.full_feedback or qoc_check.result != CheckResultType.PASS):
+            issue_list.append(qoc_check.msg)
+
+        if qoc_check.result == CheckResultType.FAIL and fix_emoji_name not in verdict_emojis:
+            verdict_emojis.append(fix_emoji_name)
+            if qoc_check_type == QoCCheckType.BITRATE:
+                verdict_emojis.append(bitrate_emoji_name)
+            if qoc_check_type == QoCCheckType.CLIPPING:
+                verdict_emojis.append(clipping_emoji_name)
+
+        if qoc_check.result == CheckResultType.ERROR and DEFAULT_ERROR not in verdict_emojis:
+            verdict_emojis += DEFAULT_ERROR
+
+    if len(metadata_checks):
+        verdict_emojis.append(metadata_emoji_name)
+        for qoc_check in metadata_checks:
+            if len(qoc_check.msg):
                 issue_list.append(qoc_check.msg)
+    elif desc.full_feedback:
+        issue_list.append('Metadata is OK.')
 
-            if qoc_check.result == CheckResultType.FAIL and fix_emoji_name not in verdict_emojis:
-                verdict_emojis.append(fix_emoji_name)
-                if qoc_check_type == QoCCheckType.BITRATE:
-                    verdict_emojis.append(bitrate_emoji_name)
-                if qoc_check_type == QoCCheckType.CLIPPING:
-                    verdict_emojis.append(clipping_emoji_name)
+    if everything_passed:
+        verdict_emojis.append(DEFAULT_CHECK)
 
-            if qoc_check.result == CheckResultType.ERROR and DEFAULT_ERROR not in verdict_emojis:
-                verdict_emojis += DEFAULT_ERROR
+    return_header = "" 
+    if len(rip_message_link):
+        return_header_title = "Rip"
+        if desc.past_rip_message_content:
 
-        if len(metadata_checks):
-            verdict_emojis.append(metadata_emoji_name)
-            for qoc_check in metadata_checks:
-                if len(qoc_check.msg):
-                    issue_list.append(qoc_check.msg)
-        elif desc.full_feedback:
-            issue_list.append('Metadata is OK.')
+            old_rip_links = extract_rip_link(desc.past_rip_message_content)
+            old_rip_link = ""
+            if len(old_rip_links):
+                old_rip_link = old_rip_links[0]
+            is_link_updated = qoced_url and old_rip_link != qoced_url
 
-        if everything_passed:
-            verdict_emojis.append(DEFAULT_CHECK)
+            #NOTE: (Ahmayk) assumes that "metadata" is everything before the audio rip link
+            linkless_metadata_old = desc.past_rip_message_content 
+            if len(old_rip_link):
+                linkless_metadata_old = desc.past_rip_message_content.split(old_rip_link)[0]
+            linkless_metadata_new = rip_message_text
+            if len(qoced_url):
+                linkless_metadata_new = rip_message_text.split(qoced_url)[0]
+            is_metadata_updated = linkless_metadata_old != linkless_metadata_new 
 
-        return_header = "" 
-        if len(rip_message_link):
-            return_header_title = "Rip"
-            if desc.past_rip_message_content:
+            if is_link_updated and is_metadata_updated:
+                return_header_title = f'{QOC_DEFAULT_LINKERR}{metadata_emoji_name} Link and Metadata Updated'
+            elif is_link_updated:
+                return_header_title = f'{QOC_DEFAULT_LINKERR} Link Updated'
+            elif is_metadata_updated:
+                return_header_title = f'{metadata_emoji_name} Metadata Updated'
+            else:
+                return_header_title = f'Message Updated'
 
-                old_rip_links = extract_rip_link(desc.past_rip_message_content)
-                old_rip_link = ""
-                if len(old_rip_links):
-                    old_rip_link = old_rip_links[0]
-                is_link_updated = qoced_url and old_rip_link != qoced_url
+        return_header = f'**{return_header_title}: {rip_message_link}** - {duration_string}'
 
-                #NOTE: (Ahmayk) assumes that "metadata" is everything before the audio rip link
-                linkless_metadata_old = desc.past_rip_message_content 
-                if len(old_rip_link):
-                    linkless_metadata_old = desc.past_rip_message_content.split(old_rip_link)[0]
-                linkless_metadata_new = rip_message_text
-                if len(qoced_url):
-                    linkless_metadata_new = rip_message_text.split(qoced_url)[0]
-                is_metadata_updated = linkless_metadata_old != linkless_metadata_new 
-
-                if is_link_updated and is_metadata_updated:
-                    return_header_title = f'{QOC_DEFAULT_LINKERR}{metadata_emoji_name} Link and Metadata Updated'
-                elif is_link_updated:
-                    return_header_title = f'{QOC_DEFAULT_LINKERR} Link Updated'
-                elif is_metadata_updated:
-                    return_header_title = f'{metadata_emoji_name} Metadata Updated'
-                else:
-                    return_header_title = f'Message Updated'
-
-            return_header = f'**{return_header_title}: {rip_message_link}** ({duration_string})'
-
-        intro_warnings_string = "\n".join(intro_warnings)
-        return_message = f'{intro_warnings_string}\n{return_header}\n**Verdict**: {" ".join(verdict_emojis)}'
-        if len(issue_list):
-            return_message += "\n- " + "\n- ".join(issue_list)
+    intro_warnings_string = "\n".join(intro_warnings)
+    return_message = f'{intro_warnings_string}\n{return_header}\n**Verdict**: {" ".join(verdict_emojis)}'
+    if len(issue_list):
+        return_message += "\n- " + "\n- ".join(issue_list)
 
     react_check_if_resolved_string = f'-# React {DEFAULT_CHECK} if this should be ignored (will be removed if this message updates).'
 
