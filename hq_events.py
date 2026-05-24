@@ -117,7 +117,7 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
                     txt = "" 
                     error_strings: list[str] = []
 
-                    async with lock_channel_then_update_database(channel.id, error_strings, channel):
+                    async with lock_channel(channel.id, error_strings, channel):
 
                         current_message_ids: list[int] = []
                         messages_and_errors = await discord_get_channel_pins(None, channel)
@@ -209,7 +209,7 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
                         elif new_count < SOFT_PIN_LIMIT and new_count >= max(0, SOFT_PIN_LIMIT - 10):
                             await send(f"-# Warning: **{SOFT_PIN_LIMIT - new_count} rips** until pinlimit is reached.\n-# Rip Count: {new_count}/{SOFT_PIN_LIMIT}", channel)
 
-                        async with lock_channel_then_update_database(channel.id, error_strings, None):
+                        async with lock_channel(channel.id, error_strings, None):
                             #NOTE: (Ahmayk) have to fetch message to get reaction data for cache
                             message_and_errors = await discord_fetch_message(message.id, channel)
                             error_strings.extend(message_and_errors.error_strings)
@@ -257,7 +257,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
         in_cache = False
         if is_qoc_channel or is_suborqueue_channel:
 
-            async with lock_channel_then_update_database(payload.channel_id, error_strings, None):
+            async with lock_channel(payload.channel_id, error_strings, None):
                 in_cache = payload.channel_id in RIP_CACHE and payload.message_id in RIP_CACHE[payload.channel_id]
                 if in_cache: 
 

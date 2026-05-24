@@ -70,7 +70,7 @@ async def _lock(id: int, lock_dict: dict[int, asyncio.Lock], error_strings: list
 DATABASE_LOCK = asyncio.Lock()
 
 @asynccontextmanager
-async def lock_channel_then_update_database(channel_id: int, error_strings: list[str], typing_channel: TextChannel | Thread | None):
+async def lock_channel(channel_id: int, error_strings: list[str], typing_channel: TextChannel | Thread | None):
     async with _lock(channel_id, CACHE_LOCK_CHANNEL, error_strings, typing_channel):
         yield
 
@@ -264,7 +264,7 @@ async def process_rip_channel(channel: TextChannel | Thread, is_validate_message
             for message in messages_and_error.messages: 
                 if message.thread is not None:
                     init_channel_cache(message.thread.id)
-                    async with lock_channel_then_update_database(message.thread.id, error_strings, typing_channel):
+                    async with lock_channel(message.thread.id, error_strings, typing_channel):
                         string_and_errors = await process_rip_channel(message.thread, False, typing_channel)
                         return_message += string_and_errors.string
                         error_strings.extend(string_and_errors.error_strings)
@@ -307,7 +307,7 @@ async def get_rips(channel: TextChannel | Thread, desc: GetRipsDesc) -> RipsAndE
     ##NOTE: (Ahmayk) We need to prevent other processes from accessing the cache 
     ## in the case where we are updating the cache. If we allow access to the cache while
     ## it is being updated, it would likely be incomplete or wrong! 
-    async with lock_channel_then_update_database(channel.id, error_strings, desc.typing_channel):
+    async with lock_channel(channel.id, error_strings, desc.typing_channel):
 
         if not len(RIP_CACHE[channel.id]) or desc.rebuild_cache:
             async with desc.typing_channel.typing() if desc.typing_channel is not None else empty_async_context():
