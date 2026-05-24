@@ -282,9 +282,11 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
 
 
 async def process_suborqueue_rip_caching(message: Message):
-    is_suborqueue_channel = channel_is_types(message.channel, ['QUEUE', 'SUBS', 'SUBS_THREAD'])
-    if is_suborqueue_channel and is_message_rip(message): 
+    is_queue_channel = channel_is_types(message.channel, ['QUEUE']) 
+    is_sub_channel = channel_is_types(message.channel, ['SUBS', 'SUBS_THREAD'])
+    if (is_queue_channel or is_sub_channel) and is_message_rip(message): 
         cache_rip_in_message(message)
+        await process_jingle_status(message)
 
 
 async def remove_reaction_from_cache(channel_id: int, message_id: int, emoji: discord.PartialEmoji, user_id: int | None, remove_all: bool):

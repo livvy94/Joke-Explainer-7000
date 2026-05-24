@@ -169,6 +169,7 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
     past_vet_message = None 
     if desc.message and channel_is_types(desc.message.channel, ['QOC']):
 
+        #TODO: (Ahmayk) don't do this anymore, utilize database!
         after_messages_and_errors = await discord_get_channel_messages_after(desc.message, 100)
         error_strings.extend(after_messages_and_errors.error_strings)
         assert bot.user
