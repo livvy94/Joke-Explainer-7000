@@ -196,8 +196,8 @@ async def process_jingle_status(message: Message) -> list[str]:
     error_strings = []
     jingle_length_in_seconds = get_config("jingle_length_in_seconds")
     urls = extract_rip_link(message.content)
-    for url in urls:
-        floatAndErrors = await get_rip_url_length(url, GetRipUrlLengthDesc())
+    if len(urls):
+        floatAndErrors = await get_rip_url_length(urls[0], GetRipUrlLengthDesc())
         if not len(floatAndErrors.error_strings) :
             if floatAndErrors.result <= jingle_length_in_seconds:
                 await update_rip_status_reacts(message, [ReactType.JINGLE], [], message.guild)
@@ -485,8 +485,41 @@ async def user_is_react(user_react_check_type: UserReactCheckType, user_id: int,
     return BoolAndErrors(result, error_strings)
 
 
+def format_rip_timecode(seconds: float, use_jingle_emoji: bool, guild: Guild, jingle_length_in_seconds: float) -> str:
+    result = ""
+    #NOTE: (Ahmayk) 0 is stored in database when the call errors
+    # we display these as blank 
+    if seconds > 0:
+        jingle_emoji = ""
+        if use_jingle_emoji and seconds <= jingle_length_in_seconds:
+            jingle_emoji = f'{react_type_to_react_name(ReactType.JINGLE, guild)} '
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
+        time_string = f"{minutes:02d}:{secs:02d}"
+        if hours > 0:
+            time_string = f"{hours:02d}:{minutes:02d}:{secs:02d}"
+        result = f'{jingle_emoji}**{time_string}**'
+    return result 
 
-def format_rip(rip: Rip, guild: discord.Guild, make_smol: bool, spec_overdue_days: int, overdue_days: int) -> str:
+
+async def get_formatted_rip_length(text: str, force_download: bool, use_jingle_emoji: bool, guild: Guild) -> StringAndErrors:
+    jingle_length_in_seconds = 0 
+    if use_jingle_emoji:
+        jingle_length_in_seconds = get_config("jingle_length_in_seconds")
+    urls = extract_rip_link(text)
+    return_message = ""
+    error_strings = []
+    if len(urls):
+        floatAndErrors = await get_rip_url_length(urls[0], GetRipUrlLengthDesc(force_download=force_download))
+        if not len(floatAndErrors.error_strings):
+            return_message = format_rip_timecode(floatAndErrors.result, use_jingle_emoji, guild, jingle_length_in_seconds) 
+        else:
+            error_strings.extend(floatAndErrors.error_strings)
+    return StringAndErrors(return_message, error_strings)
+
+
+def format_rip(rip: Rip, durationString: str, guild: discord.Guild, make_smol: bool, spec_overdue_days: int, overdue_days: int) -> str:
 
     reacts = ""
     num_checks = 0
@@ -537,6 +570,9 @@ def format_rip(rip: Rip, guild: discord.Guild, make_smol: bool, spec_overdue_day
 
     link = format_message_link(guild.id, rip.channel_id, rip.message_id)
     title_body = f'**[{rip_title}]({link})**'
+    if len(durationString):
+        title_body += f' - {durationString}'
+
     if len(indicator) > 0:
         title_body = f'{indicator} {title_body} {indicator}'
 

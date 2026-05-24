@@ -355,7 +355,10 @@ async def send_roundup(roundup_desc: RoundupDesc, command_context: CommandContex
                     is_valid = not bool_and_errors.result 
 
         if is_valid:
-            result += format_rip(rip, command_context.channel.guild, False, spec_overdue_days, overdue_days) + vet_reacts
+            string_and_errors = await get_formatted_rip_length(rip.text, False, False, command_context.channel.guild)
+            error_strings.extend(string_and_errors.error_strings)
+
+            result += format_rip(rip, string_and_errors.string, command_context.channel.guild, False, spec_overdue_days, overdue_days) + vet_reacts
             result += readability_line 
             valid_count += 1
 
@@ -1943,18 +1946,14 @@ async def length_msg(args: list[str], command_context: CommandContext):
             return await send_if_errors("Errors during grabbing message", messageAndErrors.error_strings, command_context.channel)
         message = messageAndErrors.message
         
-        jingle_length_in_seconds = get_config("jingle_length_in_seconds")
-        urls = extract_rip_link(message.content)
         return_message = ""
         error_strings = []
-        for url in urls:
-            floatAndErrors = await get_rip_url_length(url, GetRipUrlLengthDesc(force_download=True))
-            if not len(floatAndErrors.error_strings):
-                rip_title = get_rip_title(message.content)
-                return_message += f'{rip_title}\n'
-                return_message += format_rip_timecode(floatAndErrors.result, command_context.channel.guild, jingle_length_in_seconds) 
-            else:
-                error_strings.extend(floatAndErrors.error_strings)
+        string_and_errors = await get_formatted_rip_length(message.content, True, command_context.channel.guild)
+        if not len(string_and_errors.error_strings):
+            rip_title = get_rip_title(message.content)
+            return_message = f'{rip_title} - {string_and_errors.string}'
+        else:
+            error_strings.extend(string_and_errors.error_strings)
 
         await send_and_if_errors(return_message, "Errors on getting length", error_strings, command_context.channel)
 
@@ -1976,7 +1975,7 @@ async def length_url(args: list[str], command_context: CommandContext):
         error_strings = []
         floatAndErrors = await get_rip_url_length(args[0], GetRipUrlLengthDesc(force_download=True))
         if not len(floatAndErrors.error_strings):
-            return_message += format_rip_timecode(floatAndErrors.result, command_context.channel.guild, jingle_length_in_seconds) 
+            return_message += format_rip_timecode(floatAndErrors.result, True, command_context.channel.guild, jingle_length_in_seconds) 
         else:
             error_strings.extend(floatAndErrors.error_strings)
 

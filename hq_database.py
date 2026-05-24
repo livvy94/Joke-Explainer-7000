@@ -12,9 +12,8 @@ from simpleQoC.qoc import getAudioLengthInSecondsFFprobe
 JE_DATABASE = shelve.open("je_database", writeback=True)
 
 ##NOTE: (Ahmayk) database keys must be strings
-##python 3.10 doesn't have it, documentation reccomends making it yourself
+##python 3.10 doesn't have StrEnum, python documentation reccomends making it yourself
 ## https://docs.python.org/3.10/library/enum.html#otherIs
-
 class StrEnum(str, Enum):
     pass
 
@@ -51,23 +50,14 @@ async def get_rip_url_length(url: str, desc: GetRipUrlLengthDesc) -> FloatAndErr
         floatAndErrors = await run_blocking(getAudioLengthInSecondsFFprobe, url)
         if not len(floatAndErrors.error_strings):
             duration = floatAndErrors.result
-            await store_in_database_float(floatAndErrors.result, url, DatabaseKey.RIP_LENGTH)
         else:
             error_strings.extend(floatAndErrors.error_strings)
+
+        #NOTE: (Ahmayk) store 0 when we error. 
+        # This results in not retrying on paths where don't want to download anything
+        await store_in_database_float(duration, url, DatabaseKey.RIP_LENGTH)
     else:
         duration = JE_DATABASE[DatabaseKey.RIP_LENGTH][url]
 
     return FloatAndErrors(duration, error_strings)
 
-
-def format_rip_timecode(seconds: float, guild: Guild, jingle_length_in_seconds: float) -> str:
-    jingle_emoji = ""
-    if seconds <= jingle_length_in_seconds:
-        jingle_emoji = f'{react_type_to_react_name(ReactType.JINGLE, guild)} '
-    hours = int(seconds // 3600)
-    minutes = int((seconds % 3600) // 60)
-    secs = int(seconds % 60)
-    time_string = f"{minutes:02d}:{secs:02d}"
-    if hours > 0:
-        time_string = f"{hours:02d}:{minutes:02d}:{secs:02d}"
-    return f'{jingle_emoji}**{time_string}**'

@@ -85,7 +85,7 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
     ):
         jingle_length_in_seconds = get_config("jingle_length_in_seconds")
         duration = qoc_checks_dict[QoCCheckType.LENGTH].value_float
-        duration_string = format_rip_timecode(duration, guild, jingle_length_in_seconds)
+        duration_string = format_rip_timecode(duration, True, guild, jingle_length_in_seconds)
         await store_in_database_float(duration, qoced_url, DatabaseKey.RIP_LENGTH)
         if duration <= jingle_length_in_seconds:
             react_types_add.append(ReactType.JINGLE)
