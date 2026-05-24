@@ -241,6 +241,7 @@ class RoundupFilterType(Enum):
     RANDOM = auto()
     SAVEQOC = auto()
     MYSAVEQOC = auto()
+    SORTLENGTH = auto()
 
 class RoundupDesc(NamedTuple):
     roundup_filter_type: RoundupFilterType = RoundupFilterType.NULL
@@ -266,6 +267,7 @@ async def send_roundup(roundup_desc: RoundupDesc, command_context: CommandContex
     get_rips_desc = GetRipsDesc(typing_channel=command_context.channel)
     rips_and_errors = await get_rips(channel, get_rips_desc)
     error_strings = rips_and_errors.error_strings
+    rips = rips_and_errors.rips
 
     spec_overdue_days = get_config('spec_overdue_days')
     overdue_days = get_config('overdue_days')
@@ -277,12 +279,16 @@ async def send_roundup(roundup_desc: RoundupDesc, command_context: CommandContex
     if roundup_desc.roundup_filter_type == RoundupFilterType.RANDOM:
         selected_rip_message_ids = choose_random_rips(rips_and_errors.rips, roundup_desc.random_count)
 
+    if roundup_desc.roundup_filter_type == RoundupFilterType.SORTLENGTH:
+        errors = await sort_rips_by_duration(rips)
+        error_strings.extend(errors)
+
     readability_line = "━━━━━━━━━━━━━━━━━━\n"
 
     result = ""
 
     valid_count = 0
-    for i, rip in enumerate(rips_and_errors.rips):
+    for rip in rips:
 
         vet_reacts = ""
 
@@ -363,7 +369,7 @@ async def send_roundup(roundup_desc: RoundupDesc, command_context: CommandContex
             valid_count += 1
 
     if result != "":
-        footer = f'#{channel.name}   -   {valid_count} of {len(rips_and_errors.rips)} Rips'
+        footer = f'#{channel.name}   -   {valid_count} of {len(rips)} Rips'
         await send_embed(result, command_context.channel, EmbedDesc(expires=True, seperator=readability_line, footer=footer))
         await send_if_errors("Roundup had errors", error_strings, command_context.channel)
     else:
@@ -658,6 +664,17 @@ async def jingles(args: list[str], command_context: CommandContext):
     roundup_desc = RoundupDesc(roundup_filter_type = RoundupFilterType.SEARCH_REACTION, \
                                react_name=jingle_emoji, not_found_message=f'No rips with {jingle_emoji} found.')
     await send_roundup(roundup_desc, command_context)
+
+
+@command(
+    command_type=CommandType.QOC,
+    brief="Show QoC rips sorted by the rip length",
+)
+async def sortbylength(args: list[str], command_context: CommandContext):
+    roundup_desc = RoundupDesc(roundup_filter_type = RoundupFilterType.SORTLENGTH, \
+                               not_found_message=f'Length of all QoC rips: **Zero Seconds!**')
+    await send_roundup(roundup_desc, command_context)
+
 
 @command(
     command_type=CommandType.QOC,

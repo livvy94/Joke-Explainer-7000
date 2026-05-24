@@ -485,13 +485,13 @@ async def user_is_react(user_react_check_type: UserReactCheckType, user_id: int,
     return BoolAndErrors(result, error_strings)
 
 
-def format_rip_timecode(seconds: float, use_jingle_emoji: bool, guild: Guild, jingle_length_in_seconds: float) -> str:
+def format_rip_timecode(seconds: float, use_jingle_emoji: bool, guild: Guild | None, jingle_length_in_seconds: float) -> str:
     result = ""
     #NOTE: (Ahmayk) 0 is stored in database when the call errors
     # we display these as blank 
     if seconds > 0:
         jingle_emoji = ""
-        if use_jingle_emoji and seconds <= jingle_length_in_seconds:
+        if use_jingle_emoji and seconds <= jingle_length_in_seconds and guild:
             jingle_emoji = f'{react_type_to_react_name(ReactType.JINGLE, guild)} '
         hours = int(seconds // 3600)
         minutes = int((seconds % 3600) // 60)
@@ -585,3 +585,29 @@ def format_rip(rip: Rip, durationString: str, guild: discord.Guild, make_smol: b
         return f'-# {title_body} {info_body}\n'
     else:
         return f'{title_body}\n{info_body}\n'
+
+
+async def sort_rips_by_duration(rips: list[Rip]) -> list[str]:
+
+    class RipAndDuration(NamedTuple):
+        rip: Rip
+        duration: float
+
+    rips_and_durations = []
+    error_strings = []
+
+    for rip in rips:
+        urls = extract_rip_link(rip.text)
+        if len(urls):
+            floatAndErrors = await get_rip_url_length(urls[0], GetRipUrlLengthDesc())
+            if not len(floatAndErrors.error_strings):
+                rips_and_durations.append(RipAndDuration(rip, floatAndErrors.result))
+            else:
+                error_strings.extend(floatAndErrors.error_strings)
+    
+    rips_and_durations.sort(key = lambda x: x.duration)
+    rips.clear()
+    for rip_and_duration in rips_and_durations:
+        rips.append(rip_and_duration.rip)
+
+    return error_strings
