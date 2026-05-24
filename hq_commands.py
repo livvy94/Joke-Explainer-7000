@@ -668,7 +668,7 @@ async def jingles(args: list[str], command_context: CommandContext):
 
 @command(
     command_type=CommandType.QOC,
-    brief="Show QoC rips sorted by the rip length",
+    brief="Show QoC rips sorted by rip length",
 )
 async def sortbylength(args: list[str], command_context: CommandContext):
     roundup_desc = RoundupDesc(roundup_filter_type = RoundupFilterType.SORTLENGTH, \
@@ -830,13 +830,14 @@ class SubOrQueueRipFilterType(Enum):
     SCOUT = auto()
     ALL = auto()
     RANDOM = auto()
+    SORTLENGTH = auto()
 
 class SendSubOrQueueDesc(NamedTuple):
     suborqueue_rip_filter_type: SubOrQueueRipFilterType = SubOrQueueRipFilterType.NULL 
     reaction_type: ReactType = ReactType.NULL 
     react_name: str = ""
-    channel_link: str = ""
     channel_types: List[str] = []
+    channel_ids: List[int] = []
     parsed_search_input: ParsedSearchInput = ParsedSearchInput([], False, "") 
     not_found_message: str = ""
     random_count: int = 0
@@ -845,13 +846,9 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
     """
     Sends a list of rips from either all submission or queue channels according to a filter.
     """
-    channel_id, msg = parse_channel_link(desc.channel_link, desc.channel_types)
-    if len(msg) > 0 or not len(desc.channel_link):
-        if desc.channel_link is not None and len(desc.channel_link):
-            await command_context.channel.send("Warning: something went wrong parsing channel link. Defaulting to showing from all known queues.")
+    channel_ids = desc.channel_ids 
+    if not len(channel_ids):
         channel_ids = get_channel_ids_of_types(desc.channel_types)
-    else:
-        channel_ids = [channel_id]
 
     result = ""
     error_strings = []
@@ -879,6 +876,11 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
 
             rips_and_errors = await get_rips(channel, GetRipsDesc(typing_channel=command_context.channel))
             error_strings.extend(rips_and_errors.error_strings)
+            rips = rips_and_errors.rips
+
+            if desc.suborqueue_rip_filter_type == SubOrQueueRipFilterType.SORTLENGTH:
+                errors = await sort_rips_by_duration(rips)
+                error_strings.extend(errors)
 
             for rip in rips_and_errors.rips:
 
@@ -915,6 +917,8 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
                         is_valid = True
                     case SubOrQueueRipFilterType.RANDOM:
                         is_valid = rip.message_id in selected_rip_message_ids
+                    case SubOrQueueRipFilterType.SORTLENGTH:
+                        is_valid = True
                     case _:
                         assert "Unimplemented SubOrQueueRipFilterType"
 
@@ -1067,6 +1071,25 @@ async def jingles_sub(args: list[str], command_context: CommandContext):
     desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.SEARCH_REACTION, \
                               channel_types = ['SUBS', 'SUBS_PIN', 'SUBS_THREAD'], \
                               react_name = jingle_emoji)
+    await send_suborqueue_rips(desc, command_context)
+
+
+@command(
+    command_type=CommandType.SUBS,
+    format="[channel link]",
+    brief="Show subbmited rips sorted by rip length",
+)
+async def sortlength_sub(args: list[str], command_context: CommandContext):
+
+    channel_ids = get_channel_ids_of_types(["SUBS"])
+    if len(args): 
+        channel_id, msg = parse_channel_link(args[0], ['SUBS', 'SUBS_PIN', 'SUBS_THREAD'])
+        if len(msg) > 0:
+            return await command_context.channel.send(msg)
+        channel_ids = [channel_id]
+
+    desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.SORTLENGTH, \
+                              channel_ids = channel_ids)
     await send_suborqueue_rips(desc, command_context)
 
 
