@@ -2,6 +2,7 @@
 from hq_types import *
 from hq_discord import *
 from hq_rip import *
+from hq_database import * 
 
 from bot_secrets import YOUTUBE_API_KEY, YOUTUBE_CHANNEL_NAME
 from simpleQoC.qoc import CheckResultType, QoCCheckType, QoCCheck, performQoC
@@ -12,16 +13,6 @@ from simpleQoC.metadata import checkMetadata, isDupe
 #===============================================#
 
 UNPIN_START_STRING = "-# :pushpin::x:"
-
-import functools
-# https://stackoverflow.com/a/65882269
-async def run_blocking(blocking_func: typing.Callable, *args, **kwargs) -> typing.Any:
-    """
-    Runs a blocking function in a non-blocking way.
-    Needed because QoC functions take a while to run.
-    """
-    func = functools.partial(blocking_func, *args, **kwargs) # `run_in_executor` doesn't support kwargs, `functools.partial` does
-    return await bot.loop.run_in_executor(None, func)
 
 class VetRipDesc(NamedTuple):
     rip: Rip | None = None
@@ -81,6 +72,19 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
 
     link_error = QoCCheckType.LINK in qoc_checks_dict and \
         qoc_checks_dict[QoCCheckType.LINK].result == CheckResultType.ERROR
+
+    is_jingle = False
+    duration_string = "`[Unknown length]`"
+    if (
+        QoCCheckType.LENGTH in qoc_checks_dict
+        and qoc_checks_dict[QoCCheckType.LENGTH].result == CheckResultType.PASS
+        and len(qoced_url)
+    ):
+        jingle_length_in_seconds = get_config("jingle_length_in_seconds")
+        duration = qoc_checks_dict[QoCCheckType.LENGTH].value_float
+        is_jingle = duration <= jingle_length_in_seconds
+        duration_string = format_rip_timecode(duration, guild, jingle_length_in_seconds)
+        await store_in_database_float(duration, qoced_url, DatabaseKey.RIP_LENGTH)
 
     is_qoc_pass_all = len(qoc_checks_dict) > 0
     for qoc_check in qoc_checks_dict.values():
@@ -158,6 +162,7 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
     bitrate_emoji_name = react_type_to_react_name(ReactType.BITRATE, guild)
     clipping_emoji_name = react_type_to_react_name(ReactType.CLIPPING, guild)
     metadata_emoji_name = react_type_to_react_name(ReactType.METADATA, guild)
+    jingle_emoji_name = react_type_to_react_name(ReactType.JINGLE, guild)
 
     past_vet_message = None 
     if desc.message and channel_is_types(desc.message.channel, ['QOC']):
@@ -196,6 +201,12 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
             if message_has_react(bitrate_emoji_name, desc.message):
                 errors = await discord_clear_reaction(bitrate_emoji_name, desc.message)
                 error_strings.extend(errors)
+
+        if is_jingle and not message_has_react(jingle_emoji_name, desc.message):
+            errors = await discord_add_reaction(jingle_emoji_name, desc.message)
+            error_strings.extend(errors)
+        #NOTE: (Ahmayk) we don't remove jingle reacts because someone might want to override bot's judgement of what a jingle is 
+        #could make logic to detect if bot has reacted themselves but that'd be a performance hit to get user react data 
 
     return_message = ""
     if desc.full_feedback or not everything_passed or past_vet_message:
@@ -266,7 +277,7 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
                 else:
                     return_header_title = f'Message Updated'
 
-            return_header = f'**{return_header_title}: {rip_message_link}**'
+            return_header = f'**{return_header_title}: {rip_message_link}** ({duration_string})'
 
         intro_warnings_string = "\n".join(intro_warnings)
         return_message = f'{intro_warnings_string}\n{return_header}\n**Verdict**: {" ".join(verdict_emojis)}'

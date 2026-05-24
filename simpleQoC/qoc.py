@@ -38,12 +38,14 @@ class CheckResultType(Enum):
 class QoCCheck(NamedTuple):
     result: CheckResultType = CheckResultType.NULL 
     msg: str = ""
+    value_float: float = 0.0
 
 class QoCCheckType(Enum):
     LINK = auto()
     BITRATE = auto()
     CLIPPING = auto()
     RESOLUTION = auto()
+    LENGTH = auto()
 
 #=======================================#
 #               DEBUGGING               #
@@ -900,6 +902,13 @@ def performQoC(url: str) -> dict[QoCCheckType, QoCCheck]:
         result[QoCCheckType.BITRATE] = checkBitrateFromFile(file)
         result[QoCCheckType.CLIPPING] = checkClippingFromFile(file, filepath)
         result[QoCCheckType.RESOLUTION] = checkResolution(filepath)
+
+        float_and_errors = ffprobeGetLengthInSeconds(filepath)
+        if not len(float_and_errors.error_strings):
+            result[QoCCheckType.LENGTH] = QoCCheck(CheckResultType.PASS, "", float_and_errors.result)
+        else:
+            result[QoCCheckType.LENGTH] = QoCCheck(CheckResultType.FAIL, " ".join(float_and_errors.error_strings))
+
     else: 
         result[QoCCheckType.LINK] = QoCCheck(CheckResultType.ERROR, link_error_msg)
 

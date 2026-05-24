@@ -1930,6 +1930,7 @@ async def peek_url(args: list[str], command_context: CommandContext):
     command_type=CommandType.ANALYZE,
     format='<message url/reply>',
     brief='Get length in seconds of rip audio in message',
+    desc='Always redownloads the rip, skipping the internal cache.'
 )
 async def length_msg(args: list[str], command_context: CommandContext):
 
@@ -1947,7 +1948,7 @@ async def length_msg(args: list[str], command_context: CommandContext):
         return_message = ""
         error_strings = []
         for url in urls:
-            floatAndErrors = await get_rip_url_length(url, GetRipUrlLengthDesc())
+            floatAndErrors = await get_rip_url_length(url, GetRipUrlLengthDesc(force_download=True))
             if not len(floatAndErrors.error_strings):
                 rip_title = get_rip_title(message.content)
                 return_message += f'{rip_title}\n'
@@ -1962,6 +1963,7 @@ async def length_msg(args: list[str], command_context: CommandContext):
     command_type=CommandType.ANALYZE,
     format='<file url>',
     brief='Get length in seconds of rip audio in rip URL',
+    desc='Always redownloads the rip, skipping the internal cache.'
 )
 async def length_url(args: list[str], command_context: CommandContext):
 
@@ -1972,7 +1974,7 @@ async def length_url(args: list[str], command_context: CommandContext):
         jingle_length_in_seconds = get_config("jingle_length_in_seconds")
         return_message = ""
         error_strings = []
-        floatAndErrors = await get_rip_url_length(args[0], GetRipUrlLengthDesc())
+        floatAndErrors = await get_rip_url_length(args[0], GetRipUrlLengthDesc(force_download=True))
         if not len(floatAndErrors.error_strings):
             return_message += format_rip_timecode(floatAndErrors.result, command_context.channel.guild, jingle_length_in_seconds) 
         else:
