@@ -669,6 +669,7 @@ async def jingles(args: list[str], command_context: CommandContext):
 @command(
     command_type=CommandType.QOC,
     brief="Show QoC rips sorted by rip length",
+    aliases=['sortlength', 'sortripsbylength']
 )
 async def sortbylength(args: list[str], command_context: CommandContext):
     roundup_desc = RoundupDesc(roundup_filter_type = RoundupFilterType.SORTBYLENGTH, \
@@ -1075,7 +1076,8 @@ async def jingles_sub(args: list[str], command_context: CommandContext):
 @command(
     command_type=CommandType.SUBS,
     format="[channel link]",
-    brief="Show subbmited rips sorted by rip length",
+    brief="Show subbed rips sorted by rip length",
+    aliases=['sortlength_sub', 'sortripsbylength_sub', 'sortlength_subs', 'sortripsbylength_subs'],
 )
 async def sortbylength_sub(args: list[str], command_context: CommandContext):
 
@@ -1215,6 +1217,25 @@ async def jingles_q(args: list[str], command_context: CommandContext):
     desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.SEARCH_REACTION, \
                               channel_types = ['QUEUE'], \
                               react_name = jingle_emoji)
+    await send_suborqueue_rips(desc, command_context)
+
+@command(
+    command_type=CommandType.QUEUE,
+    format="[channel link]",
+    brief="Show queued rips sorted by rip length",
+    aliases=['sortlength_q', 'sortripsbylength_q'],
+)
+async def sortbylength_q(args: list[str], command_context: CommandContext):
+
+    channel_ids = get_channel_ids_of_types(["QUEUE"])
+    if len(args): 
+        channel_id, msg = parse_channel_link(args[0], ['QUEUE'])
+        if len(msg) > 0:
+            return await command_context.channel.send(msg)
+        channel_ids = [channel_id]
+
+    desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.SORTBYLENGTH, \
+                              channel_ids = channel_ids)
     await send_suborqueue_rips(desc, command_context)
 
 
@@ -2027,7 +2048,7 @@ async def length_msg(args: list[str], command_context: CommandContext):
         
         return_message = ""
         error_strings = []
-        string_and_errors = await get_formatted_rip_length(message.content, True, command_context.channel.guild)
+        string_and_errors = await get_formatted_rip_length(message.content, True, True, command_context.channel.guild)
         if not len(string_and_errors.error_strings):
             rip_title = get_rip_title(message.content)
             return_message = f'{rip_title} - {string_and_errors.string}'

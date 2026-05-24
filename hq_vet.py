@@ -86,8 +86,6 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
         jingle_length_in_seconds = get_config("jingle_length_in_seconds")
         duration = qoc_checks_dict[QoCCheckType.LENGTH].value_float
         duration_string = format_rip_timecode(duration)
-        if len(duration_string) and duration <= get_config("jingle_length_in_seconds"):
-            duration_string = f'{react_type_to_react_name(ReactType.JINGLE, guild)} {duration}'
         await store_in_database_float(duration, qoced_url, DatabaseKey.RIP_LENGTH)
         if duration <= jingle_length_in_seconds:
             react_types_add.append(ReactType.JINGLE)
@@ -275,7 +273,7 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
             else:
                 return_header_title = f'Message Updated'
 
-        return_header = f'**{return_header_title}: {rip_message_link}** - **{duration_string}**'
+        return_header = f'**{return_header_title}: {rip_message_link}** - {duration_string}'
 
     intro_warnings_string = "\n".join(intro_warnings)
     return_message = f'{intro_warnings_string}\n{return_header}\n**Verdict**: {" ".join(verdict_emojis)}'
