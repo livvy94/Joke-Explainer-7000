@@ -507,9 +507,11 @@ async def get_message_from_referece_or_args(message_reference: discord.MessageRe
                 error_strings.extend("Error: Channel not found when parsing message reference")
     
     if len(command_args):
-        server, channel, message, status = await parse_message_link(command_args[0])
-        if message is None:
-            error_strings.append(status)
+        link = command_args[0].strip()
+        if len(link):
+            server, channel, message, status = await parse_message_link(link)
+            if message is None:
+                error_strings.append(status)
 
     if not len(error_strings):
         assert message
