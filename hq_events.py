@@ -20,8 +20,7 @@ from sourceFinder import search_rip_sources
 #===============================================#
 
 times = []
-for i in range(0, 23):
-    times.append(time(hour=i, tzinfo=timezone.utc))
+times.append(time(hour=6, tzinfo=timezone.utc))
 
 @tasks.loop(time=times)
 async def validate_cache_regularly():
