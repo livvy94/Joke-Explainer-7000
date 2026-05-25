@@ -494,7 +494,15 @@ async def parse_channel_link_or_text(args: list[str]) -> StringAndErrors:
 async def get_message_from_referece_or_args(message_reference: discord.MessageReference | None, command_args: list[str]) -> MessageAndErrors:
     message = None
     error_strings = []
-    if message_reference and message_reference.message_id:
+
+    if len(command_args):
+        link = command_args[0].strip()
+        if len(link):
+            server, channel, message, status = await parse_message_link(link)
+            if message is None:
+                error_strings.append(status)
+
+    if not message and message_reference and message_reference.message_id:
         if message_reference.cached_message:
             message = message_reference.cached_message
         else:
@@ -505,13 +513,6 @@ async def get_message_from_referece_or_args(message_reference: discord.MessageRe
                 error_strings.extend(message_and_errors.error_strings)
             else:
                 error_strings.extend("Error: Channel not found when parsing message reference")
-    
-    if len(command_args):
-        link = command_args[0].strip()
-        if len(link):
-            server, channel, message, status = await parse_message_link(link)
-            if message is None:
-                error_strings.append(status)
 
     if not len(error_strings):
         assert message

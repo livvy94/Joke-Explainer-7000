@@ -2090,7 +2090,8 @@ async def parse_source_input(message_reference: discord.MessageReference, args: 
     if len(args):
         text = " ".join(args) 
         message_link = extract_discord_link(args[0])
-    if message_reference or message_link:
+
+    if (message_reference or message_link) and not (len(text) and not message_link):
         messageAndErrors = await get_message_from_referece_or_args(message_reference, [message_link])
         error_strings.extend(messageAndErrors.error_strings)
         if messageAndErrors.message:
