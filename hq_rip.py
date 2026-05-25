@@ -381,9 +381,10 @@ async def validate_cache_all() -> StringAndErrors:
 
 async def rebuild_cache_for_channel(channel_id: int) -> StringAndErrors:
     return_message = ""
-    error_strings = [] 
 
-    channel = bot.get_channel(channel_id)
+    channel_and_errors = await discord_find_channel(channel_id)
+    channel = channel_and_errors.channel
+    error_strings = channel_and_errors.error_strings
     if channel:
         rips_and_errors = await get_rips(channel, GetRipsDesc(rebuild_cache=True))
         error_strings.extend(rips_and_errors.error_strings)
@@ -396,11 +397,11 @@ async def rebuild_cache_for_channel(channel_id: int) -> StringAndErrors:
         elif channel_is_types(channel, ['SUBS', 'SUBS_THREAD', 'SUBS_PIN']):
             channel_type_string = 'subbed'
         return_message = f'Cached {len(rips_and_errors.rips)} {channel_type_string} rips in {channel.jump_url}.'
-
         await write_log(return_message)
     else:
-        error_strings.append(f'Error caching channel: Failed to find channel: <#{channel_id}>')
-        await write_log(return_message)
+        error = f'Error caching channel: Failed to find channel: <#{channel_id}>'
+        await write_log(error)
+        error_strings.append(error)
 
     return StringAndErrors(return_message, error_strings) 
 

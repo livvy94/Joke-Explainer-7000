@@ -26,6 +26,10 @@ bot = discord.Client(
 #                AndErrors Types                #
 #===============================================#
 
+class ChannelAndErrors(NamedTuple):
+    channel: TextChannel | Thread
+    error_strings: List[str]
+
 class MessageAndErrors(NamedTuple):
     message: Message | None 
     error_strings: List[str]
@@ -284,6 +288,18 @@ async def log_exception(txt: str, error: Exception, error_strings: List[str], fu
     else:
         print("No log channel found.")
     error_strings.append(error_text)
+
+async def discord_find_channel(channel_id) -> ChannelAndErrors:
+    channel = bot.get_channel(channel_id)
+    error_strings: List[str] = []
+    if not channel:
+        try:
+            channel = await bot.fetch_channel(channel_id)
+            if isinstance(channel, Thread) and channel.archived:
+                await send("Unarchiving!", channel, 1) 
+        except Exception as error:
+            await log_exception(f'Discord API call failed to fetch channel id {channel_id}', error, error_strings, True)
+    return ChannelAndErrors(channel, error_strings) 
 
 async def discord_fetch_message(message_id: int, channel: TextChannel | Thread) -> MessageAndErrors: 
     message = None

@@ -202,7 +202,7 @@ async def help(args: list[str], command_context: CommandContext):
         result += '\n\n__**Legend:**__'
         result += '\n`<argument>`: Required argument'
         result += '\n`[argument]`: Optional argument'
-        result += f'\n{qoc_react}: Command only accessible in QoC channels:'
+        result += f'\n{qoc_react.string}: Command only accessible in QoC channels:'
         result += f'\n{" ".join(qoc_channels_strings)}'
         result += f'\n\n*To learn more about a command, use `{prefix}help <command>`*'
 
