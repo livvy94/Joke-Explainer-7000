@@ -275,7 +275,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
                                 if rip.message_id not in USER_REACT_CACHE: 
                                     USER_REACT_CACHE[rip.message_id] = {} 
 
-                                react = React(payload.emoji.id or 0, payload.emoji.name)
+                                react = React(payload.emoji.id or 0, payload.emoji.name, str(payload.emoji))
                                 if react not in USER_REACT_CACHE[rip.message_id]: 
                                     USER_REACT_CACHE[rip.message_id][react] = [] 
 
@@ -297,7 +297,7 @@ async def remove_reaction_from_cache(channel_id: int, message_id: int, emoji: di
     if in_rip_cache or in_user_react_cache:
         async with lock_message(message_id, [], None):
 
-            react = React(emoji.id or 0, emoji.name)
+            react = React(emoji.id or 0, emoji.name, str(emoji))
 
             if in_rip_cache:
                 rip = RIP_CACHE[channel_id][message_id]

@@ -508,7 +508,7 @@ async def get_formatted_rip_length(text: str, force_download: bool, use_jingle_e
         if not len(floatAndErrors.error_strings):
             return_message = format_rip_timecode(floatAndErrors.result) 
             if len(return_message) and use_jingle_emoji and floatAndErrors.result <= get_config("jingle_length_in_seconds"):
-                return_message = f'{react_type_to_react_name(ReactType.JINGLE, guild)} {return_message}'
+                return_message = f'{react_type_to_react(ReactType.JINGLE, guild).string} {return_message}'
         else:
             error_strings.extend(floatAndErrors.error_strings)
     return StringAndErrors(return_message, error_strings)

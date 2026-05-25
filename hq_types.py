@@ -8,6 +8,7 @@ from datetime import datetime
 class React(NamedTuple):
     id: int
     name: str
+    string: str
 
 class Rip(NamedTuple):
     text: str

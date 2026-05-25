@@ -5,7 +5,6 @@ from typing import NamedTuple, List
 from enum import Enum
 from discord import TextChannel, Thread, Guild
 
-from hq_react import ReactType, react_type_to_react_name
 from hq_discord import FloatAndErrors, run_blocking
 from simpleQoC.qoc import getAudioLengthInSecondsFFprobe 
 

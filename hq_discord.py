@@ -291,7 +291,7 @@ async def discord_fetch_message(message_id: int, channel: TextChannel | Thread) 
     try:
         message = await channel.fetch_message(message_id)
     except Exception as error:
-        await log_exception(f'Discord API call failed to fetch message {message_id}', error, error_strings, True)
+        await log_exception(f'Discord API call failed to fetch message id {message_id}', error, error_strings, True)
     return MessageAndErrors(message, error_strings)
 
 
@@ -301,7 +301,7 @@ async def discord_get_channel_messages(limit: int | None, channel: TextChannel |
     try:
         messages = [message async for message in channel.history(limit=limit)]
     except Exception as error:
-        await log_exception(f'Discord API call failed to fetch channel messages from {channel.name}', error, error_strings, True)
+        await log_exception(f'Discord API call failed to fetch channel messages from {channel.jump_url}', error, error_strings, True)
     return MessagesAndErrors(messages, error_strings) 
 
 
@@ -311,7 +311,7 @@ async def discord_get_channel_messages_after(message: Message, limit: int | None
     try:
         messages = [message async for message in message.channel.history(limit=limit, after=message)]
     except Exception as error:
-        await log_exception(f'Discord API call failed to fetch channel messages from {message.channel.name} after message {message.jump_url}', error, error_strings, True)
+        await log_exception(f'Discord API call failed to fetch channel messages from {message.channel.jump_url} after message {message.jump_url}', error, error_strings, True)
     return MessagesAndErrors(messages, error_strings) 
 
 
@@ -345,7 +345,7 @@ async def discord_cleanup_embeds(limit: int | None, expire_time: float, channel:
         async with typing_channel.typing() if typing_channel is not None else empty_async_context():
             deleted_messages = await channel.purge(limit=limit, check=should_delete)
     except Exception as error:
-        await log_exception(f'Discord API call failed to delete messages from {channel.name}', error, error_strings, True)
+        await log_exception(f'Discord API call failed to delete messages from {channel.jump_url}', error, error_strings, True)
 
     return MessagesAndErrors(deleted_messages, error_strings)
 
@@ -374,7 +374,7 @@ async def discord_add_reaction(reaction_string: str, message: Message) -> List[s
     try:
         await message.add_reaction(reaction_string)
     except Exception as error:
-        await log_exception(f'Discord API call failed to add reaction {reaction_string} to {message.id}', error, error_strings, True)
+        await log_exception(f'Discord API call failed to add reaction {reaction_string} to {message.jump_url}', error, error_strings, True)
     return error_strings
 
 
@@ -383,7 +383,17 @@ async def discord_clear_reaction(reaction_string: str, message: Message) -> List
     try:
         await message.clear_reaction(reaction_string)
     except Exception as error:
-        await log_exception(f'Discord API call failed to clear reaction {reaction_string} from {message.id}', error, error_strings, True)
+        await log_exception(f'Discord API call failed to clear reaction {reaction_string} from {message.jump_url}', error, error_strings, True)
+    return error_strings
+
+
+async def discord_remove_reaction(reaction_string: str, user_id: int, message: Message) -> List[str]: 
+    error_strings: List[str] = [] 
+    try:
+        member = message.guild.get_member(user_id)
+        await message.remove_reaction(reaction_string, member)
+    except Exception as error:
+        await log_exception(f'Discord API call failed to remove reaction {reaction_string} from {message.jump_url} from user id {user_id}', error, error_strings, True)
     return error_strings
 
 
@@ -393,7 +403,7 @@ async def discord_edit_message(message: Message, text: str) -> List[str]:
         #NOTE: (Ahmayk) if message has attachments, components, or embeds they will disappear
         await message.edit(content=text)
     except Exception as error:
-        await log_exception(f'Discord API call failed to edit message: {message.id}', error, error_strings, True)
+        await log_exception(f'Discord API call failed to edit message: {message.jump_url}', error, error_strings, True)
     return error_strings
 
 

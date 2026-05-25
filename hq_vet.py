@@ -207,34 +207,35 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
     if not len(qoced_url) and not link_error:
         intro_warnings.append(":warning: No rip links detected.")
 
-    verdict_emojis: List[str] = [] 
+    verdict_react_strings: List[str] = [] 
 
     if link_error: 
-        verdict_emojis.append(QOC_DEFAULT_LINKERR)
+        verdict_react_strings.append(QOC_DEFAULT_LINKERR)
         intro_warnings.append(":warning: **Rip link not Auto-QoCed**")
 
-    bitrate_emoji_name = react_type_to_react_name(ReactType.BITRATE, guild)
-    clipping_emoji_name = react_type_to_react_name(ReactType.CLIPPING, guild)
-    metadata_emoji_name = react_type_to_react_name(ReactType.METADATA, guild)
+    bitrate_react = react_type_to_react(ReactType.BITRATE, guild)
+    clipping_react = react_type_to_react(ReactType.CLIPPING, guild)
+    metadata_react = react_type_to_react(ReactType.METADATA, guild)
+    fix_react = react_type_to_react(ReactType.FIX, guild)
+    regular_check_react = react_type_to_react(ReactType.REGULAR_CHECK, guild)
 
     issue_list = []
-    fix_emoji_name = react_type_to_react_name(ReactType.FIX, guild)
     for qoc_check_type, qoc_check in qoc_checks_dict.items():
         if len(qoc_check.msg) and (desc.full_feedback or qoc_check.result != CheckResultType.PASS):
             issue_list.append(qoc_check.msg)
 
-        if qoc_check.result == CheckResultType.FAIL and fix_emoji_name not in verdict_emojis:
-            verdict_emojis.append(fix_emoji_name)
+        if qoc_check.result == CheckResultType.FAIL and fix_react.string not in verdict_react_strings:
+            verdict_react_strings.append(fix_react.string)
             if qoc_check_type == QoCCheckType.BITRATE:
-                verdict_emojis.append(bitrate_emoji_name)
+                verdict_react_strings.append(bitrate_react.string)
             if qoc_check_type == QoCCheckType.CLIPPING:
-                verdict_emojis.append(clipping_emoji_name)
+                verdict_react_strings.append(clipping_react.string)
 
-        if qoc_check.result == CheckResultType.ERROR and DEFAULT_ERROR not in verdict_emojis:
-            verdict_emojis += DEFAULT_ERROR
+        if qoc_check.result == CheckResultType.ERROR and DEFAULT_ERROR not in verdict_react_strings:
+            verdict_react_strings.append(DEFAULT_ERROR)
 
     if len(metadata_checks):
-        verdict_emojis.append(metadata_emoji_name)
+        verdict_react_strings.append(metadata_react.string)
         for qoc_check in metadata_checks:
             if len(qoc_check.msg):
                 issue_list.append(qoc_check.msg)
@@ -242,7 +243,7 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
         issue_list.append('Metadata is OK.')
 
     if everything_passed:
-        verdict_emojis.append(DEFAULT_CHECK)
+        verdict_react_strings.append(regular_check_react.string)
 
     return_header = "" 
     if len(rip_message_link):
@@ -265,18 +266,18 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
             is_metadata_updated = linkless_metadata_old != linkless_metadata_new 
 
             if is_link_updated and is_metadata_updated:
-                return_header_title = f'{QOC_DEFAULT_LINKERR}{metadata_emoji_name} Link and Metadata Updated'
+                return_header_title = f'{QOC_DEFAULT_LINKERR}{metadata_react} Link and Metadata Updated'
             elif is_link_updated:
                 return_header_title = f'{QOC_DEFAULT_LINKERR} Link Updated'
             elif is_metadata_updated:
-                return_header_title = f'{metadata_emoji_name} Metadata Updated'
+                return_header_title = f'{metadata_react} Metadata Updated'
             else:
                 return_header_title = f'Message Updated'
 
         return_header = f'**{return_header_title}: {rip_message_link}** - {duration_string}'
 
     intro_warnings_string = "\n".join(intro_warnings)
-    return_message = f'{intro_warnings_string}\n{return_header}\n**Verdict**: {" ".join(verdict_emojis)}'
+    return_message = f'{intro_warnings_string}\n{return_header}\n**Verdict**: {" ".join(verdict_react_strings)}'
     if len(issue_list):
         return_message += "\n- " + "\n- ".join(issue_list)
 
@@ -301,7 +302,7 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
     if (
         past_vet_message 
         and past_vet_message.content != vet_report_text 
-        and message_has_react(DEFAULT_CHECK, past_vet_message)
+        and message_has_react(regular_check_react, past_vet_message)
     ):
         errors = await discord_clear_reaction(DEFAULT_CHECK, past_vet_message)
         error_strings.extend(errors)

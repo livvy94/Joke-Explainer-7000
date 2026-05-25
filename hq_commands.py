@@ -119,7 +119,7 @@ async def help(args: list[str], command_context: CommandContext):
     result = "" 
 
     prefix = get_config("prefix")
-    qoc_emote = react_type_to_react_name(ReactType.QOC, command_context.channel.guild)
+    qoc_react = react_type_to_react(ReactType.QOC, command_context.channel.guild)
 
     if len(args):
 
@@ -143,7 +143,7 @@ async def help(args: list[str], command_context: CommandContext):
             desc += f'\n:small_blue_diamond: __**Details**__: {details}'
 
         if not command_info.public:
-            desc += f'\n\n{qoc_emote} *Only accessible in QoC channels.*' 
+            desc += f'\n\n{qoc_react.string} *Only accessible in QoC channels.*' 
         if command_info.admin:
             desc += f'\n\n:nerd: *Only accessible by admins of this discord server.*' 
 
@@ -179,7 +179,7 @@ async def help(args: list[str], command_context: CommandContext):
                     result += '\n'
 
                     if not info.public:
-                        result += f'{qoc_emote} '
+                        result += f'{qoc_react.string} '
 
                     result += f'**{prefix}{name}**'
 
@@ -202,7 +202,7 @@ async def help(args: list[str], command_context: CommandContext):
         result += '\n\n__**Legend:**__'
         result += '\n`<argument>`: Required argument'
         result += '\n`[argument]`: Optional argument'
-        result += f'\n{qoc_emote}: Command only accessible in QoC channels:'
+        result += f'\n{qoc_react}: Command only accessible in QoC channels:'
         result += f'\n{" ".join(qoc_channels_strings)}'
         result += f'\n\n*To learn more about a command, use `{prefix}help <command>`*'
 
@@ -250,7 +250,7 @@ class RoundupDesc(NamedTuple):
     user_id: int = 0 
     conditional_string: str = ""
     parsed_search_input: ParsedSearchInput = ParsedSearchInput([], False, "") 
-    react_name: str = ""
+    react_name: str = "" 
     reaction_type: ReactType = ReactType.NULL 
     not_found_message: str = ""
     random_count: int = 0
@@ -660,9 +660,9 @@ async def hasreact(args: list[str], command_context: CommandContext):
     aliases=["jingle"]
 )
 async def jingles(args: list[str], command_context: CommandContext):
-    jingle_emoji = react_type_to_react_name(ReactType.JINGLE, command_context.channel.guild)
-    roundup_desc = RoundupDesc(roundup_filter_type = RoundupFilterType.SEARCH_REACTION, \
-                               react_name=jingle_emoji, not_found_message=f'No rips with {jingle_emoji} found.')
+    roundup_desc = RoundupDesc(roundup_filter_type = RoundupFilterType.HASREACT, \
+                               reaction_type=ReactType.JINGLE,
+                               not_found_message=f'No jingle rips found.')
     await send_roundup(roundup_desc, command_context)
 
 
@@ -953,8 +953,8 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
 
                     for react_type in shown_react_types:
                         if rip_has_react([react_type], rip):
-                            emoji = react_type_to_react_name(react_type, channel.guild)
-                            result += f"{emoji} "
+                            react = react_type_to_react(react_type, channel.guild)
+                            result += f"{react.string} "
 
                     rip_link = format_message_link(channel.guild.id, rip.channel_id, rip.message_id)
                     result += f'**[{rip_title}]({rip_link})**\n'
@@ -1066,10 +1066,9 @@ async def hasreact_sub(args: list[str], command_context: CommandContext):
     aliases=["jingles_subs", "jingle_sub", "jingle_subs"]
 )
 async def jingles_sub(args: list[str], command_context: CommandContext):
-    jingle_emoji = react_type_to_react_name(ReactType.JINGLE, command_context.channel.guild)
-    desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.SEARCH_REACTION, \
+    desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.HASREACT, \
                               channel_types = ['SUBS', 'SUBS_PIN', 'SUBS_THREAD'], \
-                              react_name = jingle_emoji)
+                              reaction_type = ReactType.JINGLE)
     await send_suborqueue_rips(desc, command_context)
 
 
@@ -1213,10 +1212,9 @@ async def hasreact_q(args: list[str], command_context: CommandContext):
     aliases=["jingle_q"]
 )
 async def jingles_q(args: list[str], command_context: CommandContext):
-    jingle_emoji = react_type_to_react_name(ReactType.JINGLE, command_context.channel.guild)
-    desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.SEARCH_REACTION, \
+    desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.HASREACT, \
                               channel_types = ['QUEUE'], \
-                              react_name = jingle_emoji)
+                              reaction_type = ReactType.JINGLE)
     await send_suborqueue_rips(desc, command_context)
 
 @command(
@@ -2076,7 +2074,7 @@ async def length_url(args: list[str], command_context: CommandContext):
         if not len(floatAndErrors.error_strings):
             return_message += format_rip_timecode(floatAndErrors.result) 
             if len(return_message) and floatAndErrors.result <= get_config("jingle_length_in_seconds"):
-                return_message = f'{react_type_to_react_name(ReactType.JINGLE, command_context.channel.guild)} {return_message}'
+                return_message = f'{react_type_to_react(ReactType.JINGLE, command_context.channel.guild).string} {return_message}'
         else:
             error_strings.extend(floatAndErrors.error_strings)
 

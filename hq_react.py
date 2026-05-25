@@ -6,7 +6,7 @@ import re
 
 from hq_types import Rip, React 
 from hq_config import get_config 
-from hq_discord import UserReactDictAndErrors, log_exception, discord_add_reaction, discord_clear_reaction
+from hq_discord import bot, UserReactDictAndErrors, log_exception, discord_add_reaction, discord_clear_reaction, discord_remove_reaction
 
 APPROVED_INDICATOR = '🔥'
 AWAITING_SPECIALIST_INDICATOR = '♨️'
@@ -40,6 +40,7 @@ class ReactType(Enum):
     NULL = auto()
     GOLDCHECK = auto()
     CHECK = auto()
+    REGULAR_CHECK = auto()
     FIX = auto()
     REJECT = auto()
     STOP = auto()
@@ -64,6 +65,7 @@ class ReactInfo(NamedTuple):
 REACT_INFOS: dict[ReactType, ReactInfo] = {
     ReactType.GOLDCHECK: ReactInfo([DEFAULT_GOLDCHECK], ["goldcheck"]),
     ReactType.CHECK: ReactInfo([DEFAULT_CHECK], ["check"]),
+    ReactType.REGULAR_CHECK: ReactInfo([DEFAULT_CHECK], []),
     ReactType.FIX: ReactInfo([DEFAULT_FIX], ["fix", "wrench"]),
     ReactType.REJECT: ReactInfo([DEFAULT_REJECT], ["reject"]),
     ReactType.STOP: ReactInfo([DEFAULT_STOP], ["stop", "octagonal"]),
@@ -96,18 +98,23 @@ KEYCAP_EMOJIS = {'2️⃣': 2, '3️⃣': 3, '4️⃣': 4, '5️⃣': 5, '6️�
 #                    REACTS
 #===============================================#
 
+discord.Emoji
+
 def init_react(reaction: discord.Reaction) -> React:
     name = ""
     id = 0 
+    string = ""
     if isinstance(reaction.emoji, str):
         name = reaction.emoji
+        string = name
     elif isinstance(reaction.emoji, discord.Emoji) or isinstance(reaction.emoji, discord.PartialEmoji):
         name = reaction.emoji.name
+        string = str(reaction.emoji) 
         if reaction.emoji.id:
             id = reaction.emoji.id
     else:
         assert False, "Unrecognized reaction type" # This shouldn't happen
-    return React(id, name) 
+    return React(id, name, string) 
 
 def react_is(react_type: ReactType, name: str) -> bool:
     result = False
@@ -145,16 +152,17 @@ def react_is_category(react_category: ReactCategory, name: str) -> bool:
             assert f"Unimplemented ReactionCategory {react_category}"
     return result
 
-def react_type_to_react_name(react_type: ReactType, guild: Guild) -> str:
-    result = ""
+def react_type_to_react(react_type: ReactType, guild: Guild) -> React:
+    result = React(0, "", "") 
     if react_type in REACT_INFOS:
         if len(REACT_INFOS[react_type].default_names):
-            result = REACT_INFOS[react_type].default_names[0]
+            name = REACT_INFOS[react_type].default_names[0]
+            result = React(0, name, name) 
         if guild:
             for custom_name in REACT_INFOS[react_type].custom_names:
                 for e in guild.emojis:
                     if e.name.lower() == custom_name:
-                        result = str(e)
+                        result = React(e.id, e.name, str(e))
                         break
     return result 
 
@@ -233,23 +241,27 @@ async def discord_get_user_react_data(react_list: List[ReactType], message: Mess
 
 
 def reaction_name_to_emoji_string(name: str, guild: Guild | None) -> str:
-    result = f'{name}' 
+    result = "" 
     if guild:
         for emoji in guild.emojis:
             if emoji.name == name:
                 result = str(emoji)
                 break
+    if not len(result):
+        for react_info in REACT_INFOS.values():
+            if name in react_info.custom_names:
+                name = react_info.default_names[0]
+                break
+    if not len(result):
+        result = name
+
     return result
 
 def parse_emojis_in_string(string: str, guild: Guild):
 
     def emoji_match_filter(match):
         name = match.group(1)
-        result = f':{name}:' 
-        for emoji in guild.emojis:
-            if emoji.name == name:
-                result = str(emoji)
-                break
+        result = reaction_name_to_emoji_string(name, guild)
         return result
 
     result = re.sub(r':(\w+):', emoji_match_filter, string) 
@@ -263,11 +275,12 @@ def parse_emojis_in_string(string: str, guild: Guild):
     return result
 
 
-def message_has_react(emoji: str, message: Message) -> bool:
+def message_has_react(react: React, message: Message) -> bool:
     result = False
     for reaction in message.reactions:
-        if reaction.emoji == emoji:
-            result = True
+        message_react = init_react(reaction)
+        result = react.name == message_react.name
+        if result:
             break
     return result
 
@@ -276,13 +289,16 @@ async def update_rip_status_reacts(message: Message, react_types_add: list[React
                                    react_types_remove: list[ReactType], guild: Guild) -> list[str]:
     error_strings = []
     for react_type in react_types_add:
-        emoji = react_type_to_react_name(react_type, guild)
-        if not message_has_react(emoji, message):
-            errors = await discord_add_reaction(emoji, message)
+        react = react_type_to_react(react_type, guild)
+        if not message_has_react(react, message):
+            errors = await discord_add_reaction(react.string, message)
             error_strings.extend(errors)
     for react_type in react_types_remove:
-        emoji = react_type_to_react_name(react_type, guild)
-        if message_has_react(emoji, message):
-            errors = await discord_clear_reaction(emoji, message)
+        react = react_type_to_react(react_type, guild)
+        if message_has_react(react, message):
+            #NOTE: (Ahmayk) this clears other users reacts too! Too far?
+            #if we only removed our react, well we would continuously call this
+            #becasue we don't check if our own react is there, and this is a performance hit
+            errors = await discord_clear_reaction(react.string, message)
             error_strings.extend(errors)
     return error_strings
