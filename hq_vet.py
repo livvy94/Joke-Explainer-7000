@@ -266,11 +266,11 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
             is_metadata_updated = linkless_metadata_old != linkless_metadata_new 
 
             if is_link_updated and is_metadata_updated:
-                return_header_title = f'{QOC_DEFAULT_LINKERR}{metadata_react} Link and Metadata Updated'
+                return_header_title = f'{QOC_DEFAULT_LINKERR}{metadata_react.string} Link and Metadata Updated'
             elif is_link_updated:
                 return_header_title = f'{QOC_DEFAULT_LINKERR} Link Updated'
             elif is_metadata_updated:
-                return_header_title = f'{metadata_react} Metadata Updated'
+                return_header_title = f'{metadata_react.string} Metadata Updated'
             else:
                 return_header_title = f'Message Updated'
 
