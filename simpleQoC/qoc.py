@@ -156,126 +156,142 @@ def ffmpegToWAV(filepath: str, wav_filepath: str):
 #           URL DOWNLOADING             #
 #=======================================#
 
-def parseUrl(url: str) -> str:
+class DownloadedRip(NamedTuple):
+    file: FileType | None
+    filepath: str
+    error_strings: list[str]
+
+class DownloadRipDesc(NamedTuple):
+    open_file: bool = False
+    convert_to_wav: bool = False
+
+def downloadRip(url: str, desc: DownloadRipDesc) -> DownloadedRip:
+    error_strings = []
+
     """
     Certain domains have to be treated in a unique way in order to download files
     For now this function just "converts" the given URL to the "downloadable" version,
     depending on the detected domain
     """
+    parsed_url = url 
     if url.find('siiva-gunner.com/?id=') != -1:
-        return url.replace('?id=', 'api/v2/file/')
+        parsed_url = url.replace('?id=', 'api/v2/file/')
     
-    if re.search(r'(?:\d{1,3}\.){3}\d{1,3}/\?id=', url):
+    elif re.search(r'(?:\d{1,3}\.){3}\d{1,3}/\?id=', url):
         # probably don't wanna deal with SSL certificate stuff
-        return 'https://siiva-gunner.com/api/v2/file/' + url.split('?id=')[1]
+        parsed_url = 'https://siiva-gunner.com/api/v2/file/' + url.split('?id=')[1]
     
-    if url.find('drive.google.com') != -1:
-        """
-        Assumes the following, taken from moder's scheduler program:
-            // Handles 3 kinds of links (they can be preceeded by https://):
-            // - drive.google.com/open?id=FILEID
-            // - drive.google.com/file/d/FILEID/view?usp=sharing
-            // - drive.google.com/uc?id=FILEID&export=download
-        """
-        id = ""
-        if url.find("open?id=") != -1:
-            id = url.split("open?id=")[1].split("&")[0]
-        if url.find("file/d/") != -1:
-            id = url.split("file/d/")[1].split("/")[0]
-        if url.find("uc?id=") != -1:
-            id = url.split("uc?id=")[1].split("&")[0]
-
-        if id == "":
-            raise QoCException("Drive ID cannot be detected from URL: {}".format(url))
+    elif url.find('drive.google.com') != -1:
+        if 'drive/folders' in url:
+            error_strings.append("Drive link is a folder. Please replace it with the link to the rip in the folder.")
         else:
-            # let's hope google doesn't randomly decide to change how downloading works in the future...
-            return "https://drive.usercontent.google.com/download?id={}&export=download&confirm=t".format(id)
+            """
+            Assumes the following, taken from moder's scheduler program:
+                // Handles 3 kinds of links (they can be preceeded by https://):
+                // - drive.google.com/open?id=FILEID
+                // - drive.google.com/file/d/FILEID/view?usp=sharing
+                // - drive.google.com/uc?id=FILEID&export=download
+            """
+            id = ""
+            if url.find("open?id=") != -1:
+                id = url.split("open?id=")[1].split("&")[0]
+            if url.find("file/d/") != -1:
+                id = url.split("file/d/")[1].split("/")[0]
+            if url.find("uc?id=") != -1:
+                id = url.split("uc?id=")[1].split("&")[0]
+
+            if id == "":
+                error_strings.append("Drive ID cannot be detected from URL: {}".format(url))
+            else:
+                # let's hope google doesn't randomly decide to change how downloading works in the future...
+                parsed_url = "https://drive.usercontent.google.com/download?id={}&export=download&confirm=t".format(id)
     
-    if url.find('dropbox.com') != -1:
-        return url.replace('&dl=0', '&dl=1')
+    elif url.find('dropbox.com') != -1:
+        parsed_url = url.replace('&dl=0', '&dl=1')
 
-    if url.find('catgirlsare.sexy') != -1:
-        return url.replace('catgirlsare.sexy', 'cgas.io')
+    elif url.find('catgirlsare.sexy') != -1:
+        parsed_url = url.replace('catgirlsare.sexy', 'cgas.io')
 
-    return url
+    response = None 
+    if not len(error_strings):
 
-# https://stackoverflow.com/questions/38511444/python-download-files-from-google-drive-using-url
-def save_response_content(response, destination):
-    CHUNK_SIZE = 1024 * 32
-
-    with open(destination, "wb") as f:
-        for chunk in response.iter_content(CHUNK_SIZE):
-            if chunk:  # filter out keep-alive new chunks
-                f.write(chunk)
-
-
-def getResponseFromUrl(validUrl: str, head: bool = False):
-    try:
         session = requests.Session()
         # https://stackoverflow.com/questions/33174804/python-requests-getting-connection-aborted-badstatusline-error
         headers = { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36' }
-        
-        if head:
-            response = session.head(validUrl, stream=True, headers=headers)
-        else:
-            response = session.get(validUrl, stream=True, headers=headers)
+        try:
+            response = session.get(parsed_url, stream=True, headers=headers)
+        # https://stackoverflow.com/questions/16511337/correct-way-to-try-except-using-python-requests-module
+        except requests.exceptions.Timeout as e:
+            error_strings.append('Request timed out. {}'.format(e))
+        except requests.exceptions.TooManyRedirects as e:
+            error_strings.append('Bad URL. {}'.format(e))
+        except requests.exceptions.ConnectionError as e:
+            error_strings.append('Connection error. {}'.format(e))
+        except requests.exceptions.RequestException as e: # Other errors
+            error_strings.append('Unknown URL error. {}'.format(e))
 
-        return response
-    
-    # https://stackoverflow.com/questions/16511337/correct-way-to-try-except-using-python-requests-module
-    except requests.exceptions.Timeout as e:
-        raise QoCException('Request timed out. {}'.format(e))
-    except requests.exceptions.TooManyRedirects as e:
-        raise QoCException('Bad URL. {}'.format(e))
-    except requests.exceptions.ConnectionError as e:
-        raise QoCException('Connection error. {}'.format(e))
-    except requests.exceptions.RequestException as e: # Other errors
-        raise QoCException('Unknown URL error. {}'.format(e))
+        if not response:
+            error_strings.append('Internal URL error.')
 
+    filename = "" 
+    if not len(error_strings) and response:
 
-def getHeadFromUrl(validUrl: str):
-    return getResponseFromUrl(validUrl, True).headers
-
-def downloadAudioFromUrl(validUrl: str) -> str:
-    filename = str(time.time_ns())
-    response = getResponseFromUrl(validUrl)
-    try:
-        msg = EmailMessage()
         content_disposition = response.headers.get("Content-Disposition")
-        if content_disposition is None:
-            raise KeyError
-        msg["Content-Disposition"] = ''.join([char for char in content_disposition if char.isprintable()])
-        content_filename = msg.get_filename()
-        if content_filename is None:
-            raise KeyError
-        filename += content_filename 
-    except KeyError:
-        if not ('audio' in response.headers['Content-Type'] or 'video' in response.headers['Content-Type']):
+        if content_disposition:
+            msg = EmailMessage()
+            msg["Content-Disposition"] = ''.join([char for char in content_disposition if char.isprintable()])
+            content_filename = msg.get_filename()
+            if content_filename:
+                filename = f'{str(time.time_ns())}{content_filename}'
+
+        if not len(filename):
+
+            response_text = ""
             if 'html' in response.headers['Content-Type']:
                 text = response.text
                 title = re.search(r'<\W*title\W*(.*)</title', text, re.IGNORECASE)
-                raise QoCException('Filename cannot be parsed from the URL (server response: {}).'.format(title.group(1) if title else None))
-            else:
-                raise QoCException('Unknown error trying to parse filename.')
-        filename = validUrl.split('/')[-1]
-    
-    filename = filename.replace('/', '_')
-    filepath = DOWNLOAD_DIR / filename
-    save_response_content(response, filepath)
-    
-    DEBUG('Downloaded filepath: {}'.format(filepath))
-    return str(filepath)
+                if title:
+                    response_text = title.group(1)
 
+            if 'drive' in url and 'Sign-in' in response_text:
+                error_strings.append("Drive link is not accessible. Ask Mailroom to reupload if this is an email sub.")
+            elif not ('audio' in response.headers['Content-Type'] or 'video' in response.headers['Content-Type']):
+                if len(response_text):
+                    error_strings.append('Filename cannot be parsed from the URL (server response: {}).'.format(response_text))
+                else:
+                    error_strings.append('Unknown error trying to parse filename.')
 
-def parseAudio(filepath: str) -> FileType:
-    try:
-        file = File(filepath)
-    except wave.error as e:
-        raise QoCException(f'File type {os.path.splitext(filepath)[1]} is not supported ({e}). Try manually inspecting file metadata with ffprobe.')
-    else:
-        if file is None:
-            raise QoCException('Something went wrong parsing file.')
-        return file
+    filepath = ""
+    if not len(error_strings) and response:
+        if not os.path.exists(DOWNLOAD_DIR):
+            os.mkdir(DOWNLOAD_DIR)
+
+        filename = parsed_url.split('/')[-1]
+        filename = filename.replace('/', '_')
+        filepath = str(DOWNLOAD_DIR / filename)
+
+        # https://stackoverflow.com/questions/38511444/python-download-files-from-google-drive-using-url
+        CHUNK_SIZE = 1024 * 32
+        try:
+            with open(filepath, "wb") as f:
+                for chunk in response.iter_content(CHUNK_SIZE):
+                    if chunk:  # filter out keep-alive new chunks
+                        f.write(chunk)
+        except Exception as e:
+            error_strings.append(f"Failed to open file: {str(e)}")
+
+    file = None
+    if desc.open_file and len(filepath) and not len(error_strings):
+        try:
+            file = File(filepath)
+            if file is None:
+                error_strings.append('Something went wrong parsing downloaded rip.')
+        except wave.error as e:
+            error_strings.append(f'File type {os.path.splitext(filepath)[1]} is not supported ({e}). You can manually inspect file metadata with ffprobe.')
+        except Exception as e:
+            error_strings.append(f'Error while downloading rip: {(str(e))}')
+
+    return DownloadedRip(file, filepath, error_strings) 
 
 
 #=======================================#
@@ -307,38 +323,6 @@ def checkBitrateFromFile(file: FileType) -> QoCCheck:
             msg = "Bitrate is OK."
     
     return QoCCheck(result, msg)
-
-
-def checkBitrateFromUrl(validUrl: str) -> Tuple[bool, str]:
-    """
-    Check the bitrate of an URL by first finding the type of media
-    If media is wav or flac, no need to do anything further.
-    Otherwise, use ffprobe to download and check bitrate.
-    """
-    contentType = getHeadFromUrl(validUrl)['Content-Type'].lower()
-    if 'wav' in contentType or 'flac' in contentType:
-        return (True, "Lossless file is OK.")
-    
-    try:
-        probeOutput = ffprobeUrl(validUrl)
-        bitrate = int(probeOutput['streams'][0]['bit_rate'])
-    except KeyError:
-        # seems FLAC does not contain this info but it should have been skipped anyway
-        raise QoCException("ERROR: Bitrate cannot be detected from ffprobe output:\n{}".format(probeOutput))
-    except ValueError:
-        raise QoCException("ERROR: Bitrate cannot be parsed from ffprobe output:\n{}".format(probeOutput))
-
-    try:
-        filetype = probeOutput['format']['format_name'].upper()
-    except KeyError:
-        filetype = "[TYPE UNKNOWN]"
-
-    if bitrate == 0:      # Some MP4 files have 0 kbps bitrate?
-        return (True, "Bitrate is OK (0 kbps detected).")
-    elif bitrate < 300000:    # Apparently some weird files can have bitrate at 317kbps or even 319.999kbps. Let's say 300k is good enough
-        return (False, "The {} file's bitrate is {}kbps. Please re-render at 320kbps.".format(filetype, bitrate // 1000))
-    else:
-        return (True, "Bitrate is OK.")
 
 
 #=======================================#
@@ -378,7 +362,13 @@ def checkClipping(wav_filepath: Path, threshold: int, doGradientAnalysis: bool) 
         # TODO: change to analyze by chunk?
         return QoCCheck(CheckResultType.ERROR, "Unable to check for clipping due to large file size or audio length. Workaround TBA.")
     
-    wavFile = parseAudio(wav_filepath)
+    wavFile = None
+    try:
+        wavFile = File(wav_filepath)
+        if wavFile is None:
+            return QoCCheck(CheckResultType.FAIL, 'Something went wrong parsing downloaded rip.')
+    except wave.error as e:
+        return QoCCheck(CheckResultType.FAIL, f'File type {os.path.splitext(wav_filepath)[1]} is not supported ({e}). You can manually inspect file metadata with ffprobe.')
 
     clips = []
     framerate, data = wavfile.read(wav_filepath)
@@ -463,25 +453,25 @@ def checkClipping(wav_filepath: Path, threshold: int, doGradientAnalysis: bool) 
         return QoCCheck(CheckResultType.PASS, "The rip is not clipping.")
 
 
-def checkClippingFromFile(file: FileType, filepath: str, threshold: int = DEFAULT_CLIPPING_THRESHOLD) -> QoCCheck:
+def checkClippingFromFile(downloaded_rip: DownloadedRip, threshold: int = DEFAULT_CLIPPING_THRESHOLD) -> QoCCheck:
     """
     Checks whether a mutagen File is clipping.
     Requires the file having been downloaded locally.
     """
-    wav_filepath = Path(filepath)
+    wav_filepath = Path(downloaded_rip.filepath)
     newfile = False
-    if not isinstance(file, wave.WAVE):
+    if not isinstance(downloaded_rip.file, wave.WAVE):
         newfile = True
         wav_filepath = "{}_temp.wav".format(Path.joinpath(wav_filepath.parent, wav_filepath.stem))
     else:
-        DEBUG('Bits per sample: {}'.format(file.info.bits_per_sample))
+        DEBUG('Bits per sample: {}'.format(downloaded_rip.file.info.bits_per_sample))
     
     if not os.path.exists(wav_filepath):
-        ffmpegToWAV(filepath, wav_filepath)
+        ffmpegToWAV(downloaded_rip.filepath, wav_filepath)
 
     qoc_check = QoCCheck() 
     # do gradient analysis if file is 24-bit FLAC
-    if isinstance(file, flac.FLAC) and file.info.bits_per_sample == 24:
+    if isinstance(downloaded_rip.file, flac.FLAC) and downloaded_rip.file.info.bits_per_sample == 24:
         DEBUG("Input file is detected as 24-bit FLAC. Recommend verifing clipping in Audacity.")
         qoc_check = checkClipping(wav_filepath, threshold, True)
     else:
@@ -489,37 +479,6 @@ def checkClippingFromFile(file: FileType, filepath: str, threshold: int = DEFAUL
 
     if newfile:
         os.remove(wav_filepath)
-
-    return qoc_check 
-
-
-def checkClippingFromUrl(validUrl: str, threshold: int = DEFAULT_CLIPPING_THRESHOLD) -> QoCCheck: 
-    """
-    Checks whether a URL media is clipping.
-    Will only download locally if the URL contains WAV; otherwise convert to local WAV file directly.
-    """
-    contentType = getHeadFromUrl(validUrl)['Content-Type'].lower()
-    wav_filepath = DOWNLOAD_DIR / 'temp.wav'
-    if 'wav' in contentType:
-        wav_filepath = downloadAudioFromUrl(validUrl)
-    else:
-        ffmpegToWAV(validUrl, wav_filepath)
-
-    # do gradient analysis if file is 24-bit FLAC
-    is24bitFLAC = False
-    try:
-        probeOutput = ffprobeUrl(validUrl)
-        is24bitFLAC = ('flac' in probeOutput['format']['format_name']) and (int(probeOutput['streams'][0]['bits_per_raw_sample']) == 24)
-    except (KeyError, ValueError):
-        pass
-
-    if is24bitFLAC:
-        DEBUG("Input file is detected as 24-bit FLAC. Recommend verifing clipping in Audacity.")
-        qoc_check = checkClipping(wav_filepath, threshold, True)
-    else:
-        qoc_check = checkClipping(wav_filepath, threshold, False)
-
-    os.remove(wav_filepath)
 
     return qoc_check 
 
@@ -553,10 +512,15 @@ def getConsecutiveRuns(channel: np.ndarray, threshold: int) -> list:
 def checkDLSClipping(wav_filepath: Path, threshold: int) -> Tuple[bool, str]:
     """
     Checks whether a WAV file might have DLS clipping (waveform contains non-zero "flat" samples).
-    - **wav_filepath**: Path to a local WAV file.
     - **threshold**: How many consecutive samples to look for. Recommended value: 5.
     """
-    wavFile = parseAudio(wav_filepath)
+    wavFile = None
+    try:
+        wavFile = File(wav_filepath)
+        if wavFile is None:
+            return (False, 'Something went wrong parsing downloaded rip.')
+    except wave.error as e:
+        return (False, f'File type {os.path.splitext(wav_filepath)[1]} is not supported ({e}). You can manually inspect file metadata with ffprobe.')
 
     cons = []
     framerate, data = wavfile.read(wav_filepath)
@@ -655,24 +619,6 @@ def checkDLSClippingFromFile(file: FileType, filepath: str, threshold: int = DEF
 
     return (check, msg)
 
-def checkDLSClippingFromUrl(validUrl: str, threshold: int = DEFAULT_DS_CLIPPING_THRESHOLD) -> Tuple[bool, str]:
-    """
-    Checks whether a URL media has DLS clipping.
-    Will only download locally if the URL contains WAV; otherwise convert to local WAV file directly.
-    """
-    contentType = getHeadFromUrl(validUrl)['Content-Type'].lower()
-    wav_filepath = DOWNLOAD_DIR / 'temp.wav'
-    if 'wav' in contentType:
-        wav_filepath = downloadAudioFromUrl(validUrl)
-    else:
-        ffmpegToWAV(validUrl, wav_filepath)
-
-    check, msg = checkDLSClipping(wav_filepath, threshold)
-
-    os.remove(wav_filepath)
-
-    return (check, msg)
-
 
 #=======================================#
 #            VIDEO RESOLUTION           #
@@ -702,78 +648,37 @@ def checkResolution(filepath: str) -> QoCCheck:
 #=======================================#
 #                Utility                #
 #=======================================#
-"""
-Utility functions to parse the message returned by QoC functions
-"""
-def msgContainsBitrateFix(msg: str) -> bool:
-    return msg.find("Please re-render at 320kbps") != -1
-
-def msgContainsClippingFix(msg: str) -> bool:
-    return (msg.find("The rip is clipping") != -1) or (msg.find("The rip is heavily clipping") != -1)
-
-def msgContainsSigninErr(msg: str) -> bool:
-    return msg.find("Drive link is not accessible") != -1
-
 
 def getFileMetadataMutagen(url: str) -> Tuple[int, str]:
     """
     Returns the metadata of file at given URL via mutagen's `pprint()` function.
     """
-    try:
-        downloadableUrl = parseUrl(url)
-    except QoCException as e:
-        return (-1, e.message)
-    
-    if not os.path.exists(DOWNLOAD_DIR):
-        os.mkdir(DOWNLOAD_DIR)
-    
-    filepath = None
-    errors = []
+    status = 0
+    msg = ""
 
-    try:
-        filepath = downloadAudioFromUrl(downloadableUrl)
-        DEBUG("Downloaded audio: " + Path(filepath).name)
-    except QoCException as e:
-        errors.append(e.message)
+    downloaded_rip = downloadRip(url, DownloadRipDesc(open_file=True))
+    if downloaded_rip.file:
+        msg = downloaded_rip.file.pprint()
     else:
-        try:
-            file = parseAudio(filepath)
-        except QoCException as e:
-            return (-1, e.message)
-        
-        metadata = file.pprint()
-    finally:
-        if filepath:
-            os.remove(filepath)
+        status = -1
+        msg = "\n".join(downloaded_rip.error_strings)
 
-    if len(errors) > 0:
-        return (-1, '\n'.join(errors))
+    if len(downloaded_rip.filepath):
+        os.remove(downloaded_rip.filepath)
 
-    return (0, metadata)
-
+    return (status, msg)
+    
 
 def getFileMetadataFfprobe(url: str) -> Tuple[int, str]:
     """
     Returns the metadata of file at given URL via ffprobe.
     """
-    try:
-        downloadableUrl = parseUrl(url)
-    except QoCException as e:
-        return (-1, e.message)
+    status = 0
+    msg = ""
 
-    if not os.path.exists(DOWNLOAD_DIR):
-        os.mkdir(DOWNLOAD_DIR)
-    
-    filepath = None
-    errors = []
-
-    try:
-        filepath = downloadAudioFromUrl(downloadableUrl)
-        DEBUG("Downloaded audio: " + Path(filepath).name)
-    except QoCException as e:
-        errors.append(e.message)
-    else:
-        probeOutput = ffprobeUrl(filepath)
+    downloaded_rip = downloadRip(url, DownloadRipDesc())
+    if len(downloaded_rip.filepath):
+        probeOutput = ffprobeUrl(downloaded_rip.filepath)
         try:
             probeOutput['format']['filename'] = "[REDACTED]"
         except KeyError:
@@ -802,50 +707,31 @@ def getFileMetadataFfprobe(url: str) -> Tuple[int, str]:
                         i += 1
 
         redactLongStrings(probeOutput)
-        metadata = json.dumps(probeOutput, indent=2)
-    finally:
-        if filepath:
-            os.remove(filepath)
+        msg = json.dumps(probeOutput, indent=2)
 
-    if len(errors) > 0:
-        return (-1, '\n'.join(errors))
+    else:
+        status = -1
+        msg = "\n".join(downloaded_rip.error_strings)
 
-    return (0, metadata)
+    if len(downloaded_rip.filepath):
+        os.remove(downloaded_rip.filepath)
+
+    return (status, msg)
 
 
-##TODO: (Ahmayk) Compress, enum for ffprobe or mutagen
-#single file download and remove function
 def getAudioLengthInSecondsFFprobe(url: str) -> FloatAndErrors: 
     duration = 0.0
-    error_strings = []
-    try:
-        downloadableUrl = parseUrl(url)
-    except QoCException as e:
-        error_strings.append(e.message)
 
-    if not len(error_strings):
+    downloaded_rip = downloadRip(url, DownloadRipDesc())
+    error_strings = downloaded_rip.error_strings
 
-        if not os.path.exists(DOWNLOAD_DIR):
-            os.mkdir(DOWNLOAD_DIR)
-        
-        filepath = None
-        errors = []
+    if len(downloaded_rip.filepath):
+        floatAndErrors = ffprobeGetLengthInSeconds(downloaded_rip.filepath)
+        duration = floatAndErrors.result
+        error_strings.extend(floatAndErrors.error_strings)
 
-        try:
-            filepath = downloadAudioFromUrl(downloadableUrl)
-            DEBUG("Downloaded audio: " + Path(filepath).name)
-        except QoCException as e:
-            errors.append(e.message)
-        else:
-            floatAndErrors = ffprobeGetLengthInSeconds(filepath)
-            duration = floatAndErrors.result
-            error_strings.extend(floatAndErrors.error_strings)
-        finally:
-            if filepath:
-                os.remove(filepath)
-
-        if len(errors) > 0:
-            error_strings.append('\n'.join(errors))
+    if len(downloaded_rip.filepath):
+        os.remove(downloaded_rip.filepath)
 
     return FloatAndErrors(duration, error_strings) 
 
@@ -858,62 +744,28 @@ def performQoC(url: str) -> dict[QoCCheckType, QoCCheck]:
     """
     Performs QoC on the given URL.
     """
-
-    link_error_msg = ""
-
-    #TODO: (Ahmayk) Compress into function 
-    try:
-        downloadableUrl = parseUrl(url)
-    except QoCException as e:
-        if 'drive/folders' in url:
-            # another custom return value because people keep submitting folders bruhhhhh
-            link_error_msg = "Drive link is a folder. Please replace it with the link to the rip in the folder."
-        else:
-            link_error_msg = e.message
     
-    filepath = "" 
+    downloaded_rip = downloadRip(url, DownloadRipDesc(open_file = True))
 
-    if not len(link_error_msg):
-
-        if not os.path.exists(DOWNLOAD_DIR):
-            os.mkdir(DOWNLOAD_DIR)
-
-        #TODO: (Ahmayk) Compress into function 
-        try:
-            filepath = downloadAudioFromUrl(downloadableUrl)
-            DEBUG("Downloaded audio: " + Path(filepath).name)
-        except QoCException as e:
-            if 'drive' in url and 'Sign-in' in e.message:
-                # custom return value for sign-in issues
-                link_error_msg = "Drive link is not accessible. Ask Mailroom to reupload if this is an email sub."
-            else:
-                link_error_msg = e.message
-
-    if not len(link_error_msg):
-        try:
-            file = parseAudio(filepath)
-        except QoCException as e:
-            link_error_msg = e.message
-
-    result = {}
-    if not len(link_error_msg):
-        DEBUG("File metadata: " + file.pprint())
+    result: dict[QoCCheckType, QoCCheck] = {}
+    if downloaded_rip.file:
+        DEBUG("File metadata: " + downloaded_rip.file.pprint())
         result[QoCCheckType.LINK] = QoCCheck(CheckResultType.PASS, "")
-        result[QoCCheckType.BITRATE] = checkBitrateFromFile(file)
-        result[QoCCheckType.CLIPPING] = checkClippingFromFile(file, filepath)
-        result[QoCCheckType.RESOLUTION] = checkResolution(filepath)
+        result[QoCCheckType.BITRATE] = checkBitrateFromFile(downloaded_rip.file)
+        result[QoCCheckType.CLIPPING] = checkClippingFromFile(downloaded_rip)
+        result[QoCCheckType.RESOLUTION] = checkResolution(downloaded_rip.filepath)
 
-        float_and_errors = ffprobeGetLengthInSeconds(filepath)
+        float_and_errors = ffprobeGetLengthInSeconds(downloaded_rip.filepath)
         if not len(float_and_errors.error_strings):
             result[QoCCheckType.LENGTH] = QoCCheck(CheckResultType.PASS, "", float_and_errors.result)
         else:
             result[QoCCheckType.LENGTH] = QoCCheck(CheckResultType.FAIL, " ".join(float_and_errors.error_strings))
 
     else: 
-        result[QoCCheckType.LINK] = QoCCheck(CheckResultType.ERROR, link_error_msg)
+        result[QoCCheckType.LINK] = QoCCheck(CheckResultType.ERROR, "\n".join(downloaded_rip.error_strings))
 
-    if filepath:
-        os.remove(filepath)
+    if len(downloaded_rip.filepath):
+        os.remove(downloaded_rip.filepath)
 
     return result
 
