@@ -266,7 +266,7 @@ def downloadRip(url: str, desc: DownloadRipDesc) -> DownloadedRip:
         if not os.path.exists(DOWNLOAD_DIR):
             os.mkdir(DOWNLOAD_DIR)
 
-        filename = parsed_url.split('/')[-1]
+        filename = filename.split('/')[-1]
         filename = filename.replace('/', '_')
         filepath = str(DOWNLOAD_DIR / filename)
 
@@ -293,6 +293,12 @@ def downloadRip(url: str, desc: DownloadRipDesc) -> DownloadedRip:
 
     return DownloadedRip(file, filepath, error_strings) 
 
+def removeDownloadedRip(downloaded_rip: DownloadedRip):
+    if downloaded_rip.filepath:
+        try:
+            os.remove(downloaded_rip.filepath)
+        except:
+            pass
 
 #=======================================#
 #           BITRATE CHECKING            #
@@ -478,7 +484,10 @@ def checkClippingFromFile(downloaded_rip: DownloadedRip, threshold: int = DEFAUL
         qoc_check = checkClipping(wav_filepath, threshold, False)
 
     if newfile:
-        os.remove(wav_filepath)
+        try:
+            os.remove(wav_filepath)
+        except:
+            pass
 
     return qoc_check 
 
@@ -664,7 +673,10 @@ def getFileMetadataMutagen(url: str) -> Tuple[int, str]:
         msg = "\n".join(downloaded_rip.error_strings)
 
     if len(downloaded_rip.filepath):
-        os.remove(downloaded_rip.filepath)
+        try:
+            os.remove(downloaded_rip.filepath)
+        except:
+            pass
 
     return (status, msg)
     
@@ -714,7 +726,10 @@ def getFileMetadataFfprobe(url: str) -> Tuple[int, str]:
         msg = "\n".join(downloaded_rip.error_strings)
 
     if len(downloaded_rip.filepath):
-        os.remove(downloaded_rip.filepath)
+        try:
+            os.remove(downloaded_rip.filepath)
+        except:
+            pass
 
     return (status, msg)
 
@@ -731,7 +746,10 @@ def getAudioLengthInSecondsFFprobe(url: str) -> FloatAndErrors:
         error_strings.extend(floatAndErrors.error_strings)
 
     if len(downloaded_rip.filepath):
-        os.remove(downloaded_rip.filepath)
+        try:
+            os.remove(downloaded_rip.filepath)
+        except:
+            pass
 
     return FloatAndErrors(duration, error_strings) 
 
@@ -752,7 +770,6 @@ def performQoC(url: str) -> dict[QoCCheckType, QoCCheck]:
         DEBUG("File metadata: " + downloaded_rip.file.pprint())
         result[QoCCheckType.LINK] = QoCCheck(CheckResultType.PASS, "")
         result[QoCCheckType.BITRATE] = checkBitrateFromFile(downloaded_rip.file)
-        result[QoCCheckType.CLIPPING] = checkClippingFromFile(downloaded_rip)
         result[QoCCheckType.RESOLUTION] = checkResolution(downloaded_rip.filepath)
 
         float_and_errors = ffprobeGetLengthInSeconds(downloaded_rip.filepath)
@@ -765,7 +782,10 @@ def performQoC(url: str) -> dict[QoCCheckType, QoCCheck]:
         result[QoCCheckType.LINK] = QoCCheck(CheckResultType.ERROR, "\n".join(downloaded_rip.error_strings))
 
     if len(downloaded_rip.filepath):
-        os.remove(downloaded_rip.filepath)
+        try:
+            os.remove(downloaded_rip.filepath)
+        except:
+            pass
 
     return result
 
