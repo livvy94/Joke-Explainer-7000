@@ -666,7 +666,7 @@ def getFileMetadataMutagen(url: str) -> Tuple[int, str]:
     msg = ""
 
     downloaded_rip = downloadRip(url, DownloadRipDesc(open_file=True))
-    if downloaded_rip.file:
+    if downloaded_rip.file != None:
         msg = downloaded_rip.file.pprint()
     else:
         status = -1
@@ -766,7 +766,7 @@ def performQoC(url: str) -> dict[QoCCheckType, QoCCheck]:
     downloaded_rip = downloadRip(url, DownloadRipDesc(open_file = True))
 
     result: dict[QoCCheckType, QoCCheck] = {}
-    if downloaded_rip.file:
+    if downloaded_rip.file != None:
         DEBUG("File metadata: " + downloaded_rip.file.pprint())
         result[QoCCheckType.LINK] = QoCCheck(CheckResultType.PASS, "")
         result[QoCCheckType.BITRATE] = checkBitrateFromFile(downloaded_rip.file)
