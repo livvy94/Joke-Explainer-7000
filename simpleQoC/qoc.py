@@ -15,6 +15,7 @@ import numpy as np
 from enum import Enum, auto
 from typing import NamedTuple, List, Tuple
 
+from hq_strings import slugify
 from hq_react import *
 from hq_discord import FloatAndErrors
 
@@ -205,6 +206,9 @@ def downloadRip(url: str, desc: DownloadRipDesc) -> DownloadedRip:
             else:
                 # let's hope google doesn't randomly decide to change how downloading works in the future...
                 parsed_url = "https://drive.usercontent.google.com/download?id={}&export=download&confirm=t".format(id)
+
+    elif url.find('docs.google.com/spreadsheets') != -1:
+        error_strings.append("Sir this is a google sheets link.")
     
     elif url.find('dropbox.com') != -1:
         parsed_url = url.replace('&dl=0', '&dl=1')
@@ -233,9 +237,21 @@ def downloadRip(url: str, desc: DownloadRipDesc) -> DownloadedRip:
         if not response:
             error_strings.append('Internal URL error.')
 
-    filename = "" 
+    filename = parsed_url.split('/')[-1]
     if not len(error_strings) and response:
 
+        response_text = ""
+        if 'html' in response.headers['Content-Type']:
+            text = response.text
+            title = re.search(r'<\W*title\W*(.*)</title', text, re.IGNORECASE)
+            if title:
+                response_text = title.group(1)
+
+        if 'drive' in url and 'Sign-in' in response_text:
+            error_strings.append("Drive link is not accessible. Ask Mailroom to reupload if this is an email sub.")
+
+    filepath = ""
+    if not len(error_strings) and response:
         content_disposition = response.headers.get("Content-Disposition")
         if content_disposition:
             msg = EmailMessage()
@@ -244,30 +260,15 @@ def downloadRip(url: str, desc: DownloadRipDesc) -> DownloadedRip:
             if content_filename:
                 filename = f'{str(time.time_ns())}{content_filename}'
 
-        if not len(filename):
+        if filename.endswith(".zip"):
+            error_strings.append(f"Rip is compressed in a `.zip` file. I'm not touching that.")
 
-            response_text = ""
-            if 'html' in response.headers['Content-Type']:
-                text = response.text
-                title = re.search(r'<\W*title\W*(.*)</title', text, re.IGNORECASE)
-                if title:
-                    response_text = title.group(1)
-
-            if 'drive' in url and 'Sign-in' in response_text:
-                error_strings.append("Drive link is not accessible. Ask Mailroom to reupload if this is an email sub.")
-            elif not ('audio' in response.headers['Content-Type'] or 'video' in response.headers['Content-Type']):
-                if len(response_text):
-                    error_strings.append('Filename cannot be parsed from the URL (server response: {}).'.format(response_text))
-                else:
-                    error_strings.append('Unknown error trying to parse filename.')
-
-    filepath = ""
-    if not len(error_strings) and response:
+    if not len(error_strings) :
         if not os.path.exists(DOWNLOAD_DIR):
             os.mkdir(DOWNLOAD_DIR)
 
         filename = filename.split('/')[-1]
-        filename = filename.replace('/', '_')
+        filename = slugify(filename)
         filepath = str(DOWNLOAD_DIR / filename)
 
         # https://stackoverflow.com/questions/38511444/python-download-files-from-google-drive-using-url

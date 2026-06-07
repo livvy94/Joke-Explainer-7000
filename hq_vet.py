@@ -89,8 +89,6 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
         await store_in_database_float(duration, qoced_url, DatabaseKey.RIP_LENGTH)
         if duration <= jingle_length_in_seconds:
             react_types_add.append(ReactType.JINGLE)
-        #NOTE: (Ahmayk) we don't remove jingle reacts because someone might want to override bot's judgement of what a jingle is 
-        #could make logic to detect if bot has reacted themselves but that'd be a performance hit to get user react data 
 
     is_qoc_pass_all = len(qoc_checks_dict) > 0
     for qoc_check in qoc_checks_dict.values():
