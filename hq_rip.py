@@ -563,19 +563,23 @@ def format_rip(rip: Rip, durationString: str, guild: discord.Guild, make_smol: b
     rip_title = get_rip_title(rip.text)
     author = get_rip_author(rip.text, rip.message_author_name)
     author = author.replace('*', '').replace('_', '')
-
     link = format_message_link(guild.id, rip.channel_id, rip.message_id)
-    title_body = f'**[{rip_title}]({link})**'
-    if len(durationString):
-        title_body += f' - {durationString}'
 
-    if len(indicator) > 0:
-        title_body = f'{indicator} {title_body} {indicator}'
+
+
+    title_body = f'**[{rip_title}]({link})**'
+
+    info_body = ""
+    if len(reacts):
+        info_body += f'{reacts} '
 
     utc = int(rip.created_at.replace(tzinfo=timezone.utc).timestamp())
-    info_body = f'{author} <t:{utc}:R>'
-    if len(reacts):
-        info_body += f' | {reacts}'
+    info_body += f'{author} <t:{utc}:R>'
+    if len(indicator) > 0:
+        info_body += f' {indicator}'
+
+    if len(durationString):
+        info_body += f' `{durationString}`'
 
     if make_smol:
         return f'-# {title_body} {info_body}\n'

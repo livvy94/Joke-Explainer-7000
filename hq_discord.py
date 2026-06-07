@@ -130,6 +130,10 @@ class EmbedDesc(NamedTuple):
     seperator: str = "\n"
 
 async def send_embed(text: str, channel: TextChannel | Thread, desc: EmbedDesc):
+
+    if not len(desc.seperator):
+        desc = desc._replace(seperator = "\n")
+
     text = text.strip()
     color = get_config('embed_color')
     delete_after_seconds = None
