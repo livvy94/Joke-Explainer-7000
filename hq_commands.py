@@ -202,6 +202,7 @@ async def help(args: list[str], command_context: CommandContext):
         result += '\n\n__**Legend:**__'
         result += '\n`<argument>`: Required argument'
         result += '\n`[argument]`: Optional argument'
+        result += '\n`<argument1 | arguemnt2>`: Either argument1 or argument2 is valid input'
         result += f'\n{qoc_react.string}: Command only accessible in QoC channels:'
         result += f'\n{" ".join(qoc_channels_strings)}'
         result += f'\n\n*To learn more about a command, use `{prefix}help <command>`*'
@@ -249,7 +250,7 @@ class RoundupDesc(NamedTuple):
     message_author_name: str = ""
     user_id: int = 0 
     conditional_string: str = ""
-    parsed_search_input: ParsedSearchInput = ParsedSearchInput([], False, "") 
+    parsed_search_input: ParsedSearchInput = ParsedSearchInput([], "", False, "") 
     react_name: str = "" 
     reaction_type: ReactType = ReactType.NULL 
     not_found_message: str = ""
@@ -484,8 +485,8 @@ async def mysaveqoc(args: list[str], command_context: CommandContext):
 
 @command(
     command_type=CommandType.QOC,
-    format="[NOT] <search text>",
-    brief="Search QoC rips titles",
+    format="[NOT] <search text | regex>",
+    brief="Search QoC rip titles",
     desc="Does not need quotes. Include NOT to search for rips that don't inlude the searched input.",
     examples=["Deltarune", "PAL", "Mother 3"]
 )
@@ -839,7 +840,7 @@ class SendSubOrQueueDesc(NamedTuple):
     react_name: str = ""
     channel_types: List[str] = []
     channel_ids: List[int] = []
-    parsed_search_input: ParsedSearchInput = ParsedSearchInput([], False, "") 
+    parsed_search_input: ParsedSearchInput = ParsedSearchInput([], "", False, "") 
     not_found_message: str = ""
     random_count: int = 0
 
@@ -976,7 +977,7 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
 @command(
     command_type=CommandType.SUBS,
     public=True,
-    format="[NOT] <search text>",
+    format="[NOT] <search text | regex>",
     brief='Search submission rip titles',
     desc="Does not need quotes. Include NOT to search for rips that don't inlude the searched input.",
     aliases=['search_sub'],
@@ -1143,7 +1144,7 @@ async def unsent(args: list[str], command_context: CommandContext):
 @command(
     command_type=CommandType.QUEUE,
     public=True,
-    format="[NOT] <search text>",
+    format="[NOT] <search text | regex>",
     brief='Search queued rip titles',
     desc="Does not need quotes. Include NOT to search for rips that don't inlude the searched input.",
     aliases=['search_queue', 'search_queues', 'search_qs'],

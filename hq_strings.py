@@ -201,10 +201,6 @@ def line_contains_substring(line: str, substring: str) -> bool:
     """
     Helper function to search substrings in Discord markdown-formatted line, ignoring case and formatting
     """
-    # Temporary "hacky" support for regex search until/if we figure out a better system
-    if substring.startswith("r\'") and substring.endswith("\'") or substring.startswith("r\"") and substring.endswith("\""):
-        regex_search_key = substring[2:-1]
-        return re.search(regex_search_key, line) is not None
     return substring.lower() in line.replace('*', '').replace('_', '').replace('|', '').replace('#', '').lower()
 
 
@@ -220,6 +216,7 @@ def emoji_to_react_name_if_emoji(s: str) -> str:
 
 class ParsedSearchInput(NamedTuple):
     search_keys: List[str]
+    regex_search_key: str
     is_not: bool
     containing_error_string: str
 
@@ -229,23 +226,37 @@ def parse_search_input(args: List[str]) -> ParsedSearchInput:
         is_not = True
         args.remove("NOT")
     search_keys = " ".join([str(s) for s in args]).split('|')
+    regex_search_key = ""
 
-    prefix = 'containing'
+    for key in search_keys:
+        if (
+            (key.startswith("r\'") and key.endswith("\'")) 
+            or (key.startswith("r\"") and key.endswith("\""))
+        ):
+            regex_search_key = key[2:-1]
+            break
+
+    containing_error_string = 'containing '
     if is_not:
-        prefix = 'NOT containing'
+        containing_error_string = 'NOT containing '
 
-    containing_error_string = ''
-    if len(search_keys) == 1:
-        containing_error_string = f'{prefix} `{search_keys[0]}`'
+    if len(regex_search_key):
+        containing_error_string += f'regex input `{regex_search_key}`'
+    elif len(search_keys) == 1:
+        containing_error_string += f'`{search_keys[0]}`'
     elif len(search_keys) == 2:
-        containing_error_string = f'{prefix} `{search_keys[0]}` or `{search_keys[1]}`'
+        containing_error_string += f'`{search_keys[0]}` or `{search_keys[1]}`'
     elif len(search_keys) > 2:
-        containing_error_string = f'{prefix} `{search_keys}`'
+        containing_error_string += f'`{search_keys}`'
 
-    return ParsedSearchInput(search_keys, is_not, containing_error_string)
+    return ParsedSearchInput(search_keys, regex_search_key, is_not, containing_error_string)
 
 def search_with_parsed_input(text: str, parsed_search_input: ParsedSearchInput) -> bool:
     is_valid = False
+
+    if parsed_search_input.regex_search_key:
+        is_valid = re.search(parsed_search_input.regex_search_key, text) is not None
+
     for key in parsed_search_input.search_keys:
         if line_contains_substring(text, key):
             is_valid = True
