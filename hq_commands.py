@@ -250,7 +250,7 @@ class RoundupDesc(NamedTuple):
     message_author_name: str = ""
     user_id: int = 0 
     conditional_string: str = ""
-    parsed_search_input: ParsedSearchInput = ParsedSearchInput([], "", False, "") 
+    parsed_search_input: ParsedSearchInput = ParsedSearchInput([], [], [], False, "", "") 
     react_name: str = "" 
     reaction_type: ReactType = ReactType.NULL 
     not_found_message: str = ""
@@ -497,6 +497,8 @@ async def search(args: list[str], command_context: CommandContext):
                            command_context.channel)
 
     parsed_search_input = parse_search_input(args)
+    if len(parsed_search_input.invalid_input_error_string):
+        return await send(parsed_search_input.invalid_input_error_string, command_context.channel)
 
     roundup_desc = RoundupDesc(roundup_filter_type = RoundupFilterType.SEARCH_TITLE, \
             parsed_search_input=parsed_search_input,\
@@ -531,6 +533,8 @@ async def events(args: list[str], command_context: CommandContext):
                            command_context.channel)
 
     parsed_search_input = parse_search_input(args)
+    if len(parsed_search_input.invalid_input_error_string):
+        return await send(parsed_search_input.invalid_input_error_string, command_context.channel)
 
     roundup_desc = RoundupDesc(roundup_filter_type = RoundupFilterType.SEARCH_AUTHOR, \
             parsed_search_input=parsed_search_input,\
@@ -840,7 +844,7 @@ class SendSubOrQueueDesc(NamedTuple):
     react_name: str = ""
     channel_types: List[str] = []
     channel_ids: List[int] = []
-    parsed_search_input: ParsedSearchInput = ParsedSearchInput([], "", False, "") 
+    parsed_search_input: ParsedSearchInput = ParsedSearchInput([], [], [], False, "", "") 
     not_found_message: str = ""
     random_count: int = 0
 
@@ -989,6 +993,8 @@ async def search_subs(args: list[str], command_context: CommandContext):
                            command_context.channel)
 
     parsed_search_input = parse_search_input(args)
+    if len(parsed_search_input.invalid_input_error_string):
+        return await send(parsed_search_input.invalid_input_error_string, command_context.channel)
 
     desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.SEARCH_TITLE, \
                               channel_types = ['SUBS', 'SUBS_PIN', 'SUBS_THREAD'], \
@@ -1012,6 +1018,8 @@ async def event_subs(args: list[str], command_context: CommandContext):
                            command_context.channel)
 
     parsed_search_input = parse_search_input(args)
+    if len(parsed_search_input.invalid_input_error_string):
+        return await send(parsed_search_input.invalid_input_error_string, command_context.channel)
 
     desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.SEARCH_AUTHOR, \
                               channel_types = ['SUBS', 'SUBS_PIN', 'SUBS_THREAD'], \
@@ -1156,6 +1164,9 @@ async def search_q(args: list[str], command_context: CommandContext):
                            command_context.channel)
 
     parsed_search_input = parse_search_input(args)
+    if len(parsed_search_input.invalid_input_error_string):
+        return await send(parsed_search_input.invalid_input_error_string, command_context.channel)
+
     desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.SEARCH_TITLE, \
                               channel_types = ['QUEUE'], \
                               parsed_search_input=parsed_search_input, \
@@ -1178,6 +1189,9 @@ async def event_q(args: list[str], command_context: CommandContext):
                            command_context.channel)
 
     parsed_search_input = parse_search_input(args)
+    if len(parsed_search_input.invalid_input_error_string):
+        return await send(parsed_search_input.invalid_input_error_string, command_context.channel)
+
     desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.SEARCH_AUTHOR, \
                               channel_types = ['QUEUE'], \
                               parsed_search_input= parsed_search_input, \
@@ -1253,6 +1267,9 @@ async def scout(args: list[str], command_context: CommandContext):
                            command_context.channel)
 
     parsed_search_input = parse_search_input(args)
+    if len(parsed_search_input.invalid_input_error_string):
+        return await send(parsed_search_input.invalid_input_error_string, command_context.channel)
+
     desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.SCOUT, \
                               channel_types = ['QUEUE'], \
                               parsed_search_input = parsed_search_input, \

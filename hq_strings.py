@@ -216,53 +216,81 @@ def emoji_to_react_name_if_emoji(s: str) -> str:
 
 class ParsedSearchInput(NamedTuple):
     search_keys: List[str]
-    regex_search_key: str
+    regex_search_keys: List[str]
+    number_ints: List[int] 
     is_not: bool
     containing_error_string: str
+    invalid_input_error_string: str
+
+def format_list(list: List) -> str:
+    result = ""
+    if len(list) == 1:
+        result = f'`{list[0]}`'
+    elif len(list) == 2:
+        result = f'`{list[0]}` or `{list[1]}`'
+    elif len(list) > 2:
+        result = f'`{list}`'
+    return result
 
 def parse_search_input(args: List[str]) -> ParsedSearchInput:
+
     is_not = False
     if "NOT" in args:
         is_not = True
         args.remove("NOT")
-    search_keys = " ".join([str(s) for s in args]).split('|')
-    regex_search_key = ""
 
+    search_keys = " ".join([str(s) for s in args]).split('|')
+    for i in range(len(search_keys)):
+        search_keys[i] = search_keys[i].strip()
+
+    regex_search_keys: List[str] = [] 
+    number_ints: List[int] = [] 
+    invalid_input_error_string = ""
+
+    to_remove = []
     for key in search_keys:
-        if (
-            (key.startswith("r\'") and key.endswith("\'")) 
+
+        if ((key.startswith("r\'") and key.endswith("\'")) 
             or (key.startswith("r\"") and key.endswith("\""))
         ):
-            regex_search_key = key[2:-1]
-            break
+            try:
+                re.compile(key)
+                regex_search_keys.append(key[2:-1])
+            except re.error:
+                invalid_input_error_string += f'\nError: Invalid regex input: {key}'
+            to_remove.append(key)
+
+        if key.isdigit():
+            number_ints.append(int(key))
+
+    for key in to_remove:
+        search_keys.remove(key)
 
     containing_error_string = 'containing '
     if is_not:
         containing_error_string = 'NOT containing '
 
-    if len(regex_search_key):
-        containing_error_string += f'regex input `{regex_search_key}`'
-    elif len(search_keys) == 1:
-        containing_error_string += f'`{search_keys[0]}`'
-    elif len(search_keys) == 2:
-        containing_error_string += f'`{search_keys[0]}` or `{search_keys[1]}`'
-    elif len(search_keys) > 2:
-        containing_error_string += f'`{search_keys}`'
+    if len(search_keys):
+        containing_error_string += format_list(search_keys) 
+    if len(regex_search_keys):
+        containing_error_string += f'regex input `{format_list(regex_search_keys)}`'
 
-    return ParsedSearchInput(search_keys, regex_search_key, is_not, containing_error_string)
+    return ParsedSearchInput(search_keys, regex_search_keys, number_ints, is_not, containing_error_string, invalid_input_error_string)
 
 def search_with_parsed_input(text: str, parsed_search_input: ParsedSearchInput) -> bool:
     is_valid = False
 
-    if parsed_search_input.regex_search_key:
-        is_valid = re.search(parsed_search_input.regex_search_key, text) is not None
+    for regex_search_key in parsed_search_input.regex_search_keys:
+        is_valid |= re.search(regex_search_key, text) is not None
 
     for key in parsed_search_input.search_keys:
         if line_contains_substring(text, key):
             is_valid = True
             break
+
     if parsed_search_input.is_not:
         is_valid = not is_valid 
+
     return is_valid
 
 
