@@ -211,13 +211,25 @@ async def help(args: list[str], command_context: CommandContext):
 
 # ============ Roundup commands ============== #
 
-def choose_random_rips(rips: List[Rip], random_count: int) -> List[int]:
+def choose_random_rips(rips: List[Rip], random_count: int, parsed_search_input: ParsedSearchInput, is_search_author: bool) -> List[int]:
     result = []
-    random.shuffle(rips)
+    valid_rips = rips
+    if len(parsed_search_input.search_keys) or len(parsed_search_input.regex_search_keys):
+        valid_rips = []
+        for rip in rips:
+            text = ""
+            if is_search_author:
+                text = get_raw_rip_author(rip.text)
+            else:
+                text = get_rip_title(rip.text)
+            if text and search_with_parsed_input(text, parsed_search_input):
+                valid_rips.append(rip)
+
+    random.shuffle(valid_rips)
     ##NOTE: (Ahmayk) consider default 0 as 1, clamp by rip size
-    clamped_count = min(max(1, random_count), len(rips))
+    clamped_count = min(max(1, random_count), len(valid_rips))
     for i in range(clamped_count):
-        result.append(rips[i].message_id)
+        result.append(valid_rips[i].message_id)
     return result
 
 class RoundupFilterType(Enum):
@@ -240,6 +252,7 @@ class RoundupFilterType(Enum):
     NOSENDBACK = auto()
     OVERDUE = auto()
     RANDOM = auto()
+    RANDOM_AUTHOR = auto()
     SAVEQOC = auto()
     MYSAVEQOC = auto()
     SORTBYLENGTH = auto()
@@ -250,11 +263,11 @@ class RoundupDesc(NamedTuple):
     message_author_name: str = ""
     user_id: int = 0 
     conditional_string: str = ""
-    parsed_search_input: ParsedSearchInput = ParsedSearchInput([], [], [], False, "", "") 
+    parsed_search_input: ParsedSearchInput = ParsedSearchInput([], [], False, "", "") 
     react_name: str = "" 
     reaction_type: ReactType = ReactType.NULL 
     not_found_message: str = ""
-    random_count: int = 0
+    parsed_random_input: ParsedRandomInput = ParsedRandomInput(0, ParsedSearchInput([], [], False, "", ""), "", False, "")
 
 async def send_roundup(roundup_desc: RoundupDesc, command_context: CommandContext):
     """
@@ -278,7 +291,17 @@ async def send_roundup(roundup_desc: RoundupDesc, command_context: CommandContex
 
     selected_rip_message_ids = [] 
     if roundup_desc.roundup_filter_type == RoundupFilterType.RANDOM:
-        selected_rip_message_ids = choose_random_rips(rips_and_errors.rips, roundup_desc.random_count)
+        selected_rip_message_ids = choose_random_rips(rips_and_errors.rips, 
+                                                      roundup_desc.parsed_random_input.random_count,
+                                                      roundup_desc.parsed_random_input.parsed_search_input, 
+                                                      False)
+
+    if roundup_desc.roundup_filter_type == RoundupFilterType.RANDOM_AUTHOR:
+        selected_rip_message_ids = choose_random_rips(rips_and_errors.rips, 
+                                                      roundup_desc.parsed_random_input.random_count,
+                                                      roundup_desc.parsed_random_input.parsed_search_input, 
+                                                      True)
+
 
     if roundup_desc.roundup_filter_type == RoundupFilterType.SORTBYLENGTH:
         errors = await sort_rips_by_duration(rips)
@@ -352,6 +375,8 @@ async def send_roundup(roundup_desc: RoundupDesc, command_context: CommandContex
                 is_overdue = (datetime.now(timezone.utc) - rip.created_at) > timedelta(days=overdue_days)
                 is_valid = is_overdue
             case RoundupFilterType.RANDOM:
+                is_valid = rip.message_id in selected_rip_message_ids
+            case RoundupFilterType.RANDOM_AUTHOR:
                 is_valid = rip.message_id in selected_rip_message_ids
             case RoundupFilterType.SAVEQOC:
                 is_valid = rip_is_one_check_away_from_accept(rip) 
@@ -691,35 +716,42 @@ async def overdue(args: list[str], command_context: CommandContext):
     await send_roundup(roundup_desc, command_context)
 
 
-async def valdate_random_count_input(args: List[str], channel: TextChannel | Thread) -> int | None:
-    count = 1
-    if len(args):
-        if '-' in args[0]:
-            await send(f'ERROR: Negative rips not implemented `(library not found: antirip)`', channel)
-            return None
-        if args[0].isdigit():
-            count = int(args[0])
-            if count == 0:
-                await send_embed(f'**[Zero. - Zero 64 (Zero Mix)](<https://www.youtube.com/watch?v=UtGL5yKdSCk>)**\nby Zero Z | 🔥 🔥 🍌 😭\n------------------------------', channel, EmbedDesc())
-                return None
+async def roundup_random(roundup_filter_type: RoundupFilterType, args: list[str], command_context: CommandContext):
+    search_line_string = "title"
+    if roundup_filter_type == RoundupFilterType.RANDOM_AUTHOR:
+        search_line_string = "author line"
+
+    parsed_random_input = await parse_random_input(args, search_line_string)
+    if len(parsed_random_input.invalid_input_error_string):
+        if parsed_random_input.invalid_input_error_string_is_embed:
+            return await send_embed(parsed_random_input.invalid_input_error_string, command_context.channel, EmbedDesc())
         else:
-            await send(f'**{args[0]}** is not a number. Please enter include how many rips you want to roll, or nothing if you just want one.', channel)
-            return None
-    return count
+            return await send(parsed_random_input.invalid_input_error_string, command_context.channel)
+
+    roundup_desc = RoundupDesc(roundup_filter_type = roundup_filter_type, \
+                               parsed_random_input=parsed_random_input, \
+                               not_found_message=parsed_random_input.not_found_error_string)
+    await send_roundup(roundup_desc, command_context)
+
 
 @command(
     command_type=CommandType.QOC,
-    brief=f'Show a random QoC rip',
-    format="[count]",
-    desc='Insert a number to roll that many rips.',
-    aliases=['random', 'randomqoc', 'random_qoc', 'lucky', 'letsgogambling!']
+    brief=f'Show a random QoC rip, optionally searching title',
+    format="[count] [[NOT] <search text | regex>]",
+    aliases=['random', 'randomtitle', 'randomqoc', 'random_qoc', 'lucky', 'letsgogambling!']
 )
 async def randompull(args: list[str], command_context: CommandContext):
-    count = await valdate_random_count_input(args, command_context.channel)
-    if count == None: return
-    roundup_desc = RoundupDesc(roundup_filter_type = RoundupFilterType.RANDOM, random_count = count, \
-                               not_found_message="No gambling today, sorry!")
-    await send_roundup(roundup_desc, command_context)
+    await roundup_random(RoundupFilterType.RANDOM, args, command_context)
+
+
+@command(
+    command_type=CommandType.QOC,
+    brief=f'Show a random QoC rip, optionally searching author line',
+    format="[count] [[NOT] <search text | regex>]",
+    aliases=['randomevent', 'randomauthor']
+)
+async def random_event(args: list[str], command_context: CommandContext):
+    await roundup_random(RoundupFilterType.RANDOM_AUTHOR, args, command_context)
 
 
 @command(
@@ -836,6 +868,7 @@ class SubOrQueueRipFilterType(Enum):
     SCOUT = auto()
     ALL = auto()
     RANDOM = auto()
+    RANDOM_AUTHOR = auto()
     SORTBYLENGTH = auto()
 
 class SendSubOrQueueDesc(NamedTuple):
@@ -844,9 +877,9 @@ class SendSubOrQueueDesc(NamedTuple):
     react_name: str = ""
     channel_types: List[str] = []
     channel_ids: List[int] = []
-    parsed_search_input: ParsedSearchInput = ParsedSearchInput([], [], [], False, "", "") 
+    parsed_search_input: ParsedSearchInput = ParsedSearchInput([], [], False, "", "") 
+    parsed_random_input: ParsedRandomInput = ParsedRandomInput(0, ParsedSearchInput([], [], False, "", ""), "", False, "")
     not_found_message: str = ""
-    random_count: int = 0
 
 async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: CommandContext):
     """
@@ -862,7 +895,10 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
     valid_count = 0
 
     selected_rip_message_ids = [] 
-    if desc.suborqueue_rip_filter_type == SubOrQueueRipFilterType.RANDOM: 
+    if (
+        desc.suborqueue_rip_filter_type == SubOrQueueRipFilterType.RANDOM 
+        or desc.suborqueue_rip_filter_type == SubOrQueueRipFilterType.RANDOM_AUTHOR
+    ): 
         temp_rips_all: List[Rip] = []
         for channel_id in channel_ids:
             channel = bot.get_channel(channel_id)
@@ -870,7 +906,12 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
                 temp_rips_and_errors = await get_rips(channel, GetRipsDesc(typing_channel=command_context.channel))
                 error_strings.extend(temp_rips_and_errors.error_strings)
                 temp_rips_all.extend(temp_rips_and_errors.rips)
-        selected_rip_message_ids = choose_random_rips(temp_rips_all, desc.random_count)
+
+        search_by_author = desc.suborqueue_rip_filter_type == SubOrQueueRipFilterType.RANDOM_AUTHOR 
+        selected_rip_message_ids = choose_random_rips(temp_rips_all, 
+                                                    desc.parsed_random_input.random_count,
+                                                    desc.parsed_random_input.parsed_search_input, 
+                                                    search_by_author)
 
     for channel_id in channel_ids:
         channel = bot.get_channel(channel_id)
@@ -920,6 +961,8 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
                     case SubOrQueueRipFilterType.ALL:
                         is_valid = True
                     case SubOrQueueRipFilterType.RANDOM:
+                        is_valid = rip.message_id in selected_rip_message_ids
+                    case SubOrQueueRipFilterType.RANDOM_AUTHOR:
                         is_valid = rip.message_id in selected_rip_message_ids
                     case SubOrQueueRipFilterType.SORTBYLENGTH:
                         is_valid = True
@@ -1028,23 +1071,47 @@ async def event_subs(args: list[str], command_context: CommandContext):
     await send_suborqueue_rips(desc, command_context)
 
 
+async def random_suborqueue(suborqueue_rip_filter_type: SubOrQueueRipFilterType, channel_types: list[str],
+                             args: list[str], command_context: CommandContext):
+
+    search_line_string = "title"
+    if suborqueue_rip_filter_type == SubOrQueueRipFilterType.RANDOM_AUTHOR:
+        search_line_string = "author line"
+
+    parsed_random_input = await parse_random_input(args, search_line_string)
+    if len(parsed_random_input.invalid_input_error_string):
+        if parsed_random_input.invalid_input_error_string_is_embed:
+            return await send_embed(parsed_random_input.invalid_input_error_string, command_context.channel, EmbedDesc())
+        else:
+            return await send(parsed_random_input.invalid_input_error_string, command_context.channel)
+
+    desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = suborqueue_rip_filter_type, \
+                              parsed_random_input= parsed_random_input, \
+                              channel_types = channel_types, \
+                              not_found_message = parsed_random_input.not_found_error_string)
+    await send_suborqueue_rips(desc, command_context)
+
 @command(
     command_type=CommandType.SUBS,
     public=True,
-    format="[count]",
-    brief='Show a random submitted rip',
-    desc='Insert a number to roll that many rips.',
+    format="[count] [[NOT] <search text | regex>]",
+    brief=f'Show a random submitted rip, optionally searching title',
     aliases=['randomsub', 'randomqoc', 'luckysub', 'letsgogambling!sub!']
 )
 async def random_sub(args: list[str], command_context: CommandContext):
+    await random_suborqueue(SubOrQueueRipFilterType.RANDOM, ['SUBS', 'SUBS_PIN', 'SUBS_THREAD'], args, command_context)
 
-    count = await valdate_random_count_input(args, command_context.channel)
-    if count == None: return
 
-    desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.RANDOM, \
-                              random_count = count, \
-                              channel_types = ['SUBS', 'SUBS_PIN', 'SUBS_THREAD'])
-    await send_suborqueue_rips(desc, command_context)
+@command(
+    command_type=CommandType.SUBS,
+    public=True,
+    format="[count] [[NOT] <search text | regex>]",
+    brief=f'Show a random submitted rip, optionally searching author line',
+    desc='Insert a number to roll that many rips.',
+    aliases=['random_event_sub', 'randomeventsub', 'randomauthor_sub', 'random_author_sub', 'randomauthorsub']
+)
+async def randomevent_sub(args: list[str], command_context: CommandContext):
+    await random_suborqueue(SubOrQueueRipFilterType.RANDOM_AUTHOR, ['SUBS', 'SUBS_PIN', 'SUBS_THREAD'], args, command_context)
 
 
 @command(
@@ -1580,18 +1647,24 @@ async def subs_all(args: list[str], command_context: CommandContext):
 @command(
     command_type=CommandType.QUEUE,
     public=True,
-    format="[count]",
-    brief=f'Show a random submitted rip',
-    desc='Insert a number to roll that many rips.',
+    format="[count] [[NOT] <search text | regex>]",
+    brief=f'Show a random queued rip, optionally searching title',
     aliases=['randomq', 'randomqueue', 'randomaccepted', 'luckyqueue', 'letsgogambling!queue!']
 )
 async def random_q(args: list[str], command_context: CommandContext):
-    count = await valdate_random_count_input(args, command_context.channel)
-    if count == None: return
-    desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.RANDOM, \
-                              random_count=count, \
-                              channel_types = ['QUEUE'])
-    await send_suborqueue_rips(desc, command_context)
+    await random_suborqueue(SubOrQueueRipFilterType.RANDOM, ['QUEUE'], args, command_context)
+
+
+@command(
+    command_type=CommandType.QUEUE,
+    public=True,
+    format="[count] [[NOT] <search text | regex>]",
+    brief=f'Show a random queued rip, optionally searching author line',
+    desc='Insert a number to roll that many rips.',
+    aliases=['random_event_q', 'randomauthor_q', 'random_author_q']
+)
+async def randomevent_q(args: list[str], command_context: CommandContext):
+    await random_suborqueue(SubOrQueueRipFilterType.RANDOM_AUTHOR, ['QUEUE'], args, command_context)
 
 
 @command(

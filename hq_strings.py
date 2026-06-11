@@ -217,7 +217,6 @@ def emoji_to_react_name_if_emoji(s: str) -> str:
 class ParsedSearchInput(NamedTuple):
     search_keys: List[str]
     regex_search_keys: List[str]
-    number_ints: List[int] 
     is_not: bool
     containing_error_string: str
     invalid_input_error_string: str
@@ -244,7 +243,6 @@ def parse_search_input(args: List[str]) -> ParsedSearchInput:
         search_keys[i] = search_keys[i].strip()
 
     regex_search_keys: List[str] = [] 
-    number_ints: List[int] = [] 
     invalid_input_error_string = ""
 
     to_remove = []
@@ -260,9 +258,6 @@ def parse_search_input(args: List[str]) -> ParsedSearchInput:
                 invalid_input_error_string += f'\nError: Invalid regex input: {key}'
             to_remove.append(key)
 
-        if key.isdigit():
-            number_ints.append(int(key))
-
     for key in to_remove:
         search_keys.remove(key)
 
@@ -275,7 +270,7 @@ def parse_search_input(args: List[str]) -> ParsedSearchInput:
     if len(regex_search_keys):
         containing_error_string += f'regex input `{format_list(regex_search_keys)}`'
 
-    return ParsedSearchInput(search_keys, regex_search_keys, number_ints, is_not, containing_error_string, invalid_input_error_string)
+    return ParsedSearchInput(search_keys, regex_search_keys, is_not, containing_error_string, invalid_input_error_string)
 
 def search_with_parsed_input(text: str, parsed_search_input: ParsedSearchInput) -> bool:
     is_valid = False
@@ -292,6 +287,42 @@ def search_with_parsed_input(text: str, parsed_search_input: ParsedSearchInput) 
         is_valid = not is_valid 
 
     return is_valid
+
+
+class ParsedRandomInput(NamedTuple):
+    random_count: int
+    parsed_search_input: ParsedSearchInput 
+    invalid_input_error_string: str
+    invalid_input_error_string_is_embed: bool
+    not_found_error_string: str
+
+async def parse_random_input(args: List[str], search_type_string: str) -> ParsedRandomInput:
+
+    invalid_input_error_string = ""
+    invalid_input_error_string_is_embed = False
+    parsed_search_input = ParsedSearchInput([], [], False, "", "") 
+    not_found_error_string = 'No gambling today!' 
+
+    random_count = 1
+    if len(args):
+        if args[0].isdigit():
+            random_count = int(args[0])
+            if random_count == 0:
+                invalid_input_error_string = f'**[Zero. - Zero 64 (Zero Mix)](<https://www.youtube.com/watch?v=UtGL5yKdSCk>)**\nby Zero Z | 🔥 🔥 🍌 😭\n------------------------------'
+                invalid_input_error_string_is_embed = True
+            elif random_count < 0:
+                invalid_input_error_string = f'ERROR: Negative rips not implemented `(library not found: antirip)`'
+            else:
+                args = args[1:]
+
+    if not len(invalid_input_error_string) and len(args):
+        parsed_search_input = parse_search_input(args)
+        invalid_input_error_string = parsed_search_input.invalid_input_error_string
+
+    if len(parsed_search_input.containing_error_string):
+        not_found_error_string = f'No rips {parsed_search_input.containing_error_string} in {search_type_string} found.'
+
+    return ParsedRandomInput(random_count, parsed_search_input, invalid_input_error_string, invalid_input_error_string_is_embed, not_found_error_string) 
 
 
 class GameAndTrackPair(NamedTuple):
