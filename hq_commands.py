@@ -1724,7 +1724,7 @@ def format_ripdates(ripdates: list[RipDate]) -> str:
                 if i_date == 0:
                     result += '\n'
                 else:
-                    result += ' \ '
+                    result += ' \\ '
                 result += f"🗓️ **{datestring}:**" 
         elif rip_has_react([ReactType.CALENDAR], ripdate.rip):
             result += f"\n🗓️ **???**" 
@@ -2227,7 +2227,7 @@ async def specialists(args: list[str], command_context: CommandContext):
 
         #NOTE: (Ahmayk) bypass cache so that we are guarenteed to get what is on the sheet right now
         qoc_sheet_data = await get_qoc_sheet_data(GetQoCSheetDataDesc(bypass_cache=True))
-        text = search_specialists(text, qoc_sheet_data, command_context.channel.guild)
+        text = search_specialists(string_and_errors.string, qoc_sheet_data, command_context.channel.guild)
         if len(text):
             await send_embed(text, command_context.channel, EmbedDesc(title="Specialists"))
         else:
