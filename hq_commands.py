@@ -146,7 +146,7 @@ async def help(args: list[str], command_context: CommandContext):
         if not command_info.public:
             desc += f'\n\n{qoc_react.string} *Only accessible in QoC channels.*' 
         if command_info.admin:
-            desc += f'\n\n:nerd: *Only accessible by admins of this discord server.*' 
+            desc += f'\n\n:nerd: *Only accessible by admins of this Discord server.*' 
 
         desc += '\n'
 
@@ -2307,7 +2307,7 @@ async def validate_cache(args: list[str], command_context: CommandContext):
 @command(
     command_type=CommandType.MANAGEMENT,
     format='[channel link]',
-    brief='Refetches rip data from discord',
+    brief='Refetches rip data from Discord',
     desc='Insert a channel to rebuild the cache for just that channel.',
     aliases=['refresh_cache', 'rebuild_cache']
 )

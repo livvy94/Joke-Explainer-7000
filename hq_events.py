@@ -247,7 +247,7 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
                                 confirm_emoji = random.choice(['🐟 ', '😂 ', '😳 ', '🐒 ', '💯 ', '🌈 ', '🍔 ', '🫶', '👁️👄👁️ ', '🏳️‍⚧️ ', '🏳️‍🌈 ', '🐴 ', '🇧🇷'])
                             return_message = confirm_emoji 
 
-                await send_and_if_errors(return_message, "Warning: Pining QoC rip returned errors.", error_strings, channel, delete_afterwards_time)
+                await send_and_if_errors(return_message, "Warning: Pinning QoC rip returned errors.", error_strings, channel, delete_afterwards_time)
 
         except Exception as error:
             await send_crash(f'ERROR on QOC Pin:', error, channel)
