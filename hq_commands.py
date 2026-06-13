@@ -1224,15 +1224,12 @@ async def unsent(args: list[str], command_context: CommandContext):
 )
 async def lookup(args: list[str], command_context: CommandContext):
     def lookup_result(url: str, length: str, note: str):
-        return f"URL: {url}\nLength: {length}: Note: {note}"
+        return f"URL: {url}\nLength: {length}\nNote: {note}"
     
     if not len(args):
         return await send(lookup_result(None, None, "Missing search query!"), command_context.channel)
 
-    parsed_search_input = parse_search_input(args)
-    if len(parsed_search_input.invalid_input_error_string):
-        return await send(lookup_result(None, None, parsed_search_input.invalid_input_error_string), command_context.channel)
-    
+    lookup_title = ' '.join(args)
     lookup_url = None
     lookup_length = None
     error_strings = []
@@ -1246,9 +1243,7 @@ async def lookup(args: list[str], command_context: CommandContext):
             rips = rips_and_errors.rips
             for rip in rips:
                 rip_title = get_rip_title(rip.text)
-                rip_author = get_raw_rip_author(rip.text)
-
-                is_valid = search_with_parsed_input(rip_title, parsed_search_input) 
+                is_valid = (rip_title == lookup_title)
 
                 if is_valid:
                     lookup_url = format_message_link(channel.guild.id, rip.channel_id, rip.message_id)
@@ -1257,9 +1252,11 @@ async def lookup(args: list[str], command_context: CommandContext):
                     if len(string_and_errors.string):
                         lookup_length = string_and_errors.string
                     
-                    return await send(lookup_result(lookup_url, lookup_length, "All good!"), command_context.channel)
+                    lookup_note = '\n'.join(error_strings) if len(error_strings) else "All good!"
+                    return await send(lookup_result(lookup_url, lookup_length, lookup_note), command_context.channel)
     
-    return await send(lookup_result(None, None, "Rip not found!"), command_context.channel)
+    lookup_note = '\n'.join(error_strings) if len(error_strings) else "Rip not found!"
+    return await send(lookup_result(None, None, lookup_note), command_context.channel)
 
 
 @command(

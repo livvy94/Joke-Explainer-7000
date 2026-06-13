@@ -116,14 +116,15 @@ def get_rip_title(text: str) -> str | None:
     Wrapper function to format unusual or spoiler rip titles
     """
     rip_title = get_raw_rip_title(text)
+    CODEBLOCK_TYPES = ['ansi', 'swift', 'fix']
     if rip_title is None:
         return "`[Unusual Pin Format]`"
     elif '||' in text.split('```')[0]:
         # if || is detected in the message before the first ```, make the rip title into spoiler
         return "`[Rip Contains Spoiler]`"
-    elif rip_title == 'ansi':
-        # fairly sure we will never upload a video named "ansi". other codeblock formats exist but this one is the most common for color so
-        return get_raw_rip_title(text.replace('```ansi', '```', 1))
+    elif rip_title in CODEBLOCK_TYPES:
+        # 13 Jun 2026: im just gonna hardcode these 3 cases lol
+        return get_raw_rip_title(text.replace(f'```{rip_title}', '```', 1))
     else:
         return rip_title
 
