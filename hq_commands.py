@@ -1220,6 +1220,51 @@ async def unsent(args: list[str], command_context: CommandContext):
 @command(
     command_type=CommandType.QUEUE,
     public=True,
+    brief='Search for a specific queued rip title.',
+)
+async def lookup(args: list[str], command_context: CommandContext):
+    def lookup_result(url: str, length: str, note: str):
+        return f"URL: {url}\nLength: {length}: Note: {note}"
+    
+    if not len(args):
+        return await send(lookup_result(None, None, "Missing search query!"), command_context.channel)
+
+    parsed_search_input = parse_search_input(args)
+    if len(parsed_search_input.invalid_input_error_string):
+        return await send(lookup_result(None, None, parsed_search_input.invalid_input_error_string), command_context.channel)
+    
+    lookup_url = None
+    lookup_length = None
+    error_strings = []
+    
+    channel_ids = get_channel_ids_of_types(["QUEUE"])
+    for channel_id in channel_ids:
+        channel = bot.get_channel(channel_id)
+        if channel:
+            rips_and_errors = await get_rips(channel, GetRipsDesc(typing_channel=command_context.channel))
+            error_strings.extend(rips_and_errors.error_strings)
+            rips = rips_and_errors.rips
+            for rip in rips:
+                rip_title = get_rip_title(rip.text)
+                rip_author = get_raw_rip_author(rip.text)
+
+                is_valid = search_with_parsed_input(rip_title, parsed_search_input) 
+
+                if is_valid:
+                    lookup_url = format_message_link(channel.guild.id, rip.channel_id, rip.message_id)
+                    string_and_errors = await get_formatted_rip_length(rip.text, False, False, channel.guild)  
+                    error_strings.extend(string_and_errors.error_strings)
+                    if len(string_and_errors.string):
+                        lookup_length = string_and_errors.string
+                    
+                    return await send(lookup_result(lookup_url, lookup_length, "All good!"), command_context.channel)
+    
+    return await send(lookup_result(None, None, "Rip not found!"), command_context.channel)
+
+
+@command(
+    command_type=CommandType.QUEUE,
+    public=True,
     format="[NOT] <search text | regex>",
     brief='Search queued rip titles',
     desc="Does not need quotes. Include NOT to search for rips that don't inlude the searched input.",
