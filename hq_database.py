@@ -20,6 +20,19 @@ DATABASE_LOCK = asyncio.Lock()
 class GetRipUrlLengthDesc(NamedTuple):
     force_download: bool = False
 
+async def store_in_database_float(value: float, key: str, database_key: str):
+    if (
+        database_key != DatabaseKey.RIP_LENGTH
+    ):
+        assert f"{database_key} does not support float as input"
+
+    await DATABASE_LOCK.acquire()
+    try:
+        JE_DATABASE[database_key][key] = value 
+        JE_DATABASE.sync()
+    finally:
+        DATABASE_LOCK.release()
+
 async def get_rip_url_length(url: str, desc: GetRipUrlLengthDesc) -> FloatAndErrors: 
     duration = 0.0
     error_strings = []
