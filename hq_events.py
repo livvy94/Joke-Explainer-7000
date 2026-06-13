@@ -12,6 +12,7 @@ import random
 from hq_config import *
 from hq_vet import *
 from hq_sheets import * 
+from hq_embed import *
 from hq_commands import CommandContext, find_command_info
 from sourceFinder import search_rip_sources 
 
@@ -19,25 +20,11 @@ from sourceFinder import search_rip_sources
 #                    EVENTS                     #
 #===============================================#
 
-async def remove_embeds_from_channel(channel_ids: List[int], expire_time_seconds: float):
-    for channel_id in channel_ids:
-        channel = bot.get_channel(channel_id)
-        if channel:
-            messages_and_errors = await discord_cleanup_embeds(200, expire_time_seconds, channel, None) 
-            #NOTE: (Ahmayk) Don't send errors in channel and don't notify anyone
-            # only bot devs care about this. errors will be posted in log
-
 
 times = []
 times.append(time(hour=6, tzinfo=timezone.utc))
-
 @tasks.loop(time=times)
 async def regular_checkup():
-    qoc_channel_ids = get_channel_ids_of_types(['QOC'])
-    await remove_embeds_from_channel(qoc_channel_ids, get_config('embed_seconds'))
-
-    proxy_channel_ids = get_channel_ids_of_types(['PROXY_QOC'])
-    await remove_embeds_from_channel(proxy_channel_ids, get_config('proxy_embed_seconds'))
 
     try:
         string_and_errors = await validate_cache_all()
@@ -64,8 +51,18 @@ async def regular_checkup():
             if url in stored_urls:
                 stored_urls.remove(url)
                 break
+
     await remove_urls_from_database(stored_urls)
+
+    await cleanup_sent_embeds_in_expire_database()
     
+
+@tasks.loop(minutes=1)
+async def cleanup_embeds_regularly():
+    try: 
+        await cleanup_sent_embeds_in_expire_database()
+    except Exception as error:
+        await send_crash(f'ERROR on scheduled embed cleanup', error, None)
 
 @bot.event
 async def on_ready():
@@ -76,6 +73,8 @@ async def on_ready():
     print('#################################')
 
     await write_log("Good morning! Connecting to Google Sheets API...")
+
+    cleanup_embeds_regularly.start()
 
     #NOTE: (Ahmayk) fetch sheet data on init to initialize credentials info and make sure that works
     await get_qoc_sheet_data(GetQoCSheetDataDesc())

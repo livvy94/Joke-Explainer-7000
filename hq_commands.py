@@ -11,6 +11,7 @@ from sourceFinder import search_rip_sources
 from hq_types import *
 from hq_config import *
 from hq_discord import *
+from hq_embed import *
 from hq_react import *
 from hq_rip import *
 from hq_vet import * 
