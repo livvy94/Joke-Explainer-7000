@@ -97,10 +97,7 @@ def desc_to_dict(description: str, start_line: int) -> Tuple[Dict[str, str], Set
                 else: messages.add(f'Missing space in ``{key}`` line.')
                 value = value.rstrip()
         except ValueError:
-            # ignore last line if ppl decide to put channel desc
-            if line != description.splitlines()[-1]:
-                line_short = line if len(line) < 15 else f'{line[:7]}...{line[-7:]}'
-                messages.add(f'Irregular line without : found in description: "{line_short}"')
+            messages.add('Irregular line without : found in description. Ignore if intentional (e.g. custom channel description line).')
             continue
         desc[key] = value
     
@@ -222,14 +219,16 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
         else:
             # Compare desc with existing videos
             existing_descs = [video['description'] for video in videos]
-            extra_fields = False
+            extra_fields = []
             for key in desc.keys():
                 # ignore ones already covered by patterns.json
                 if (key + ":") in [p["pattern"] for p in patterns["MISTAKE"] if "pattern" in p.keys()]:
                     continue
                 if not crosscheck_description_key(key, existing_descs, 0):
-                    extra_fields = True
-                    adv_messages.add(f'``{key}`` field not present in any existing videos in playlist.')
+                    extra_fields.append(key)
+            
+            if len(extra_fields):
+                adv_messages.add("``" + ", ".join(extra_fields) + "`` field" + ('s' if len(extra_fields) > 1 else '') + " not present in any existing videos in playlist.")
 
             # Check the order of keys
             if not extra_fields and len(existing_descs) > 0 \

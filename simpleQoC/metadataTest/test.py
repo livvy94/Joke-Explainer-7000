@@ -71,9 +71,8 @@ class TestMetadata(unittest.TestCase):
                 "We commonly use Xbox Series X|S.",
                 "Reboot metadata found. Change to regular metadata if this was not intentional.",
                 "Missing space in ``Platforms`` line.",
-                "Irregular line without : found in description: \"dummy l...s — lol\"",
-                "``Arrangement`` field not present in any existing videos in playlist.",
-                "``Platlist`` field not present in any existing videos in playlist.",
+                "Irregular line without : found in description. Ignore if intentional (e.g. custom channel description line).",
+                "``Arrangement, Platlist`` fields not present in any existing videos in playlist.",
                 "Title format does not match existing videos in playlist, or Music line is incorrect (e.g. missing mixname).",
             ]
         )
