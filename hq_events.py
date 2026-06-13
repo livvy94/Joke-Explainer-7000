@@ -13,7 +13,7 @@ from hq_config import *
 from hq_vet import *
 from hq_sheets import * 
 from hq_embed import *
-from hq_commands import CommandContext, find_command_info
+from hq_commands import CommandContext, CommandType, find_command_info
 from sourceFinder import search_rip_sources 
 
 #===============================================#
@@ -397,10 +397,11 @@ async def on_message(message: Message):
         ##NOTE: (Ahmayk) consider giving feedback on a command not being avaliable
         # if not having any feedback is confusing, probably is fine tho
         return
-
-    if command_info.admin:
-        if not type(message.author) is discord.Member:
-            return await send("Error: Admin commands can only be executed within servers.", message.channel)
+    
+    if not type(message.author) is discord.Member:
+        if command_info.command_type != CommandType.SECRET:
+            return await send("Error: Working commands can only be executed within servers.", message.channel)
+    elif command_info.admin:
         if not message.author.guild_permissions.administrator:
             return await send("Error: Only users with admin access in this server can use this command.", message.channel)
 
