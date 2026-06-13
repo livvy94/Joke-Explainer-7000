@@ -116,7 +116,7 @@ def get_rip_title(text: str) -> str | None:
     Wrapper function to format unusual or spoiler rip titles
     """
     rip_title = get_raw_rip_title(text)
-    CODEBLOCK_TYPES = ['ansi', 'swift', 'fix']
+    CODEBLOCK_TYPES = ['ansi', 'swift', 'fix', 'ldif']
     if rip_title is None:
         return "`[Unusual Pin Format]`"
     elif '||' in text.split('```')[0]:
