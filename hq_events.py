@@ -19,11 +19,26 @@ from sourceFinder import search_rip_sources
 #                    EVENTS                     #
 #===============================================#
 
+async def remove_embeds_from_channel(channel_ids: List[int], expire_time_seconds: float):
+    for channel_id in channel_ids:
+        channel = bot.get_channel(channel_id)
+        if channel:
+            messages_and_errors = await discord_cleanup_embeds(200, expire_time_seconds, channel, None) 
+            #NOTE: (Ahmayk) Don't send errors in channel and don't notify anyone
+            # only bot devs care about this. errors will be posted in log
+
+
 times = []
 times.append(time(hour=6, tzinfo=timezone.utc))
 
 @tasks.loop(time=times)
-async def validate_cache_regularly():
+async def regular_checkup():
+    qoc_channel_ids = get_channel_ids_of_types(['QOC'])
+    await remove_embeds_from_channel(qoc_channel_ids, get_config('embed_seconds'))
+
+    proxy_channel_ids = get_channel_ids_of_types(['PROXY_QOC'])
+    await remove_embeds_from_channel(proxy_channel_ids, get_config('proxy_embed_seconds'))
+
     try:
         string_and_errors = await validate_cache_all()
         if len(string_and_errors.string):
@@ -35,24 +50,22 @@ async def validate_cache_regularly():
     except Exception as error:
         await send_crash(f'ERROR on scheduled cache revalidation', error, None)
 
-
-async def remove_embeds_from_channel(channel_ids: List[int], expire_time_seconds: float):
-    for channel_id in channel_ids:
+    rips_all = []
+    for channel_id in get_channel_ids_of_types(['QOC', 'SUBS', 'SUBS_PIN', 'SUBS_THREAD', 'QUEUE']):
         channel = bot.get_channel(channel_id)
         if channel:
-            messages_and_errors = await discord_cleanup_embeds(200, expire_time_seconds, channel, None) 
-            #NOTE: (Ahmayk) Don't send errors in channel and don't notify anyone
-            # only bot devs care about this. errors will be posted in log
+            temp_rips_and_errors = await get_rips(channel, GetRipsDesc())
+            rips_all.extend(temp_rips_and_errors.rips)
 
-
-@tasks.loop(time=times)
-async def cleanup_regularly():
-    qoc_channel_ids = get_channel_ids_of_types(['QOC'])
-    await remove_embeds_from_channel(qoc_channel_ids, get_config('embed_seconds'))
-
-    proxy_channel_ids = get_channel_ids_of_types(['PROXY_QOC'])
-    await remove_embeds_from_channel(proxy_channel_ids, get_config('proxy_embed_seconds'))
-
+    stored_urls = list(JE_DATABASE[DatabaseKey.RIP_LENGTH].keys())
+    for rip in rips_all:
+        urls = extract_rip_link(rip.text)
+        for url in urls:
+            if url in stored_urls:
+                stored_urls.remove(url)
+                break
+    await remove_urls_from_database(stored_urls)
+    
 
 @bot.event
 async def on_ready():
@@ -76,8 +89,7 @@ async def on_ready():
     validate_result = f'**Startup caching complete.**{string_and_errors.string}'
     await write_log(validate_result)
 
-    validate_cache_regularly.start()
-    cleanup_regularly.start()
+    regular_checkup.start()
 
 @bot.event
 async def on_error(event, *args, **kwargs):

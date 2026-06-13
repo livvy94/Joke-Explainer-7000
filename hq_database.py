@@ -2,7 +2,7 @@
 import shelve 
 import asyncio 
 from typing import NamedTuple, List
-from enum import Enum
+from enum import Enum, StrEnum
 from discord import TextChannel, Thread, Guild
 
 from hq_discord import FloatAndErrors, run_blocking
@@ -10,30 +10,10 @@ from simpleQoC.qoc import getAudioLengthInSecondsFFprobe
 
 JE_DATABASE = shelve.open("je_database", writeback=True)
 
-##NOTE: (Ahmayk) database keys must be strings
-##python 3.10 doesn't have StrEnum, python documentation reccomends making it yourself
-## https://docs.python.org/3.10/library/enum.html#otherIs
-class StrEnum(str, Enum):
-    pass
-
 class DatabaseKey(StrEnum):
     RIP_LENGTH = "RIP_LENGTH" 
 
 DATABASE_LOCK = asyncio.Lock()
-
-async def store_in_database_float(value: float, key: str, database_key: str):
-    if (
-        database_key != DatabaseKey.RIP_LENGTH
-    ):
-        assert f"{database_key} does not support float as input"
-
-    await DATABASE_LOCK.acquire()
-    try:
-        JE_DATABASE[database_key][key] = value 
-        JE_DATABASE.sync()
-    finally:
-        DATABASE_LOCK.release()
-
 
 class GetRipUrlLengthDesc(NamedTuple):
     force_download: bool = False
@@ -52,11 +32,26 @@ async def get_rip_url_length(url: str, desc: GetRipUrlLengthDesc) -> FloatAndErr
         else:
             error_strings.extend(floatAndErrors.error_strings)
 
-        #NOTE: (Ahmayk) store 0 when we error. 
-        # This results in not retrying on paths where don't want to download anything
-        await store_in_database_float(duration, url, DatabaseKey.RIP_LENGTH)
+        await DATABASE_LOCK.acquire()
+        try:
+            #NOTE: (Ahmayk) store 0 when we error. 
+            # This results in not retrying on paths where don't want to download anything
+            JE_DATABASE[DatabaseKey.RIP_LENGTH][url] = duration
+            JE_DATABASE.sync()
+        finally:
+            DATABASE_LOCK.release()
     else:
         duration = JE_DATABASE[DatabaseKey.RIP_LENGTH][url]
 
     return FloatAndErrors(duration, error_strings)
 
+
+async def remove_urls_from_database(urls_to_remove: list[str]):
+    if len(urls_to_remove):
+        await DATABASE_LOCK.acquire()
+        try:
+            for url in urls_to_remove:
+                JE_DATABASE[DatabaseKey.RIP_LENGTH].pop(url)
+            JE_DATABASE.sync()
+        finally:
+            DATABASE_LOCK.release()
