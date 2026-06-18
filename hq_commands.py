@@ -34,6 +34,7 @@ class CommandType(Enum):
     STATS = auto()
     ANALYZE = auto()
     SOURCE = auto()
+    UPLOAD_MISTAKES = auto()
     SECRET = auto()
     MANAGEMENT = auto()
 
@@ -47,6 +48,7 @@ COMMAND_TYPE_DATA[CommandType.QUEUE] = CommandTypeData('get info on rips in appr
 COMMAND_TYPE_DATA[CommandType.STATS] = CommandTypeData('get miscellaneous info on all rips')
 COMMAND_TYPE_DATA[CommandType.ANALYZE] = CommandTypeData('analyze rip metadata or audio for common issues')
 COMMAND_TYPE_DATA[CommandType.SOURCE] = CommandTypeData('search for rip sources from online VGM databases')
+COMMAND_TYPE_DATA[CommandType.UPLOAD_MISTAKES] = CommandTypeData('commands related to reported upload mistakes')
 COMMAND_TYPE_DATA[CommandType.MANAGEMENT] = CommandTypeData('manage or learn about the bot')
 
 class CommandContext(NamedTuple):
@@ -2286,6 +2288,36 @@ async def qocsheet(args: list[str], command_context: CommandContext):
         await send("Specialist spreadsheet is not configured in bot.", command_context.channel)
     link = f'https://docs.google.com/spreadsheets/d/{SPECIALISTS_SPREADSHEET_ID}/edit?usp=sharing'
     await send(link, command_context.channel)
+
+
+@command(
+    command_type=CommandType.UPLOAD_MISTAKES,
+    brief='chooses a random unarchived post in uploading mistakes forum',
+    aliases=['randommistake', 'savethechannel'],
+    public=True
+)
+async def fixthechannel(args: list[str], command_context: CommandContext):
+    channel_ids = get_channel_ids_of_types(['UPLOAD_MISTAKE_FORUM'])
+    if not len(channel_ids):
+        return await send(f"ERROR: upload mistake channel not defined in bot config (contact bot maintainer).", command_context.channel)
+    error_strings: list[str] = []
+    channel_and_errors = await discord_find_channel(channel_ids[0])
+    channel = channel_and_errors.channel
+    if not channel:
+        return await send_and_if_errors(f"ERROR: upload mistake channel not found.", "Error grabbing channel", error_strings, command_context.channel)
+    if channel.type != discord.ChannelType.forum:
+        return await send_and_if_errors(f"ERROR: upload mistake channel {channel.jump_url} is not a forum channel.", "Error grabbing channel", error_strings, command_context.channel)
+
+    unresolved = []
+    for thread in channel.threads:
+        for tag in thread.applied_tags:
+            if tag.name == "Unresolved":
+                unresolved.append(thread)
+                break
+
+    chosen_thread = random.choice(unresolved)
+    fix_react = react_type_to_react(ReactType.FIX, channel.guild) 
+    return await send(f'Random recent channel mistake by **{chosen_thread.owner.display_name}**: {fix_react.string} **[{chosen_thread.name}]({chosen_thread.jump_url})**', command_context.channel)
 
 @command(
     command_type=CommandType.MANAGEMENT,
