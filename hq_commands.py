@@ -2670,3 +2670,29 @@ async def refresh_thumbnails(args: list[str], command_context: CommandContext):
         string_and_errors.error_strings,
         command_context.channel,
     )
+
+
+@command(
+    command_type=CommandType.SECRET,
+    admin=True,
+)
+async def search_frames(args: list[str], command_context: CommandContext):
+
+    if not len(args):
+        return await send("Please input a game title. I'll search for a matching thumbnail for the channel.", command_context.channel)
+
+    input_title = " ".join(args)
+
+    async with command_context.channel.typing():
+        messages_and_errors = await search_thumbnail_cache(input_title)
+
+    return_message = ""
+    if not len(messages_and_errors.messages):
+        return_message = "No thumbnails found"
+
+    for message in messages_and_errors.messages:
+        return_message += f'\n{message.content}\n{message.jump_url} {message.attachments[0].url}'
+
+    await send_and_if_errors(return_message, "Erorrs during searching frames", messages_and_errors.error_strings, command_context.channel)
+
+ 

@@ -1,8 +1,12 @@
 
 import typing
 from typing import List, NamedTuple
+from enum import Enum, auto
 import re
+import string
 import unicodedata
+from difflib import SequenceMatcher
+import numpy 
 
 def split_long_message(a_message: str, character_limit) -> list[str]:  # avoid Discord's character limit
     """
@@ -397,3 +401,104 @@ def slugify(s: str) -> str:
     s = unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode('ascii')
     s = re.sub(r'[^\w\s-]', '', s.lower())
     return re.sub(r'[-\s]+', '-', s).strip('-_')
+
+
+class TitleType(Enum):
+    TRACK = auto()
+    ALBUM = auto()
+    THUMBNAIL = auto()
+
+def get_cleaned_words(title: str, track_type: TitleType) -> str:
+    title = title.lower()
+    title = title.translate(str.maketrans('', '', string.punctuation))
+    #NOTE: (Ahmayk) remove common keywords, matching to them dilutes search
+    if track_type == TitleType.ALBUM:
+        title = title.replace(" ost", " ")
+        title = title.replace(" original soundtrack", " ")
+        title = title.replace(" official soundtrack", " ")
+        title = title.replace(" the complete soundtrack", " ")
+        title = title.replace(" complete soundtrack", " ")
+        title = title.replace(" digital soundtrack", " ")
+        title = title.replace(" official ost", " ")
+        title = title.replace(" unofficial soundtrack", " ")
+        title = title.replace(" unofficial ost", " ")
+        title = title.replace(" soundtrack", " ")
+    if track_type == TitleType.TRACK:
+        title = title.replace(" version", " ")
+        title = title.replace(" mix", " ")
+    if track_type == TitleType.TRACK:
+        title = title.replace(" (retcon)", " ")
+    title = title.strip()
+    return title
+
+
+#NOTE: (Ahamyk) fine tuned similarity algorythm
+def score_title_similarity(title_to_score: str, match_title: str, scan_result_type: TitleType) -> float:
+
+    score = 0.0
+
+    title_to_score = get_cleaned_words(title_to_score, scan_result_type)
+    match_title = get_cleaned_words(match_title, scan_result_type)
+
+    # print(f'SUB: {submitted_title} SCAN: {scanned_title}')
+
+    longest_common_substring_ratio = 0.0
+    if len(title_to_score):
+
+        match = SequenceMatcher(None, title_to_score, match_title).find_longest_match()
+        longest_common_substring_ratio = match.size / len(title_to_score) 
+        # print(match)
+        # print(f"LCS: {longest_common_substring_ratio}")
+
+    match scan_result_type:
+
+        case TitleType.ALBUM:
+            # print(f'SUB: {submitted_title} SCAN: {scanned_title}')
+            # print(f'SUB: {len(submitted_title)} SCAN: {len(scanned_title)}')
+
+            if longest_common_substring_ratio > 0.1:
+                title_included = title_to_score == match_title
+                ratio_rattcliff = SequenceMatcher(None, title_to_score, match_title).ratio()
+
+                score = (
+                    (0.5 * longest_common_substring_ratio)
+                    + (0.25 * title_included)
+                    + (0.25 * ratio_rattcliff)
+                )
+
+        case TitleType.TRACK:
+
+            if longest_common_substring_ratio > 0.5:
+
+                if title_to_score == match_title:
+                    # print("Exact match!")
+                    score = 1.0
+                else:
+                    is_partial_match = 0.0 
+                    if title_to_score in match_title:
+                        # print(f"Included! {submitted_title} -> {scanned_title}")
+                        is_partial_match = 1.0 
+
+                    ratio_rattcliff = SequenceMatcher(None, title_to_score, match_title).ratio()
+                    # print(f"ratio: {ratio_rattcliff}")
+
+                    score = (
+                        (0.5 * longest_common_substring_ratio)
+                        + (0.25 * ratio_rattcliff)
+                        + (0.25 * is_partial_match)
+                    )
+
+                    #NOTE: (Ahmayk) introduces harsher cutoff, makes lower scores lower than higher scores
+                    score = score * score * score
+
+        case TitleType.THUMBNAIL:
+            # print(f'SUB: {submitted_title} SCAN: {scanned_title}')
+            # print(f'SUB: {len(submitted_title)} SCAN: {len(scanned_title)}')
+
+            if longest_common_substring_ratio > 0.1:
+                score = 0
+                if match_title in title_to_score:
+                    score = SequenceMatcher(None, title_to_score, match_title).ratio()
+
+    return score
+

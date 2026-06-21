@@ -1,12 +1,14 @@
 
 import shelve 
 import asyncio 
+import numpy
 from typing import NamedTuple
 from enum import StrEnum
 from datetime import datetime, timedelta, timezone
 
+from hq_strings import TitleType, score_title_similarity 
 from hq_config import get_config, get_channel_ids_of_types 
-from hq_discord import FloatAndErrors, StringAndErrors, MessagesAndErrors, run_blocking, discord_find_channel, discord_delete_messages, discord_get_channel_messages
+from hq_discord import FloatAndErrors, StringAndErrors, MessagesAndErrors, run_blocking, discord_find_channel, discord_delete_messages, discord_get_channel_messages, discord_fetch_message
 from simpleQoC.qoc import getAudioLengthInSecondsFFprobe 
 
 JE_DATABASE = shelve.open("je_database", writeback=True)
@@ -192,3 +194,54 @@ async def refresh_thumbnail_cache() -> StringAndErrors:
         string += f"\n- {len(thumbnail_dict)} image messages."
 
     return StringAndErrors(string, error_strings)
+
+async def search_thumbnail_cache(input_title: str) -> MessagesAndErrors:
+
+    messages = []
+    error_strings = []
+
+    channel_ids = get_channel_ids_of_types(['THUMBNAILS'])
+    if not len(channel_ids):
+        error_strings.append(f"Thumbnail channel not defined in bot config (contact bot maintainer).")
+
+    if not len(error_strings):
+        channel_and_errors = await discord_find_channel(channel_ids[0])
+        error_strings.extend(channel_and_errors.error_strings)
+
+    if THUMBNAIL_DICT_KEY not in THUMBNAIL_DATABASE:
+        error_strings.append("Thumbnail cache is empty. Cache must be filled before thumbnails can be searched.")
+
+    if not len(error_strings):
+
+        class ScoredFrame(NamedTuple):
+            score: float
+            discord_id: int
+            message_content: str
+
+        scored_frames = []
+
+        for discord_id, message_content in THUMBNAIL_DATABASE[THUMBNAIL_DICT_KEY].items():
+            score = score_title_similarity(message_content, input_title, TitleType.THUMBNAIL) 
+            scored_frames.append(ScoredFrame(score, discord_id, message_content))
+
+        scores = []
+        for scored in scored_frames:
+            scores.append(scored.score)
+        score_cutoff = 0
+        if len(scores):
+            track_mean = numpy.mean(scores) 
+            standard_deviation = numpy.maximum(0.0, numpy.std(scores))
+            max_score = numpy.max(scores)
+            score_cutoff = numpy.minimum(max_score, track_mean + standard_deviation)
+
+        scored_frames_all = list(sorted(scored_frames, key=lambda scored: scored.score, reverse=True))
+        scored_frames = scored_frames_all[:5]
+
+        for scored in scored_frames:
+            if scored.score > 0 and scored.score >= score_cutoff:
+                message_and_errors = await discord_fetch_message(scored.discord_id, channel_and_errors.channel)
+                error_strings.extend(message_and_errors.error_strings)
+                if message_and_errors.message:
+                    messages.append(message_and_errors.message)
+
+    return MessagesAndErrors(messages, error_strings)
