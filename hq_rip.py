@@ -67,7 +67,7 @@ async def _lock(id: int, lock_dict: dict[int, asyncio.Lock], error_strings: list
 
     lock_dict[id].release()
 
-DATABASE_LOCK = asyncio.Lock()
+JE_DATABASE_LOCK = asyncio.Lock()
 
 @asynccontextmanager
 async def lock_channel(channel_id: int, error_strings: list[str], typing_channel: TextChannel | Thread | None):

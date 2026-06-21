@@ -2651,3 +2651,22 @@ async def testsource(args: list[str], command_context: CommandContext):
             await send(f'TESTING: {title}', command_context.channel)
             text = search_rip_sources(rip.text)
             await send_embed(text, command_context.channel, EmbedDesc(title="Sources"))
+
+
+@command(
+    command_type=CommandType.SECRET,
+    admin=True,
+)
+async def refresh_thumbnails(args: list[str], command_context: CommandContext):
+
+    await send("Refreshing thumbnail cache. This will take 5-10 minutes.", command_context.channel)
+
+    async with command_context.channel.typing():
+        string_and_errors = await refresh_thumbnail_cache()
+
+    await send_and_if_errors(
+        string_and_errors.string,
+        "Oops, something went wrong while refreshing thumbnail cache.",
+        string_and_errors.error_strings,
+        command_context.channel,
+    )

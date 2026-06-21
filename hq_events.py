@@ -44,7 +44,7 @@ async def regular_checkup():
             temp_rips_and_errors = await get_rips(channel, GetRipsDesc())
             rips_all.extend(temp_rips_and_errors.rips)
 
-    stored_urls = list(JE_DATABASE[DatabaseKey.RIP_LENGTH].keys())
+    stored_urls = list(JE_DATABASE[JEDatabaseKey.RIP_LENGTH].keys())
     for rip in rips_all:
         urls = extract_rip_link(rip.text)
         for url in urls:
