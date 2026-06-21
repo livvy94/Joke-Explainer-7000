@@ -61,6 +61,9 @@ def split_long_message(a_message: str, character_limit) -> list[str]:  # avoid D
     return result
 
 
+#TODO: (Ahmayk) This is the wrong api. rips can have either a link or an attachment.
+# should input a message, and we return a link either from message content or an attachment url
+# (this would require an equivalent rip version of this api, which would store attachment urls)
 def extract_rip_link(text: str) -> typing.List[str]:
     """
     Extract potential rip links from text.

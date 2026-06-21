@@ -2107,6 +2107,10 @@ async def peek_msg(args: list[str], command_context: CommandContext):
         use_ffprobe = len(args) > 1
         
         urls = extract_rip_link(message.content)
+        if not len(urls):
+            return await send("No links found in message", command_context.channel)
+
+        code = 0
         errs = []
         for url in urls:
             if use_ffprobe:
