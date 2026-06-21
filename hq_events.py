@@ -93,7 +93,7 @@ async def on_ready():
 @bot.event
 async def on_error(event, *args, **kwargs):
     # https://stackoverflow.com/a/60031624
-    await write_log('{}```py\n{}\n```'.format(event, traceback.format_exc()), embed=True)
+    await write_log('{}```py\n{}\n```'.format(event, traceback.format_exc()))
 
 
 _bot_close = bot.close
