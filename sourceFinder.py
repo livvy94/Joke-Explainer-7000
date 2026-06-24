@@ -441,6 +441,8 @@ def find_song(game_and_track_pairs: list[GameAndTrackPair]) -> FindSongResult:
 def search_rip_sources(submissionText: str, qoc_sheet_data: QoCSheetData) -> str:
 
     title = get_raw_rip_title(submissionText)
+    spoiler = '||' in submissionText.split('```')[0]
+    S = '||' if spoiler else ''
     if title is None: 
         title = submissionText
 
@@ -496,7 +498,7 @@ def search_rip_sources(submissionText: str, qoc_sheet_data: QoCSheetData) -> str
                 album_title = source_track.album_title
                 if display_platforms_tracks and len(source_track.track_platform):
                     album_title += f" ({source_track.track_platform})"
-                result += f"\n- **[{source_track.track_title}]({source_track.track_url})** - [{album_title}]({source_track.album_url})"
+                result += f"\n- {S}**[{source_track.track_title}]({source_track.track_url})** - [{album_title}]({source_track.album_url}){S}"
                 result += f" [{VGM_SITE_INFOS[source_track.vgm_site].name}]"
 
 
@@ -514,7 +516,7 @@ def search_rip_sources(submissionText: str, qoc_sheet_data: QoCSheetData) -> str
             album_title = scan_result_album.title 
             if display_platforms_albums and len(scan_result_album.platform):
                 album_title += f" ({scan_result_album.platform})"
-            result += f"\nAlbum: [{album_title}](<{scan_result_album.url}>)"
+            result += f"\nAlbum: {S}[{album_title}](<{scan_result_album.url}>){S}"
             result += f" [{VGM_SITE_INFOS[scan_result_album.vgm_site].name}]"
 
 
@@ -522,9 +524,10 @@ def search_rip_sources(submissionText: str, qoc_sheet_data: QoCSheetData) -> str
 
     if not found_exact_match and not skip_youtube_title_link:
         youtube_title_url = YOUTUBE_SEARCH_URL + quote_plus(title)
-        result += f"\nYouTube Search: [{title}]({youtube_title_url})"
+        result += f"\nYouTube Search: {S}[{title}]({youtube_title_url}){S}"
 
     joke = get_rip_joke(submissionText)
+    joke = joke.replace('||', '')
     #NOTE: (Ahmayk) only parse this if the joke line is short. otherwise it clogs up chat
     if len(joke) < 75:
         #NOTE: (Ahmayk) removes formatted links
@@ -540,7 +543,7 @@ def search_rip_sources(submissionText: str, qoc_sheet_data: QoCSheetData) -> str
                 joke_links.append(f"[{joke}](<{youtube_title_url}>)")
         if len(joke_links):
             joke_string = ", ".join(joke_links)
-            result += f"\nYouTube Search: {joke_string}"
+            result += f"\nYouTube Search: {S}{joke_string}{S}"
 
     if not len(result):
         result = no_results_message 
