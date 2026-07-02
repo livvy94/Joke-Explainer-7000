@@ -19,12 +19,23 @@ function sleep(ms) {
 
 let numVideosPrevious = 0;
 async function reloadIfVideosUnloaded() {
+
+    let totalVideos = null;
+    let xpath = "//span[contains(@class, 'ytAttributedStringHost') and contains(., ' videos')]";
+    let matchingElement = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+    if (matchingElement) {
+        totalVideos = Number(matchingElement.textContent.split(' ')[0]);
+    }
+    if (totalVideos == null)  {
+        console.error("Failed to find total videos");
+    }
+
     let playlistVideos = document.querySelector('ytd-item-section-renderer');
     let numVideos = playlistVideos.querySelectorAll('ytd-playlist-video-renderer').length;
     console.log(`Bef Loaded: ${numVideosPrevious}\nNow Loaded: ${numVideos}`);
-    if (numVideos < numVideosPrevious) {
+    if (numVideos != totalVideos && ((numVideos < numVideosPrevious) || (numVideos % 100 != 0))) {
         console.log("RESTARTING!")
-        await sleep(5000);
+        await sleep(1000);
         location.reload();
         await sleep(9999999999999);
     }
@@ -136,9 +147,32 @@ async function sortPlaylist(videoIds) {
                         }
                     }
 
+                    let videoTitleDrag = null; 
+                    if (!errorString.length) {
+                        let link = videoItem.querySelector('a[id="video-title"]');
+                        if (link) {
+                            videoTitleDrag = link.title;
+                        } else {
+                            errorString = `Failed to find title in ${videoItem}`;
+                        }
+                    }
+
+                    let videoTitleDrop = null; 
+                    if (!errorString.length) {
+                        let link = replaceVideoItem.querySelector('a[id="video-title"]');
+                        if (link) {
+                            videoTitleDrop = link.title;
+                        } else {
+                            errorString = `Failed to find title in ${replaceVideoItem}`;
+                        }
+                    }
+
                     if (!errorString.length) {
 
-                        console.log(`Dragging ${videoItem.outerText.split('\n')[0]} => ${replaceVideoItem.outerText.split('\n')[0]}`)
+                        console.log(`Dragging ${videoTitleDrag} => ${videoTitleDrop}`);
+
+                        elemDrop.scrollIntoView({ behavior: 'auto', block: 'center' });
+                        await sleep(500);
 
                         let pos = elemDrag.getBoundingClientRect();
                         let center1X = Math.floor((pos.left + pos.right) / 2);
@@ -152,6 +186,7 @@ async function sortPlaylist(videoIds) {
                         fireMouseEvent("mouseenter", elemDrag, center1X, center1Y);
                         fireMouseEvent("mouseover", elemDrag, center1X, center1Y);
                         fireMouseEvent("mousedown", elemDrag, center1X, center1Y);
+                        await sleep(100);
 
                         // start dragging process over to drop target
                         fireMouseEvent("dragstart", elemDrag, center1X, center1Y);
@@ -159,34 +194,33 @@ async function sortPlaylist(videoIds) {
                         fireMouseEvent("mousemove", elemDrag, center1X, center1Y);
                         fireMouseEvent("drag", elemDrag, center2X, center2Y);
                         fireMouseEvent("mousemove", elemDrop, center2X, center2Y);
+                        await sleep(100);
 
                         // trigger dragging process on top of drop target
                         fireMouseEvent("mouseenter", elemDrop, center2X, center2Y);
                         fireMouseEvent("dragenter", elemDrop, center2X, center2Y);
                         fireMouseEvent("mouseover", elemDrop, center2X, center2Y);
                         fireMouseEvent("dragover", elemDrop, center2X, center2Y);
+                        await sleep(100);
 
                         // release dragged element on top of drop target
                         fireMouseEvent("drop", elemDrop, center2X, center2Y);
                         fireMouseEvent("dragend", elemDrag, center2X, center2Y);
                         fireMouseEvent("mouseup", elemDrag, center2X, center2Y);
 
-                        while (true) {
-                            await sleep(250);
-                            let playlistVideos = document.querySelector('ytd-item-section-renderer');
-                            let videoList = playlistVideos.querySelectorAll('ytd-playlist-video-renderer');
-                            videoItem = playlistVideos.querySelector(`ytd-playlist-video-renderer:has([href*="/watch?v=${videoIds[i]}"])`);
-                            index = Array.prototype.indexOf.call(videoList, videoItem);
-                            if (index == i)
-                            {
-                                break;
-                            }
-                            console.log(`Waiting for video to be moved`);
-                        }
+                        await sleep(250);
 
-                        console.log(`Moved ${videoItem.innerText.split('\n')[0]}`);
+                        let playlistVideos = document.querySelector('ytd-item-section-renderer');
+                        let videoList = playlistVideos.querySelectorAll('ytd-playlist-video-renderer');
+                        videoItem = playlistVideos.querySelector(`ytd-playlist-video-renderer:has([href*="/watch?v=${videoIds[i]}"])`);
+                        index = Array.prototype.indexOf.call(videoList, videoItem);
+                        if (index != i)
+                        {
+                            console.log(`Index doesn't match, video may have missed. Expected ${i}, is ${index}`);
+                        }
+                        console.log(`Moved ${videoTitleDrag} to position ${i + 1}`);
                         numMoved++;
-                        await sleep(3000);
+                        await sleep(2000);
                     }
                 }
             }
