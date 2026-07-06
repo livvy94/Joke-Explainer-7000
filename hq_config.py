@@ -98,7 +98,7 @@ def set_config(config: str, value):
     configs[config] = value
     _write_config_file(configs)
 
-def get_log_channel():
+def get_log_channel_id():
     configs = _read_config_file()
     return configs[LOG_CHANNEL_KEY] if LOG_CHANNEL_KEY in configs.keys() else -1
 

@@ -278,11 +278,14 @@ async def send_roundup(roundup_desc: RoundupDesc, command_context: CommandContex
     The roundup_filter_type describes how the roundup will be filtered.
     """
 
-    channel = await get_qoc_channel(command_context.channel)
-    if channel is None: return
+    channel_and_errors = await get_qoc_channel(command_context.channel)
+    if len(channel_and_errors.error_strings):
+        return await send_if_errors("Roundup failed, QoC Channel not found.", channel_and_errors.error_strings, command_context.channel)
+    if not channel_and_errors.channel:
+        return await send("ERROR: Channel not found.", command_context.channel)
 
     get_rips_desc = GetRipsDesc(typing_channel=command_context.channel)
-    rips_and_errors = await get_rips(channel, get_rips_desc)
+    rips_and_errors = await get_rips(channel_and_errors.channel, get_rips_desc)
     error_strings = rips_and_errors.error_strings
     rips = rips_and_errors.rips
 
@@ -398,7 +401,7 @@ async def send_roundup(roundup_desc: RoundupDesc, command_context: CommandContex
             valid_count += 1
 
     if result != "":
-        footer = f'#{channel.name}   -   {valid_count} of {len(rips)} Rips'
+        footer = f'#{channel_and_errors.channel.name}   -   {valid_count} of {len(rips)} Rips'
         await send_embed(result, command_context.channel, EmbedDesc(expires=True, seperator=readability_line, footer=footer))
         await send_if_errors("Roundup had errors", error_strings, command_context.channel)
     else:
@@ -757,6 +760,17 @@ async def random_event(args: list[str], command_context: CommandContext):
     await roundup_random(RoundupFilterType.RANDOM_AUTHOR, args, command_context)
 
 
+async def current_or_qoc_channel(channel: TextChannel | Thread) -> ChannelAndErrors:
+    error_strings = []
+    if channel_is_type(channel, 'PROXY_QOC'):
+        channel_and_errors = await get_qoc_channel(channel)
+        if len(channel_and_errors.error_strings):
+            error_strings.extend(channel_and_errors.error_strings)
+        if channel_and_errors.channel:
+            channel = channel_and_errors.channel
+    return ChannelAndErrors(channel, error_strings)
+
+
 @command(
     command_type=CommandType.QOC,
     public=True,
@@ -765,18 +779,12 @@ async def random_event(args: list[str], command_context: CommandContext):
 )
 async def count(args: list[str], command_context: CommandContext):
 
-    ##TODO: (Ahmayk) Compress
-    qoc_channel = None 
-    proxy = ""
-    if channel_is_type(command_context.channel, 'PROXY_QOC'):
-        qoc_channel = await get_qoc_channel(command_context.channel)
-        if qoc_channel:
-            proxy = f"\n-# Showing results from <#{qoc_channel.id}>."
-    else:
-        qoc_channel = command_context.channel
+    channel_and_errors = await current_or_qoc_channel(command_context.channel)
+    if len(channel_and_errors.error_strings):
+        return await send_if_errors("QoC Channel not found.", channel_and_errors.error_strings, command_context.channel)
 
-    if qoc_channel:
-        rips_and_errors = await get_rips_fast(qoc_channel, GetRipsDesc(typing_channel=command_context.channel))
+    if channel_and_errors.channel:
+        rips_and_errors = await get_rips_fast(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
         if len(rips_and_errors.error_strings):
             return await send_if_errors("Can't count today. :(", rips_and_errors.error_strings, command_context.channel)
 
@@ -787,7 +795,9 @@ async def count(args: list[str], command_context: CommandContext):
         else:
             result = f"`* {pincount} left.`"
 
-        result += proxy
+        if channel_and_errors.channel.id != command_context.channel.id:
+            result += f"\n-# Showing results from <#{channel_and_errors.channel.id}>."
+
         await send(result, command_context.channel)
 
 
@@ -800,24 +810,20 @@ async def count(args: list[str], command_context: CommandContext):
 )
 async def limitcheck(args: list[str], command_context: CommandContext):
 
-    ##TODO: (Ahmayk) Compress
-    qoc_channel = None 
-    proxy = ""
-    if channel_is_type(command_context.channel, 'PROXY_QOC'):
-        qoc_channel = await get_qoc_channel(command_context.channel)
-        if qoc_channel:
-            proxy = f"\n-# Showing results from <#{qoc_channel.id}>."
-    else:
-        qoc_channel = command_context.channel
+    channel_and_errors = await current_or_qoc_channel(command_context.channel)
+    if len(channel_and_errors.error_strings):
+        return await send_if_errors("QoC Channel not found.", channel_and_errors.error_strings, command_context.channel)
 
-    if qoc_channel:
-        rips_and_errors = await get_rips_fast(qoc_channel, GetRipsDesc(typing_channel=command_context.channel))
+    if channel_and_errors.channel:
+        rips_and_errors = await get_rips_fast(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
         if len(rips_and_errors.error_strings):
             return await send_if_errors("idk how to count rn sorry", rips_and_errors.error_strings, command_context.channel)
         count = len(rips_and_errors.rips)
         result = f"You can pin {get_config('soft_pin_limit') - count} more rips until I start complaining about pin space."
-        result += proxy
+        if channel_and_errors.channel.id != command_context.channel.id:
+            result += f"\n-# Showing results from <#{channel_and_errors.channel.id}>."
         await send(result, command_context.channel)
+
 
 @command(
     command_type=CommandType.SUBS,
@@ -838,13 +844,11 @@ async def count_subs(args: list[str], command_context: CommandContext):
     if len(args):
         sub_channel_link = args[0]
 
-    sub_channel_id, msg = parse_channel_link(sub_channel_link, ['SUBS', 'SUBS_PIN', 'SUBS_THREAD'])
-    if len(msg) > 0:
-        await send(msg, command_context.channel)
-    if sub_channel_id == -1:
-        return
+    int_and_errors = await parse_channel_link(sub_channel_link, ['SUBS', 'SUBS_PIN', 'SUBS_THREAD'])
+    if len(int_and_errors.error_strings):
+        return await send_if_errors("No counting today.", int_and_errors.error_strings, command_context.channel)
 
-    channel_and_errors = await discord_find_channel(sub_channel_id)
+    channel_and_errors = await discord_find_channel(int_and_errors.result)
     if len(channel_and_errors.error_strings):
         return await send_if_errors("failed to find channel", channel_and_errors.error_strings, command_context.channel)
 
@@ -1167,10 +1171,10 @@ async def sortbylength_sub(args: list[str], command_context: CommandContext):
 
     channel_ids = get_channel_ids_of_types(["SUBS"])
     if len(args): 
-        channel_id, msg = parse_channel_link(args[0], ['SUBS', 'SUBS_PIN', 'SUBS_THREAD'])
-        if len(msg) > 0:
-            return await command_context.channel.send(msg)
-        channel_ids = [channel_id]
+        int_and_errors = await parse_channel_link(args[0], ['SUBS', 'SUBS_PIN', 'SUBS_THREAD'])
+        if len(int_and_errors.error_strings):
+            return await send_if_errors("No sorting today.", int_and_errors.error_strings, command_context.channel)
+        channel_ids = [int_and_errors.result]
 
     desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.SORTBYLENGTH, \
                               channel_ids = channel_ids)
@@ -1357,10 +1361,10 @@ async def sortbylength_q(args: list[str], command_context: CommandContext):
 
     channel_ids = get_channel_ids_of_types(["QUEUE"])
     if len(args): 
-        channel_id, msg = parse_channel_link(args[0], ['QUEUE'])
-        if len(msg) > 0:
-            return await command_context.channel.send(msg)
-        channel_ids = [channel_id]
+        int_and_errors = await parse_channel_link(args[0], ['QUEUE'])
+        if len(int_and_errors.error_strings):
+            return await send_if_errors("No sorting today.", int_and_errors.error_strings, command_context.channel)
+        channel_ids = [int_and_errors.result]
 
     desc = SendSubOrQueueDesc(suborqueue_rip_filter_type = SubOrQueueRipFilterType.SORTBYLENGTH, \
                               channel_ids = channel_ids)
@@ -1404,13 +1408,15 @@ async def scout_stats(args: list[str], command_context: CommandContext):
     if len(args):
         channel_link = args[0]
 
-    channel_id, msg = parse_channel_link(channel_link, ['QUEUE'])
-    if len(msg) > 0:
-        return await command_context.channel.send(msg)
+    int_and_errors = await parse_channel_link(channel_link, ['QUEUE'])
+    if len(int_and_errors.error_strings):
+        return await send_if_errors("No scouting today.", int_and_errors.error_strings, command_context.channel)
 
-    channel_and_errors = await discord_find_channel(channel_id)
-    if len(channel_and_errors.error_strings) or not channel_and_errors.channel:
-        return await send_and_if_errors("", "Channel not found", channel_and_errors.error_strings, command_context.channel)
+    channel_and_errors = await discord_find_channel(int_and_errors.result)
+    if len(channel_and_errors.error_strings):
+        return await send_if_errors("Channel not found", channel_and_errors.error_strings, command_context.channel)
+    if not channel_and_errors.channel:
+        return await send("ERROR: Channel not found", command_context.channel)
 
     rips_and_errors = await get_rips_fast(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
     if len(rips_and_errors.error_strings):
@@ -1488,10 +1494,13 @@ async def send_vibes(rips: List[Rip], max_emojis: int, command_context: CommandC
 )
 async def vibecheck(args: list[str], command_context: CommandContext):
 
-    channel = await get_qoc_channel(command_context.channel)
-    if channel is None: return
+    channel_and_errors = await get_qoc_channel(command_context.channel)
+    if len(channel_and_errors.error_strings):
+        return await send_if_errors("Vibes are way off today.", channel_and_errors.error_strings, command_context.channel)
+    if not channel_and_errors.channel:
+        return await send("ERROR: Channel not found.", command_context.channel)
 
-    rips_and_errors = await get_rips(channel, GetRipsDesc(typing_channel=command_context.channel))
+    rips_and_errors = await get_rips(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
     if len(rips_and_errors.error_strings):
         return await send_if_errors("no vibes. only sad. all is lost. aaa", rips_and_errors.error_strings, command_context.channel)
 
@@ -1599,8 +1608,11 @@ async def viberank(args: list[str], command_context: CommandContext):
     if not len(args): 
         return await send("Error: Please include an emoji to search for. I'll show QoC rips that have the most of that emoji", command_context.channel)
 
-    channel = await get_qoc_channel(command_context.channel)
-    if channel is None: return
+    channel_and_errors = await get_qoc_channel(command_context.channel)
+    if len(channel_and_errors.error_strings):
+        return await send_if_errors("Vibes are way off today.", channel_and_errors.error_strings, command_context.channel)
+    if not channel_and_errors.channel:
+        return await send("ERROR: Channel not found.", command_context.channel)
 
     react_input = emoji_to_react_name_if_emoji(args[0])
 
@@ -1608,7 +1620,7 @@ async def viberank(args: list[str], command_context: CommandContext):
     if len(args) > 1:
         max = 0 
 
-    rips_and_errors = await get_rips(channel, GetRipsDesc(typing_channel=command_context.channel))
+    rips_and_errors = await get_rips(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
     if len(rips_and_errors.error_strings):
         return await send_if_errors("o noes. Rank is error.", rips_and_errors.error_strings, command_context.channel)
 
@@ -1976,14 +1988,17 @@ async def vet_from(args: list[str], command_context: CommandContext):
             return
         from_timestamp = from_message.created_at
 
-    channel = await get_qoc_channel(command_context.channel)
-    if channel is None: return
+    channel_and_errors = await get_qoc_channel(command_context.channel)
+    if len(channel_and_errors.error_strings):
+        return await send_if_errors("No vetting today.", channel_and_errors.error_strings, command_context.channel)
+    if not channel_and_errors.channel:
+        return await send("ERROR: Channel not found.", command_context.channel)
 
     if not ffmpegExists():
         return await send("WARNING: ffmpeg command not found on the bot's server. Please contact the developers.", command_context.channel)
 
     async with command_context.channel.typing():
-        rips_and_errors = await get_rips_fast(channel, GetRipsDesc())
+        rips_and_errors = await get_rips_fast(channel_and_errors.channel, GetRipsDesc())
         error_strings = rips_and_errors.error_strings 
 
         for rip in rips_and_errors.rips:
@@ -2358,14 +2373,14 @@ async def reset_cache(args: list[str], command_context: CommandContext):
     string_and_errors = StringAndErrors("None", [])
     prefix = get_config('prefix')
     if len(args):
-        channel_link = args[0] 
-        channel_id, msg = parse_channel_link(channel_link, ['SUBS', 'SUBS_PIN', 'SUBS_THREAD', 'QUEUE', 'QOC'], False)
-        if len(msg) > 0:
-            return await send(msg, command_context.channel)
-        await send(f'Rebuilding cache for <#{channel_id}>. This will take a few minutes...', command_context.channel)
-        async with command_context.channel.typing():
-            await write_log(f'`{prefix}rebuild_cache` run by {command_context.user.name} for <#{channel_id}> in {command_context.channel.jump_url}')
-            string_and_errors = await rebuild_cache_for_channel(channel_id)
+        int_and_errors = await parse_channel_link(args[0], ['SUBS', 'SUBS_PIN', 'SUBS_THREAD', 'QUEUE', 'QOC'])
+        if len(int_and_errors.error_strings):
+            return await send_if_errors("No cache refresh today.", int_and_errors.error_strings, command_context.channel)
+        if int_and_errors.result:
+            await send(f'Rebuilding cache for <#{int_and_errors.result}>. This will take a few minutes...', command_context.channel)
+            async with command_context.channel.typing():
+                await write_log(f'`{prefix}rebuild_cache` run by {command_context.user.name} for <#{int_and_errors.result}> in {command_context.channel.jump_url}')
+                string_and_errors = await rebuild_cache_for_channel(int_and_errors.result)
     else:
         await send(f'Rebuilding cache for all channels. This may take a few minutes...', command_context.channel)
         async with command_context.channel.typing():

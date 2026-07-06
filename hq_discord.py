@@ -54,6 +54,10 @@ class BoolAndErrors(NamedTuple):
     result: bool
     error_strings: List[str]
 
+class IntAndErrors(NamedTuple):
+    result: int 
+    error_strings: List[str]
+
 class FloatAndErrors(NamedTuple):
     result: float 
     error_strings: List[str]
@@ -66,7 +70,7 @@ class AuditLogEntriesAndErrors(NamedTuple):
 #                Discord API Calls              #
 #===============================================#
 
-async def send(text: str, channel: TextChannel | Thread, delete_after: int = 0):
+async def send(text: str, channel: TextChannel | Thread, delete_after: float = 0):
     limit = get_config("character_limit")
     split_message = split_long_message(text, limit)
     for line in split_message:
@@ -102,19 +106,36 @@ async def send_and_if_errors(txt: str, if_errors_txt: str, error_strings: List[s
     if len(txt) or len(error_text):
         await send(f'{txt}\n{error_text}', channel, delete_after)
 
+
+async def discord_find_channel(channel_id: int) -> ChannelAndErrors:
+    channel = bot.get_channel(channel_id)
+    error_strings: List[str] = []
+    if not channel:
+        try:
+            channel = await bot.fetch_channel(channel_id)
+            ##TODO: (Ahmayk) does a less intrusive way of unarchiving a thread exist?
+            if isinstance(channel, Thread) and channel.archived:
+                await send("Unarchiving!", channel, 1) 
+        except Exception as error:
+            await log_exception(f'Discord API call failed to fetch channel id {channel_id}', error, error_strings, True)
+    return ChannelAndErrors(channel, error_strings) 
+
+
+async def get_log_channel() -> TextChannel | Thread | None:
+    channel_and_errors = await discord_find_channel(get_log_channel_id())
+    if len(channel_and_errors.error_strings):
+        print(f"ERROR: Cound not post to log channel, channel not found. {"\n".join(channel_and_errors.error_strings)}")
+    return channel_and_errors.channel
+
 async def write_log(msg: str = "Placeholder message"):
     """
     Logging function.
     If LOG_CHANNEL is valid, send a message there.
     Also write to a log file as backup.
     """
-    try:
-        log_channel = bot.get_channel(get_log_channel())
+    log_channel = await get_log_channel()
+    if log_channel:
         await send(msg, log_channel)
-    except (discord.InvalidData, discord.HTTPException, discord.Forbidden) as e:
-        msg += "\nError fetching log channel: {}".format(e.text)
-    except discord.NotFound:
-        pass
 
     with open('bot_logs.txt', 'a', encoding='utf-8') as file:
         file.write(datetime.now(timezone.utc).strftime('%m/%d/%y %I:%M %p'))
@@ -137,24 +158,10 @@ async def log_exception(txt: str, error: Exception, error_strings: List[str], fu
     if full_stack:
         trace = "".join(traceback.extract_stack().format())
     print(f"\033[91m {error_text}\n{trace}\033[0m")
-    log_channel = bot.get_channel(get_log_channel())
+    log_channel = await get_log_channel()
     if log_channel:
         await send(f'**{error_text}**\n```py\n{trace}\n```', log_channel)
-    else:
-        print("No log channel found.")
     error_strings.append(error_text)
-
-async def discord_find_channel(channel_id) -> ChannelAndErrors:
-    channel = bot.get_channel(channel_id)
-    error_strings: List[str] = []
-    if not channel:
-        try:
-            channel = await bot.fetch_channel(channel_id)
-            if isinstance(channel, Thread) and channel.archived:
-                await send("Unarchiving!", channel, 1) 
-        except Exception as error:
-            await log_exception(f'Discord API call failed to fetch channel id {channel_id}', error, error_strings, True)
-    return ChannelAndErrors(channel, error_strings) 
 
 async def discord_fetch_message(message_id: int, channel: TextChannel | Thread) -> MessageAndErrors: 
     message = None
@@ -312,17 +319,17 @@ def channel_is_types(channel: typing.Union[GuildChannel, Thread], types: typing.
     return any([t in get_channel_config(channel.id).types for t in types]) or hasattr(channel, "parent") and channel_is_types(channel.parent, types)
 
 
-async def get_qoc_channel(channel: TextChannel | Thread):
-    """
-    Gets the first channel labeled QOC in bot_secrets.py 
-    """
+async def get_qoc_channel(channel: TextChannel | Thread) -> ChannelAndErrors:
+    qoc_channel: TextChannel | Thread | None = channel
+    error_strings: list[str] = []
     if channel_is_type(channel, 'PROXY_QOC'):
-        qoc_channel, msg = parse_channel_link(None, ["QOC"])
-        if len(msg) > 0:
-            await channel.send(msg)
-            if qoc_channel == -1: return None
-        channel = bot.get_channel(qoc_channel)
-    return channel
+        int_and_errors = await parse_channel_link("", ["QOC"])
+        error_strings.extend(int_and_errors.error_strings)
+        if not len(error_strings):
+            channel_and_errors = await discord_find_channel(int_and_errors.result)
+            error_strings.extend(channel_and_errors.error_strings)
+            qoc_channel = channel_and_errors.channel
+    return ChannelAndErrors(qoc_channel, error_strings) 
 
 
 #TODO: (Ahmayk) simplify 
@@ -352,37 +359,34 @@ async def parse_message_link(link: str):
     return server, channel, message_and_errors.message, status 
 
 
-##TODO: (Ahmayk) refactor input system, don't give default on error by default
-def parse_channel_link(link: str | None, types: typing.List[str], give_default: bool = True) -> typing.Tuple[int, str]:
-    """
-    Parse the channel link and return the channel ID if it matches the specified types.
-    If channel is invalid or does not match the types, returns the first channel in config matching the types.
-    Returns null channel if no such channel types exists - the caller function should return early.
+async def parse_channel_link(link: str, channel_types: list[str]) -> IntAndErrors: 
+    error_strings = []
 
-    Return values:
-    - `channel_id`: Parsed channel ID if it is valid, default channel if it isn't, and -1 if no default channel
-    - `msg`: Message to print if `channel_id` is not parsed from `link`, empty string otherwise
-    """
-    try:
-        default_id = get_channel_ids_all()[0]
-    except IndexError:
-        return -1, "Error: No default channels found."
-    
-    if link is None or not len(link):
-        return default_id, ""
-
-    try:
-        arg = int(link.split('/')[5])
-    except IndexError:
-        return -1, "Error: Cannot parse argument - make sure it is a valid link to channel."
-
-    channel = bot.get_channel(arg)
-    if channel_is_types(channel, types):
-        return arg, ""
-    elif give_default:
-        return default_id, f"Warning: Link is not a valid roundup channel, defaulting to <#{default_id}>."
+    default_id = 0
+    channel_ids = get_channel_ids_all()
+    if len(channel_ids):
+        default_id = int(channel_ids[0])
     else:
-        return -1, "Error: Link is not a valid roundup channel."
+        error_strings.append("No channels configured. Contact a bot maintainer.")
+
+    channel_id = default_id
+
+    if len(link) and not len(error_strings):
+        channel_id = 0 
+        args = link.split('/')
+        if len(args) < 6:
+            error_strings.append("Invalid discord channel link.")
+
+        if not len(error_strings):
+            channel_and_errors = await discord_find_channel(int(args[5]))
+            error_strings.extend(channel_and_errors.error_strings)
+
+            if channel_and_errors.channel and channel_is_types(channel_and_errors.channel, channel_types):
+                channel_id = channel_and_errors.channel.id
+            elif channel_and_errors.channel:
+                error_strings.append(f"{channel_and_errors.channel.jump_url} is not valid type (Expected: {channel_types}).")
+
+    return IntAndErrors(channel_id, error_strings)
 
 async def parse_channel_link_or_text(args: list[str]) -> StringAndErrors:
     text = " ".join(args)
@@ -412,16 +416,12 @@ async def get_message_from_referece_or_args(message_reference: discord.MessageRe
         if message_reference.cached_message:
             message = message_reference.cached_message
         else:
-            channel = bot.get_channel(message_reference.channel_id)
-            if channel:
+            channel_and_errors = await discord_find_channel(message_reference.channel_id)
+            error_strings.extend(channel_and_errors.error_strings)
+            if channel_and_errors.channel:
                 message_and_errors = await discord_fetch_message(message_reference.message_id, channel)
                 message = message_and_errors.message
                 error_strings.extend(message_and_errors.error_strings)
-            else:
-                error_strings.extend("Error: Channel not found when parsing message reference")
-
-    if not len(error_strings):
-        assert message
 
     return MessageAndErrors(message, error_strings)
 

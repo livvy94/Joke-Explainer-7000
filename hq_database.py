@@ -158,7 +158,7 @@ async def refresh_thumbnail_cache() -> StringAndErrors:
         error_strings.extend(channel_and_errors.error_strings)
 
     messages_and_errors = MessagesAndErrors([], []) 
-    if not len(error_strings):
+    if not len(error_strings) and channel_and_errors.channel:
         messages_and_errors = await discord_get_channel_messages(None, channel_and_errors.channel)
         error_strings.extend(messages_and_errors.error_strings)
 
