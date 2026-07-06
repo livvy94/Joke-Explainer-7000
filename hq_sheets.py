@@ -35,7 +35,7 @@ class QoCSheetData(NamedTuple):
     specialist_entries: list[SpecialistEntry]
     source_exclusions: list[SourceExclusion]
 
-async def get_raw_sheet_data(sheet_name: str, row_start: int, last_column: str, credentials: Credentials) -> list[list[str]]: 
+async def get_raw_sheet_data(spreadsheet_id: str, sheet_name: str, row_start: int, last_column: str, credentials: Credentials) -> list[list[str]]: 
     result: list[list[str]] = []
 
     try:
@@ -43,7 +43,7 @@ async def get_raw_sheet_data(sheet_name: str, row_start: int, last_column: str, 
         output = (
             service.spreadsheets()
             .get(
-                spreadsheetId=SPECIALISTS_SPREADSHEET_ID,
+                spreadsheetId=spreadsheet_id,
                 ranges=f"{sheet_name}!A{row_start}:{last_column}",
                 fields="sheets.data.rowData.values.formattedValue",
                 includeGridData=True,
@@ -71,7 +71,7 @@ QOC_SHEET_DATA: QoCSheetData = QoCSheetData([], [])
 class GetQoCSheetDataDesc(NamedTuple):
     bypass_cache: bool = False
 
-async def refresh_credentials():
+async def refresh_credentials() -> Credentials:
     global CREDENTIALS
 
     # NOTE: (Ahmayk) login required in web browser to access google sheets doc
@@ -93,7 +93,7 @@ async def refresh_credentials():
                     await write_log(f"Failed to refresh google api token: {str(error)}")
 
             should_tell_success = False
-            if CREDENTIALS and not CREDENTIALS.valid:
+            if not CREDENTIALS or (CREDENTIALS and not CREDENTIALS.valid):
                 should_tell_success = True 
                 await write_log("Creating new Google Api token...")
                 flow = InstalledAppFlow.from_client_secrets_file("credentials.json", scopes)
@@ -107,6 +107,8 @@ async def refresh_credentials():
 
     except Exception as error:
         await log_exception("Failed to set up google sheets credentials", error, [], True)
+
+    return CREDENTIALS
 
 
 async def should_call_sheet_api(bypass_cache: bool) -> bool:
@@ -155,7 +157,7 @@ async def get_qoc_sheet_data(desc: GetQoCSheetDataDesc) -> QoCSheetData:
 
             specialist_entries: list[SpecialistEntry] = []
 
-            game_sheet_data = await get_raw_sheet_data("Game Strict Rules", 3, 'D', CREDENTIALS)
+            game_sheet_data = await get_raw_sheet_data(SPECIALISTS_SPREADSHEET_ID, "Game Strict Rules", 3, 'D', CREDENTIALS)
             for row in game_sheet_data:
                 if len(row) > 1:
                     game_title = row[0] 
@@ -170,7 +172,7 @@ async def get_qoc_sheet_data(desc: GetQoCSheetDataDesc) -> QoCSheetData:
                         notes = row[3]
                     specialist_entries.append(SpecialistEntry(specialists, notes, game_title, alternate_game_titles, "", [], "", []))
 
-            composer_sheet_data = await get_raw_sheet_data("Composer Strict Rules", 3, 'D', CREDENTIALS)
+            composer_sheet_data = await get_raw_sheet_data(SPECIALISTS_SPREADSHEET_ID, "Composer Strict Rules", 3, 'D', CREDENTIALS)
             for row in composer_sheet_data:
                 if len(row) > 1:
                     composer_string = row[0]
@@ -185,7 +187,7 @@ async def get_qoc_sheet_data(desc: GetQoCSheetDataDesc) -> QoCSheetData:
                         notes = row[3]
                     specialist_entries.append(SpecialistEntry(specialists, notes, "", [], composer_string, alternate_composer_names, "", []))
 
-            source_sheet_data = await get_raw_sheet_data("Source Strict Rules", 3, 'D', CREDENTIALS)
+            source_sheet_data = await get_raw_sheet_data(SPECIALISTS_SPREADSHEET_ID, "Source Strict Rules", 3, 'D', CREDENTIALS)
             for row in source_sheet_data:
                 if len(row) > 1:
                     source_string = row[0]
@@ -201,7 +203,7 @@ async def get_qoc_sheet_data(desc: GetQoCSheetDataDesc) -> QoCSheetData:
                     specialist_entries.append(SpecialistEntry(specialists, notes, "", [], "", [], source_string, alternate_source_names))
 
             source_exclusions: list[SourceExclusion] = []
-            source_exclusion_sheet_data = await get_raw_sheet_data("Source Exclusions", 3, 'F', CREDENTIALS)
+            source_exclusion_sheet_data = await get_raw_sheet_data(SPECIALISTS_SPREADSHEET_ID, "Source Exclusions", 3, 'F', CREDENTIALS)
             for row in source_exclusion_sheet_data:
                 if len(row) > 1 and len(row[1]):
                     track_title = row[0] 
