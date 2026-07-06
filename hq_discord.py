@@ -27,7 +27,7 @@ bot = discord.Client(
 #===============================================#
 
 class ChannelAndErrors(NamedTuple):
-    channel: TextChannel | Thread
+    channel: TextChannel | Thread | None
     error_strings: List[str]
 
 class MessageAndErrors(NamedTuple):

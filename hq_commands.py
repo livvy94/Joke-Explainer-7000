@@ -198,9 +198,9 @@ async def help(args: list[str], command_context: CommandContext):
         qoc_channel_ids = get_channel_ids_of_types(['QOC', 'PROXY_QOC'])
         qoc_channels_strings: list[str] = [] 
         for id in qoc_channel_ids:
-            channel = bot.get_channel(int(id))
-            if channel:
-                qoc_channels_strings.append(channel.jump_url)
+            channel_and_errors = await discord_find_channel(int(id))
+            if channel_and_errors.channel:
+                qoc_channels_strings.append(channel_and_errors.channel.jump_url)
 
         result += '\n\n__**Legend:**__'
         result += '\n`<argument>`: Required argument'
@@ -844,12 +844,16 @@ async def count_subs(args: list[str], command_context: CommandContext):
     if sub_channel_id == -1:
         return
 
-    channel = bot.get_channel(sub_channel_id)
-    rips_and_errors = await get_rips_fast(channel, GetRipsDesc(typing_channel=command_context.channel))
-    if len(rips_and_errors.error_strings):
-        return await send_if_errors("o noes", rips_and_errors.error_strings, command_context.channel)
+    channel_and_errors = await discord_find_channel(sub_channel_id)
+    if len(channel_and_errors.error_strings):
+        return await send_if_errors("failed to find channel", channel_and_errors.error_strings, command_context.channel)
 
-    count = len(rips_and_errors.rips)
+    count = 0
+    if channel_and_errors.channel:
+        rips_and_errors = await get_rips_fast(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
+        if len(rips_and_errors.error_strings):
+            return await send_if_errors("o noes", rips_and_errors.error_strings, command_context.channel)
+        count = len(rips_and_errors.rips)
 
     if (count < 1):
         result = "```ansi\n\u001b[0;31m* Determination.\u001b[0;0m```"
@@ -904,9 +908,10 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
     ): 
         temp_rips_all: List[Rip] = []
         for channel_id in channel_ids:
-            channel = bot.get_channel(channel_id)
-            if channel:
-                temp_rips_and_errors = await get_rips(channel, GetRipsDesc(typing_channel=command_context.channel))
+            channel_and_errors = await discord_find_channel(channel_id)
+            error_strings.extend(channel_and_errors.error_strings)
+            if channel_and_errors.channel:
+                temp_rips_and_errors = await get_rips(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
                 error_strings.extend(temp_rips_and_errors.error_strings)
                 temp_rips_all.extend(temp_rips_and_errors.rips)
 
@@ -917,12 +922,13 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
                                                     search_by_author)
 
     for channel_id in channel_ids:
-        channel = bot.get_channel(channel_id)
-        if channel:
+        channel_and_errors = await discord_find_channel(channel_id)
+        error_strings.extend(channel_and_errors.error_strings)
+        if channel_and_errors.channel:
 
             result += f'<#{channel_id}>:\n'
 
-            rips_and_errors = await get_rips(channel, GetRipsDesc(typing_channel=command_context.channel))
+            rips_and_errors = await get_rips(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
             error_strings.extend(rips_and_errors.error_strings)
             rips = rips_and_errors.rips
 
@@ -974,7 +980,7 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
 
                 if is_valid:
 
-                    string_and_errors = await get_formatted_rip_length(rip.text, False, False, channel.guild)  
+                    string_and_errors = await get_formatted_rip_length(rip.text, False, False, channel_and_errors.channel.guild)  
                     error_strings.extend(string_and_errors.error_strings)
                     if len(string_and_errors.string):
                         result += f"`{string_and_errors.string}` "
@@ -999,15 +1005,15 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
                         desc.suborqueue_rip_filter_type == SubOrQueueRipFilterType.SEARCH_REACTION
                         and input_react_type not in shown_react_types
                     ):
-                        emoji = reaction_name_to_emoji_string(desc.react_name, channel.guild)
+                        emoji = reaction_name_to_emoji_string(desc.react_name, channel_and_errors.channel.guild)
                         result += f"{emoji} "
 
                     for react_type in shown_react_types:
                         if rip_has_react([react_type], rip):
-                            react = react_type_to_react(react_type, channel.guild)
+                            react = react_type_to_react(react_type, channel_and_errors.channel.guild)
                             result += f"{react.string} "
 
-                    rip_link = format_message_link(channel.guild.id, rip.channel_id, rip.message_id)
+                    rip_link = format_message_link(channel_and_errors.channel.guild.id, rip.channel_id, rip.message_id)
                     result += f'**[{rip_title}]({rip_link})**\n'
                     valid_count += 1
 
@@ -1233,14 +1239,14 @@ async def lookup(args: list[str], command_context: CommandContext):
 
     lookup_title = ' '.join(args)
     lookup_url = None
-    lookup_length = None
     error_strings = []
     
     channel_ids = get_channel_ids_of_types(["QUEUE"])
     for channel_id in channel_ids:
-        channel = bot.get_channel(channel_id)
-        if channel:
-            rips_and_errors = await get_rips(channel, GetRipsDesc(typing_channel=command_context.channel))
+        channel_and_errors = await discord_find_channel(channel_id)
+        error_strings.extend(channel_and_errors.error_strings)
+        if channel_and_errors.channel:
+            rips_and_errors = await get_rips(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
             error_strings.extend(rips_and_errors.error_strings)
             rips = rips_and_errors.rips
             for rip in rips:
@@ -1248,14 +1254,11 @@ async def lookup(args: list[str], command_context: CommandContext):
                 is_valid = (rip_title == lookup_title)
 
                 if is_valid:
-                    lookup_url = format_message_link(channel.guild.id, rip.channel_id, rip.message_id)
-                    string_and_errors = await get_formatted_rip_length(rip.text, False, False, channel.guild)  
+                    lookup_url = format_message_link(channel_and_errors.channel.guild.id, rip.channel_id, rip.message_id)
+                    string_and_errors = await get_formatted_rip_length(rip.text, False, False, channel_and_errors.channel.guild)  
                     error_strings.extend(string_and_errors.error_strings)
-                    if len(string_and_errors.string):
-                        lookup_length = string_and_errors.string
-                    
                     lookup_note = '\n'.join(error_strings) if len(error_strings) else "All good!"
-                    return await send(lookup_result(lookup_url, lookup_length, lookup_note), command_context.channel)
+                    return await send(lookup_result(lookup_url, string_and_errors.string, lookup_note), command_context.channel)
     
     lookup_note = '\n'.join(error_strings) if len(error_strings) else "Rip not found!"
     return await send(lookup_result(None, None, lookup_note), command_context.channel)
@@ -1405,11 +1408,11 @@ async def scout_stats(args: list[str], command_context: CommandContext):
     if len(msg) > 0:
         return await command_context.channel.send(msg)
 
-    channel = bot.get_channel(channel_id)
-    if channel is None: 
-        return await send("Error: Invalid channel found. Contact bot developers to update list of channels.", command_context.channel)
+    channel_and_errors = await discord_find_channel(channel_id)
+    if len(channel_and_errors.error_strings) or not channel_and_errors.channel:
+        return await send_and_if_errors("", "Channel not found", channel_and_errors.error_strings, command_context.channel)
 
-    rips_and_errors = await get_rips_fast(channel, GetRipsDesc(typing_channel=command_context.channel))
+    rips_and_errors = await get_rips_fast(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
     if len(rips_and_errors.error_strings):
         return await send_if_errors("Scout died.", rips_and_errors.error_strings, command_context.channel)
 
@@ -1511,9 +1514,11 @@ async def vibecheck_q(args: list[str], command_context: CommandContext):
 
     queue_rips = []
     for channel_id in get_channel_ids_of_types(['QUEUE']):
-        channel = bot.get_channel(channel_id)
-        if channel:
-            rips_and_errors  = await get_rips(channel, GetRipsDesc(typing_channel=command_context.channel))
+        channel_and_errors = await discord_find_channel(channel_id)
+        if len(channel_and_errors.error_strings):
+            await send_if_errors("Channel not found", channel_and_errors.error_strings, command_context.channel)
+        if channel_and_errors.channel:
+            rips_and_errors  = await get_rips(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
             if len(rips_and_errors.error_strings):
                 return await send_if_errors("The vibes are bad!", rips_and_errors.error_strings, command_context.channel)
             queue_rips.extend(rips_and_errors.rips)
@@ -1536,9 +1541,11 @@ async def vibecheck_subs(args: list[str], command_context: CommandContext):
 
     subbed_rips = []
     for channel_id in get_channel_ids_of_types(['SUBS', 'SUBS_THREAD', 'SUBS_PIN']):
-        channel = bot.get_channel(channel_id)
-        if channel:
-            rips_and_errors = await get_rips(channel, GetRipsDesc(typing_channel=command_context.channel))
+        channel_and_errors = await discord_find_channel(channel_id)
+        if len(channel_and_errors.error_strings):
+            return await send_if_errors("vibes are kind of not in today. i couldn't find the channel", channel_and_errors.error_strings, command_context.channel)
+        if channel_and_errors.channel:
+            rips_and_errors = await get_rips(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
             if len(rips_and_errors.error_strings):
                 return await send_if_errors("vibes are kind of not in today. come back later", rips_and_errors.error_strings, command_context.channel)
             subbed_rips.extend(rips_and_errors.rips)
@@ -1564,15 +1571,6 @@ async def send_viberank(rips: List[Rip], react_name: str, max_rips: int, command
 
     if len(emoji_count_list):
         result = ""
-
-        #NOTE: (Ahmayk) assumes all rips come from the same server 
-        channel = bot.get_channel(rip.channel_id)
-        guild_id = 0 
-        if channel:
-            channel = await bot.fetch_channel(rip.channel_id)
-        if channel:
-            guild_id = channel.guild.id 
-
         emoji_count_list_most = emoji_count_list 
         if max_rips > 0:
             emoji_count_list_most = emoji_count_list_most[:max_rips]
@@ -1582,7 +1580,7 @@ async def send_viberank(rips: List[Rip], react_name: str, max_rips: int, command
         emoji_stirng = reaction_name_to_emoji_string(react_name, command_context.channel.guild)
         for emoji_count in emoji_count_list_most:
             rip_title = get_rip_title(emoji_count.rip.text)
-            rip_link = format_message_link(guild_id, emoji_count.rip.channel_id, emoji_count.rip.message_id)
+            rip_link = format_message_link(rip.guild_id, emoji_count.rip.channel_id, emoji_count.rip.message_id)
             result += f'{emoji_stirng} **x{emoji_count.num_emojis}**: **[{rip_title}]({rip_link})**\n'
 
         await send_embed(result, command_context.channel, EmbedDesc(expires=True))
@@ -1637,9 +1635,11 @@ async def viberank_q(args: list[str], command_context: CommandContext):
 
     queue_rips = []
     for channel_id in get_channel_ids_of_types(['QUEUE']):
-        channel = bot.get_channel(channel_id)
-        if channel:
-            rips_and_errors  = await get_rips(channel, GetRipsDesc(typing_channel=command_context.channel))
+        channel_and_errors = await discord_find_channel(channel_id)
+        if len(channel_and_errors.error_strings):
+            await send_if_errors("Channel not found", channel_and_errors.error_strings, command_context.channel)
+        if channel_and_errors.channel:
+            rips_and_errors  = await get_rips(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
             if len(rips_and_errors.error_strings):
                 return await send_if_errors("The vibes are bad!", rips_and_errors.error_strings, command_context.channel)
             queue_rips.extend(rips_and_errors.rips)
@@ -1668,9 +1668,11 @@ async def viberank_subs(args: list[str], command_context: CommandContext):
 
     subbed_rips = []
     for channel_id in get_channel_ids_of_types(['SUBS', 'SUBS_THREAD', 'SUBS_PIN']):
-        channel = bot.get_channel(channel_id)
-        if channel:
-            rips_and_errors = await get_rips(channel, GetRipsDesc(typing_channel=command_context.channel))
+        channel_and_errors = await discord_find_channel(channel_id)
+        if len(channel_and_errors.error_strings):
+            await send_if_errors("Channel not found", channel_and_errors.error_strings, command_context.channel)
+        if channel_and_errors:
+            rips_and_errors = await get_rips(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
             if len(rips_and_errors.error_strings):
                 return await send_if_errors("vibes are kind of not in today. come back later", rips_and_errors.error_strings, command_context.channel)
             subbed_rips.extend(rips_and_errors.rips)
@@ -1811,9 +1813,10 @@ async def limbo(args: list[str], command_context: CommandContext):
     total_rip_count = 0
 
     for channel_id in channel_ids:
-        channel = bot.get_channel(channel_id)
-        if channel:
-            rips_and_errors = await get_rips(channel, GetRipsDesc(typing_channel=command_context.channel))
+        channel_and_errors = await discord_find_channel(channel_id)
+        error_strings.extend(channel_and_errors.error_strings)
+        if channel_and_errors.channel:
+            rips_and_errors = await get_rips(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
             error_strings.extend(rips_and_errors.error_strings)
             for rip in rips_and_errors.rips:
                 total_rip_count += 1
@@ -2057,6 +2060,8 @@ async def count_dupe(args: list[str], command_context: CommandContext):
         if len(messageAndErrors.error_strings):
             return await send_if_errors("Errors during grabbing message", messageAndErrors.error_strings, command_context.channel)
         message = messageAndErrors.message
+        if not message:
+            return await send("Message not found! (and no error? Something went wrong)", command_context.channel)
 
         playlistId = extract_playlist_id('\n'.join(message.content.splitlines()[1:])) # ignore author line
         description = get_rip_description(message.content)
@@ -2071,9 +2076,10 @@ async def count_dupe(args: list[str], command_context: CommandContext):
         q = 0
         queue_channels = get_channel_ids_of_types(['QUEUE'])
         for queue_channel_id in queue_channels:
-            queue_channel = bot.get_channel(queue_channel_id)
-            if queue_channel:
-                rips_and_errors = await get_rips_fast(queue_channel, GetRipsDesc(typing_channel=command_context.channel))
+            channel_and_errors = await discord_find_channel(queue_channel_id)
+            error_strings.extend(channel_and_errors.error_strings)
+            if channel_and_errors.channel:
+                rips_and_errors = await get_rips_fast(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
                 error_strings.extend(rips_and_errors.error_strings)
                 q += sum([isDupe(description, get_rip_description(r.text)) for r in rips_and_errors.rips if r.message_id != message.id])
 
@@ -2461,17 +2467,17 @@ async def cleanup(args: list[str], command_context: CommandContext):
 
 async def get_suborqueue_rip_stats_string(channel_id: int, typing_channel: TextChannel | Thread) -> StringAndErrors:
     ret = ""
-    error_strings = []
-    channel = bot.get_channel(channel_id)
-    if channel:
+    channel_and_errors = await discord_find_channel(channel_id)
+    error_strings = channel_and_errors.error_strings
+    if channel_and_errors.channel:
 
-        rips_and_errors = await get_rips_fast(channel, GetRipsDesc(typing_channel=typing_channel))
+        rips_and_errors = await get_rips_fast(channel_and_errors.channel, GetRipsDesc(typing_channel=typing_channel))
         error_strings.extend(rips_and_errors.error_strings)
 
-        if channel_is_types(channel, ['SUBS', 'SUBS_PIN']):
+        if channel_is_types(channel_and_errors.channel, ['SUBS', 'SUBS_PIN']):
             ret += f"- <#{channel_id}>: **{len(rips_and_errors.rips)}** rips\n"
 
-        elif channel_is_types(channel, ['QUEUE', 'SUBS_THREAD']):
+        elif channel_is_types(channel_and_errors.channel, ['QUEUE', 'SUBS_THREAD']):
 
             thread_count_dict: dict[int, int] = {}
             for rip in rips_and_errors.rips:
@@ -2480,7 +2486,7 @@ async def get_suborqueue_rip_stats_string(channel_id: int, typing_channel: TextC
                         thread_count_dict[rip.channel_id] = 0
                     thread_count_dict[rip.channel_id] += 1
 
-            if len(rips_and_errors.rips) > 0 and (channel_is_type(channel, 'SUBS_THREAD') or len(thread_count_dict) > 1):
+            if len(rips_and_errors.rips) > 0 and (channel_is_type(channel_and_errors.channel, 'SUBS_THREAD') or len(thread_count_dict) > 1):
                 ret += f"- <#{channel_id}>:\n"
                 for channel_id, count in thread_count_dict.items():
                     if count > 0:
@@ -2508,9 +2514,10 @@ async def stats(args: list[str], command_context: CommandContext):
         if channel_id not in sub_channels:
             team_count = 0
             email_count = 0
-            channel = bot.get_channel(channel_id)
-            if channel:
-                rips_and_errors = await get_rips_fast(channel, GetRipsDesc(typing_channel=command_context.channel))
+            channel_and_errors = await discord_find_channel(channel_id)
+            error_strings.extend(channel_and_errors.error_strings)
+            if channel_and_errors.channel:
+                rips_and_errors = await get_rips_fast(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
                 error_strings.extend(rips_and_errors.error_strings)
                 for rip in rips_and_errors.rips:
                     author = get_rip_author(rip.text, rip.message_author_name)
@@ -2642,18 +2649,27 @@ async def testsource(args: list[str], command_context: CommandContext):
 
     temp_rips_all: List[Rip] = []
     for channel_id in channel_ids:
-        channel = bot.get_channel(channel_id)
-        if channel:
-            temp_rips_and_errors = await get_rips(channel, GetRipsDesc(typing_channel=command_context.channel))
+        channel_and_errors = await discord_find_channel(channel_id)
+        if len(channel_and_errors.error_strings):
+            return await send_if_errors("girl fix your shit", channel_and_errors.error_strings, command_context.channel)
+        if channel_and_errors.channel:
+            temp_rips_and_errors = await get_rips(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
             # error_strings.extend(temp_rips_and_errors.error_strings)
             temp_rips_all.extend(temp_rips_and_errors.rips)
 
-    selected_rip_message_ids = choose_random_rips(temp_rips_all, 10)
+    selected_rip_message_ids = []
+    random.shuffle(temp_rips_all)
+    clamped_count = min(max(1, 10), len(temp_rips_all))
+    for i in range(clamped_count):
+        selected_rip_message_ids.append(temp_rips_all[i].message_id)
+
+    qoc_sheet_data = await get_qoc_sheet_data(GetQoCSheetDataDesc())
+
     for rip in temp_rips_all:
         if rip.message_id in selected_rip_message_ids:
             title = get_rip_title(rip.text)
             await send(f'TESTING: {title}', command_context.channel)
-            text = search_rip_sources(rip.text)
+            text = search_rip_sources(rip.text, qoc_sheet_data)
             await send_embed(text, command_context.channel, EmbedDesc(title="Sources"))
 
 
