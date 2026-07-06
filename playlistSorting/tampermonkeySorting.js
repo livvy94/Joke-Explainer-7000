@@ -18,8 +18,8 @@ function sleep(ms) {
 }
 
 let numVideosPrevious = 0;
-async function reloadIfVideosUnloaded(totalVideos) {
-    let playlistVideos = document.querySelector('ytd-item-section-renderer');
+async function reloadIfVideosUnloaded(totalVideos, playlistVideos) {
+    playlistVideos = document.querySelector('ytd-item-section-renderer');
     let numVideos = playlistVideos.querySelectorAll('ytd-playlist-video-renderer').length;
     console.log(`Bef Loaded: ${numVideosPrevious}\nNow Loaded: ${numVideos}`);
     if (numVideos != totalVideos && numVideos != 792 && ((numVideos < numVideosPrevious) || (numVideos % 100 != 0))) {
@@ -31,7 +31,7 @@ async function reloadIfVideosUnloaded(totalVideos) {
     numVideosPrevious = numVideos;
 }
 
-async function clickMenuButton(menuString, videoItem, videoId, playlistVideos) {
+async function clickMenuButton(menuString, videoItem, videoId) {
     let openMenuButton = videoItem.querySelector(`yt-icon-button`);
     if (openMenuButton) {
         openMenuButton.dispatchEvent(new MouseEvent('click'));
@@ -78,29 +78,29 @@ async function sortPlaylist(videoIds) {
         console.error("Failed to find total videos");
     }
 
+    let playlistVideos = null; 
+
     for (let videoIndex = 0; videoIndex < videoIds.length; videoIndex++) {
 
         let errorString = ""
 
         let videoItem = null;
-        {
-            let playlistVideos = document.querySelector('ytd-item-section-renderer');
-            while (true) {
-                videoItem = playlistVideos.querySelector(`ytd-playlist-video-renderer:has([href*="/watch?v=${videoIds[videoIndex]}"])`);
-                if (videoItem) {
+        playlistVideos = document.querySelector('ytd-item-section-renderer');
+        while (true) {
+            videoItem = playlistVideos.querySelector(`ytd-playlist-video-renderer:has([href*="/watch?v=${videoIds[videoIndex]}"])`);
+            if (videoItem) {
+                break;
+            }
+            document.scrollingElement.scrollTop = document.scrollingElement.scrollHeight;
+            let spinnerIcon = document.querySelector('tp-yt-paper-spinner[active]');
+            await sleep(250);
+            await reloadIfVideosUnloaded(totalVideos, playlistVideos);
+            let numVideos = playlistVideos.querySelectorAll('ytd-playlist-video-renderer').length;
+            if (totalVideos == numVideos) {
+                console.log(`Video id not found: ${videoIds[videoIndex]}`)
+                videoIndex++;
+                if (videoIndex > videoIds.length - 1) {
                     break;
-                }
-                document.scrollingElement.scrollTop = document.scrollingElement.scrollHeight;
-                let spinnerIcon = document.querySelector('tp-yt-paper-spinner[active]');
-                await sleep(250);
-                await reloadIfVideosUnloaded(totalVideos);
-                let numVideos = playlistVideos.querySelectorAll('ytd-playlist-video-renderer').length;
-                if (totalVideos == numVideos) {
-                    console.log(`Video id not found: ${videoIds[videoIndex]}`)
-                    videoIndex++;
-                    if (videoIndex > videoIds.length - 1) {
-                        break;
-                    }
                 }
             }
         }
@@ -116,7 +116,7 @@ async function sortPlaylist(videoIds) {
         let numMovedPrev = numMoved;
         if (!errorString.length) {
 
-            let playlistVideos = document.querySelector('ytd-item-section-renderer');
+            await reloadIfVideosUnloaded(totalVideos, playlistVideos);
             let videoList = playlistVideos.querySelectorAll('ytd-playlist-video-renderer');
             let index = Array.prototype.indexOf.call(videoList, videoItem);
             if (index != videoIndex) {
@@ -218,7 +218,7 @@ async function sortPlaylist(videoIds) {
 
                         await sleep(250);
 
-                        let playlistVideos = document.querySelector('ytd-item-section-renderer');
+                        playlistVideos = document.querySelector('ytd-item-section-renderer');
                         let videoList = playlistVideos.querySelectorAll('ytd-playlist-video-renderer');
                         videoItem = playlistVideos.querySelector(`ytd-playlist-video-renderer:has([href*="/watch?v=${videoIds[videoIndex]}"])`);
                         index = Array.prototype.indexOf.call(videoList, videoItem);
@@ -239,7 +239,7 @@ async function sortPlaylist(videoIds) {
         }
 
         if (numMovedPrev < numMoved) {
-            await reloadIfVideosUnloaded(totalVideos);
+            await reloadIfVideosUnloaded(totalVideos, playlistVideos);
         }
     }
     console.log("All videos sorted! Hopefully...")
