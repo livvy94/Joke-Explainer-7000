@@ -369,13 +369,12 @@ async def validate_cache_all() -> StringAndErrors:
     return_string = ""
     error_strings = []
     for channel_id in get_channel_ids_of_types(['QOC', 'SUBS', 'SUBS_PIN', 'SUBS_THREAD', 'QUEUE']):
-        channel = bot.get_channel(channel_id)
-        if channel:
-            string_and_errors = await process_rip_channel(channel, True, None)
+        channel_and_errors = await discord_find_channel(channel_id)
+        error_strings.extend(channel_and_errors.error_strings)
+        if channel_and_errors.channel:
+            string_and_errors = await process_rip_channel(channel_and_errors.channel, True, None)
             return_string = string_and_errors.string
             error_strings = string_and_errors.error_strings
-        else:
-            error_strings.append(f'Failed to find channel of id {channel_id}')
     return StringAndErrors(return_string, error_strings) 
 
 
@@ -458,8 +457,9 @@ async def user_is_react(user_react_check_type: UserReactCheckType, user_id: int,
                 break
 
         if fetch_user_ids: 
-            channel = bot.get_channel(rip.channel_id)
-            if channel:
+            channel_and_errors = await discord_find_channel(rip.channel_id)
+            error_strings.extend(channel_and_errors.error_strings)
+            if channel_and_errors.channel:
                 # NOTE: (Ahmayk) this message fetch isn't actually neccessary, but we need the
                 # message react object to call reaction.users().
                 # As far as I can tell this is the only way discord.py exposes this API call.
@@ -467,7 +467,7 @@ async def user_is_react(user_react_check_type: UserReactCheckType, user_id: int,
                 # perhaps bypassing discord.py to make the direct api call we need
                 # In pratice we shouldn't be calling this code path too often anyway during regular usage
                 # So isn't the biggest problem
-                message_and_errors = await discord_fetch_message(rip.message_id, channel)
+                message_and_errors = await discord_fetch_message(rip.message_id, channel_and_errors.channel)
                 error_strings.extend(message_and_errors.error_strings)
                 if message_and_errors.message:
                     user_react_data_and_errors = await discord_get_user_react_data(react_list, message_and_errors.message)

@@ -419,7 +419,7 @@ async def get_message_from_referece_or_args(message_reference: discord.MessageRe
             channel_and_errors = await discord_find_channel(message_reference.channel_id)
             error_strings.extend(channel_and_errors.error_strings)
             if channel_and_errors.channel:
-                message_and_errors = await discord_fetch_message(message_reference.message_id, channel)
+                message_and_errors = await discord_fetch_message(message_reference.message_id, channel_and_errors.channel)
                 message = message_and_errors.message
                 error_strings.extend(message_and_errors.error_strings)
 

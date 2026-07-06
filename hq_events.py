@@ -39,9 +39,9 @@ async def regular_checkup():
 
     rips_all = []
     for channel_id in get_channel_ids_of_types(['QOC', 'SUBS', 'SUBS_PIN', 'SUBS_THREAD', 'QUEUE']):
-        channel = bot.get_channel(channel_id)
-        if channel:
-            temp_rips_and_errors = await get_rips(channel, GetRipsDesc())
+        channel_and_errors = await discord_find_channel(channel_id)
+        if channel_and_errors.channel:
+            temp_rips_and_errors = await get_rips(channel_and_errors.channel, GetRipsDesc())
             rips_all.extend(temp_rips_and_errors.rips)
 
     stored_urls = list(JE_DATABASE[JEDatabaseKey.RIP_LENGTH].keys())
@@ -258,7 +258,8 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
 
     error_strings: list[str] = []
 
-    channel = bot.get_channel(payload.channel_id)
+    channel_and_errors = await discord_find_channel(payload.channel_id)
+    channel = channel_and_errors.channel
     if channel:
         is_qoc_channel = channel_is_types(channel, ['QOC'])
         is_suborqueue_channel = channel_is_types(channel, ['QUEUE', 'SUBS', 'SUBS_THREAD', 'SUBS_PIN'])

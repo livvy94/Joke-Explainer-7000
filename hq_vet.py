@@ -131,9 +131,10 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
             rips = []
             channel_ids = get_channel_ids_of_types(['QUEUE', 'QOC'])
             for channel_id in channel_ids:
-                channel = bot.get_channel(channel_id)
-                if channel:
-                    rips_and_errors = await get_rips_fast(channel, GetRipsDesc())
+                channel_and_errors = await discord_find_channel(channel_id)
+                error_strings.extend(channel_and_errors.error_strings)
+                if channel_and_errors.channel:
+                    rips_and_errors = await get_rips_fast(channel_and_errors.channel, GetRipsDesc())
                     rips = rips_and_errors.rips
                     error_strings.extend(rips_and_errors.error_strings)
 
