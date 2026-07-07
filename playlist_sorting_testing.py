@@ -1,7 +1,7 @@
 from simpleQoC.metadata import *
 from hq_sheets import *
 from bot_secrets import YOUTUBE_API_KEY, PLAYLISTS_SPREADSHEET_ID
-from dateutil import parser
+from dateutil import parser, tz
 
 import shelve 
 FOO_DATABASE = shelve.open("foo", writeback=True)
@@ -76,12 +76,15 @@ async def playlist_test() -> bool:
         FOO_DATABASE[DELTARUNE_KEY] = playlist_videos
         FOO_DATABASE.sync()
 
+
     class OfficialName(NamedTuple):
         name: str
         alt: str
 
     official_names: list[OfficialName] = [] 
     credentials = await refresh_credentials()
+    await clear_cells(PLAYLISTS_SPREADSHEET_ID, "deltarune", "C3:F", credentials)
+
     if credentials and credentials.valid:
         sheet_data = await get_raw_sheet_data(PLAYLISTS_SPREADSHEET_ID, "deltarune", 1, 'b', credentials)
         for row in sheet_data:
@@ -152,7 +155,7 @@ async def playlist_test() -> bool:
           + f"\n- {len(unmatched)} unmatched tracks"\
           + f"\n- {len(private)} private videos")
 
-    sheet_cells: list[list[str]] = [[], [], []]
+    sheet_cells: list[list[str]] = [[], [], [], []]
 
     sheet_cells[0].append(f'COUNT: {len(unmatched)}') 
     sheet_cells[0].append("") 
@@ -172,6 +175,11 @@ async def playlist_test() -> bool:
         video_track_name = playlist_video.title.replace(" - DELTARUNE", "")
         sheet_cells[1].append(f'{(playlist_video.playlist_position + 1):03}') 
         sheet_cells[2].append(f'{video_track_name}') 
+
+    date = datetime.now(tz=tz.UTC)
+    date = date.astimezone(tz.gettz('America/Los_Angeles'))
+    timestring = date.strftime("%H:%M:%S (PST) - %d/%m/%Y") 
+    sheet_cells[3].append(f"{timestring}") 
 
     await write_data_to_sheet(PLAYLISTS_SPREADSHEET_ID, "deltarune", sheet_cells, "C3", credentials)
 

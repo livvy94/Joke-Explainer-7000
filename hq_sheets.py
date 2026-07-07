@@ -86,6 +86,27 @@ async def write_data_to_sheet(spreadsheet_id: str, sheet_name: str, sheet_cells:
     return result
 
 
+async def clear_cells(spreadsheet_id: str, sheet_name: str, 
+                      range: str, credentials: Credentials) -> bool:
+    result = False
+    try:
+        service = build("sheets", "v4", credentials=credentials)
+        output = (
+            service.spreadsheets()
+            .values()
+            .clear(
+                spreadsheetId=spreadsheet_id,
+                range=f"{sheet_name}!{range}"
+            )
+            .execute()
+        )
+        print(f"Cells cleared: {output.get('clearedRange')}")
+        result = True
+    except Exception as error:
+        await log_exception(f"Failed to clear google sheet cells in {sheet_name}", error, [], True)
+    return result
+
+
 CREDENTIALS = None
 SHEET_LAST_UPDATED: datetime = datetime.now(timezone.utc)
 QOC_SHEET_DATA: QoCSheetData = QoCSheetData([], []) 
