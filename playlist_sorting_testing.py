@@ -13,6 +13,7 @@ class PlaylistVideo(NamedTuple):
     title: str 
     desc: str
     playlist_position: int
+    isPrivate: bool
 
 def get_playlist_videos_foo(playlist_id, api_key) -> list[PlaylistVideo]: 
     videos = []
@@ -21,7 +22,7 @@ def get_playlist_videos_foo(playlist_id, api_key) -> list[PlaylistVideo]:
     while True:
         url = f'https://www.googleapis.com/youtube/v3/playlistItems'
         params = {
-            'part': 'snippet',
+            'part': 'snippet,status',
             'playlistId': playlist_id,
             'key': api_key,
             'pageToken': next_page_token
@@ -40,7 +41,8 @@ def get_playlist_videos_foo(playlist_id, api_key) -> list[PlaylistVideo]:
                 parser.parse(item["snippet"]["publishedAt"]),
                 item["snippet"]["title"],
                 item["snippet"]["description"],
-                item["snippet"]["position"]
+                item["snippet"]["position"],
+                item["status"]["privacyStatus"] == 'private'
             )
             videos.append(playlist_video)
 
@@ -99,37 +101,41 @@ async def playlist_test() -> bool:
 
     sort_dict: dict[OfficialName, list[TrackAndMixname]] = {} 
     unmatched: list[PlaylistVideo] = []
+    private : list[PlaylistVideo] = []
 
     for playlist_video in playlist_videos:
-        video_track_name = playlist_video.title.replace(" - DELTARUNE", "")
-        matched_official_name = OfficialName("", "") 
-        is_matched_alt = False
-
-        for official_name in official_names:
-            if (
-                (len(official_name.name) > len(matched_official_name.name)) 
-                and rip_title_matches_rip_title(video_track_name, official_name.name)
-            ): 
-                matched_official_name = official_name
-
-            if ( 
-                len(official_name.alt)
-                and (len(official_name.alt) > len(matched_official_name.alt)) 
-                and rip_title_matches_rip_title(video_track_name, official_name.alt)
-            ):
-                matched_official_name = official_name
-                is_matched_alt = True
-
-        if len(matched_official_name.name):
-            if matched_official_name not in sort_dict:
-                sort_dict[matched_official_name] = []
-            track = matched_official_name.name
-            if is_matched_alt:
-                track = matched_official_name.alt
-            mixname = playlist_video.title[len(track) + 1:]
-            sort_dict[matched_official_name].append(TrackAndMixname(track, mixname, playlist_video))
+        if playlist_video.isPrivate:
+            private.append(playlist_video)
         else:
-            unmatched.append(playlist_video)
+            video_track_name = playlist_video.title.replace(" - DELTARUNE", "")
+            matched_official_name = OfficialName("", "") 
+            is_matched_alt = False
+
+            for official_name in official_names:
+                if (
+                    (len(official_name.name) > len(matched_official_name.name)) 
+                    and rip_title_matches_rip_title(video_track_name, official_name.name)
+                ): 
+                    matched_official_name = official_name
+
+                if ( 
+                    len(official_name.alt)
+                    and (len(official_name.alt) > len(matched_official_name.alt)) 
+                    and rip_title_matches_rip_title(video_track_name, official_name.alt)
+                ):
+                    matched_official_name = official_name
+                    is_matched_alt = True
+
+            if len(matched_official_name.name):
+                if matched_official_name not in sort_dict:
+                    sort_dict[matched_official_name] = []
+                track = matched_official_name.name
+                if is_matched_alt:
+                    track = matched_official_name.alt
+                mixname = playlist_video.title[len(track) + 1:]
+                sort_dict[matched_official_name].append(TrackAndMixname(track, mixname, playlist_video))
+            else:
+                unmatched.append(playlist_video)
     
     sorted_titles: list[PlaylistVideo] = []
     for official_name in official_names:
@@ -150,10 +156,18 @@ async def playlist_test() -> bool:
     for foo in unmatched:
         string += f'{foo.playlist_position:03}  {foo.title}\n' 
 
+    string += '----------------\n'
+
+    for foo in private:
+        string += f'{foo.playlist_position:03}  {foo.title}\n' 
+
     with open("deltarune3.txt", "w") as f:
         f.truncate()
         f.write(string)
 
-    print(f"Updated {len(sorted_titles)} sorted tracks and {len(unmatched)} unmatched tracks ({len(sorted_titles) + len(unmatched)} total).")
+    print(f"Sorted {len(playlist_videos)} tracks"\
+          + f"\n- {len(sorted_titles)} sorted tracks"\
+          + f"\n- {len(unmatched)} unmatched tracks"\
+          + f"\n- {len(private)} private videos")
 
     return True
