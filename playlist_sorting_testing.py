@@ -83,7 +83,7 @@ async def playlist_test() -> bool:
 
     official_names: list[OfficialName] = [] 
     credentials = await refresh_credentials()
-    await clear_cells(PLAYLISTS_SPREADSHEET_ID, "deltarune", "C3:F", credentials)
+    await clear_cells(PLAYLISTS_SPREADSHEET_ID, "deltarune", "C3:G", credentials)
 
     if credentials and credentials.valid:
         sheet_data = await get_raw_sheet_data(PLAYLISTS_SPREADSHEET_ID, "deltarune", 1, 'b', credentials)
@@ -163,7 +163,11 @@ async def playlist_test() -> bool:
         video_track_name = playlist_video.title.replace(" - DELTARUNE", "")
         sheet_cells[0].append(f'{video_track_name}') 
 
-    resulting_order = []
+    date = datetime.now(tz=tz.UTC)
+    date = date.astimezone(tz.gettz('America/Los_Angeles'))
+    timestring = date.strftime("%H:%M:%S (PST) - %d/%m/%Y") 
+
+    resulting_order: list[PlaylistVideo] = []
     resulting_order.extend(sorted_titles) 
     resulting_order.extend(unmatched) 
     resulting_order.extend(private) 
@@ -176,11 +180,23 @@ async def playlist_test() -> bool:
         sheet_cells[1].append(f'{(playlist_video.playlist_position + 1):03}') 
         sheet_cells[2].append(f'{video_track_name}') 
 
-    date = datetime.now(tz=tz.UTC)
-    date = date.astimezone(tz.gettz('America/Los_Angeles'))
-    timestring = date.strftime("%H:%M:%S (PST) - %d/%m/%Y") 
-    sheet_cells[3].append(f"{timestring}") 
+    sheet_cells[3].append(timestring) 
 
     await write_data_to_sheet(PLAYLISTS_SPREADSHEET_ID, "deltarune", sheet_cells, "C3", credentials)
+
+    video_ids_string = "let videoIds = ["
+    for i, playlist_video in enumerate(resulting_order):
+        video_ids_string += f'"{playlist_video.video_id}"'
+        if i != len(resulting_order) - 1:
+            video_ids_string += ", " 
+    video_ids_string += "]"
+
+    tampermonkey_script = ""
+    with open("./playlistSorting/tampermonkeySorting.js", 'r') as file:
+        tampermonkey_script = file.read()
+    tampermonkey_script += f"\n\n{video_ids_string}\n//Good Luck!"
+    with open("tampermonkeyfoo.js", "w") as f:
+        f.truncate()
+        f.write(tampermonkey_script)
 
     return True
