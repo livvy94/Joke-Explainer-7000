@@ -170,4 +170,6 @@ async def playlist_test() -> bool:
           + f"\n- {len(unmatched)} unmatched tracks"\
           + f"\n- {len(private)} private videos")
 
+    await write_data_to_sheet(PLAYLISTS_SPREADSHEET_ID, "deltarune", credentials)
+
     return True

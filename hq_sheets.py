@@ -63,6 +63,28 @@ async def get_raw_sheet_data(spreadsheet_id: str, sheet_name: str, row_start: in
 
     return result
 
+async def write_data_to_sheet(spreadsheet_id: str, sheet_name: str, credentials: Credentials):
+    result = False
+    try:
+        values = [ ["test"] ]
+        service = build("sheets", "v4", credentials=credentials)
+        output = (
+            service.spreadsheets()
+            .values()
+            .update(
+                spreadsheetId=spreadsheet_id,
+                range=f"{sheet_name}!C1:C2",
+                valueInputOption="USER_ENTERED",
+                body={"values": values},
+            )
+            .execute()
+        )
+        print(f"{output.get('updatedCells')} cells updated.")
+        result = True
+    except Exception as error:
+        await log_exception(f"Failed to write google sheet data into {sheet_name}", error, [], True)
+    return result
+
 
 CREDENTIALS = None
 SHEET_LAST_UPDATED: datetime = datetime.now(timezone.utc)
@@ -77,8 +99,8 @@ async def refresh_credentials() -> Credentials:
     # NOTE: (Ahmayk) login required in web browser to access google sheets doc
     # then token.json is created and saves login info
     scopes = [
-        "https://www.googleapis.com/auth/spreadsheets.readonly",
-        "https://www.googleapis.com/auth/drive.readonly",
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive",
     ]
 
     try: 
