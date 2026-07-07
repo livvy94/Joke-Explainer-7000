@@ -63,19 +63,19 @@ async def get_raw_sheet_data(spreadsheet_id: str, sheet_name: str, row_start: in
 
     return result
 
-async def write_data_to_sheet(spreadsheet_id: str, sheet_name: str, credentials: Credentials):
+async def write_data_to_sheet(spreadsheet_id: str, sheet_name: str, sheet_cells: list[list[str]],
+                              starting_cell: str, credentials: Credentials) -> bool:
     result = False
     try:
-        values = [ ["test"] ]
         service = build("sheets", "v4", credentials=credentials)
         output = (
             service.spreadsheets()
             .values()
             .update(
                 spreadsheetId=spreadsheet_id,
-                range=f"{sheet_name}!C1:C2",
-                valueInputOption="USER_ENTERED",
-                body={"values": values},
+                range=f"{sheet_name}!{starting_cell}",
+                valueInputOption="RAW",
+                body={"majorDimension": "COLUMNS", "values": sheet_cells},
             )
             .execute()
         )

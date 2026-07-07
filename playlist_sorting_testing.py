@@ -65,7 +65,6 @@ def rip_title_matches_rip_title(video_track_name: str, official_track_name: str)
         result = True
     return result 
 
-
 async def playlist_test() -> bool:
 
     playlist_videos: list[PlaylistVideo] = [] 
@@ -147,29 +146,33 @@ async def playlist_test() -> bool:
             for track_and_title in sort_dict[official_name]:
                 sorted_titles.append(track_and_title.playlist_video)
 
-    string = ""
-    for foo in sorted_titles:
-        string += f'{foo.playlist_position:03}  {foo.title}\n' 
-
-    string += '----------------\n'
-
-    for foo in unmatched:
-        string += f'{foo.playlist_position:03}  {foo.title}\n' 
-
-    string += '----------------\n'
-
-    for foo in private:
-        string += f'{foo.playlist_position:03}  {foo.title}\n' 
-
-    with open("deltarune3.txt", "w") as f:
-        f.truncate()
-        f.write(string)
 
     print(f"Sorted {len(playlist_videos)} tracks"\
           + f"\n- {len(sorted_titles)} sorted tracks"\
           + f"\n- {len(unmatched)} unmatched tracks"\
           + f"\n- {len(private)} private videos")
 
-    await write_data_to_sheet(PLAYLISTS_SPREADSHEET_ID, "deltarune", credentials)
+    sheet_cells: list[list[str]] = [[], [], []]
+
+    sheet_cells[0].append(f'COUNT: {len(unmatched)}') 
+    sheet_cells[0].append("") 
+    for playlist_video in unmatched:
+        video_track_name = playlist_video.title.replace(" - DELTARUNE", "")
+        sheet_cells[0].append(f'{video_track_name}') 
+
+    resulting_order = []
+    resulting_order.extend(sorted_titles) 
+    resulting_order.extend(unmatched) 
+    resulting_order.extend(private) 
+    sheet_cells[1].append("") 
+    sheet_cells[1].append("") 
+    sheet_cells[2].append(f'COUNT: {len(resulting_order)}') 
+    sheet_cells[2].append("") 
+    for playlist_video in resulting_order:
+        video_track_name = playlist_video.title.replace(" - DELTARUNE", "")
+        sheet_cells[1].append(f'{(playlist_video.playlist_position + 1):03}') 
+        sheet_cells[2].append(f'{video_track_name}') 
+
+    await write_data_to_sheet(PLAYLISTS_SPREADSHEET_ID, "deltarune", sheet_cells, "C3", credentials)
 
     return True
