@@ -3,9 +3,9 @@ import discord
 from discord import TextChannel, Thread, Guild
 from datetime import datetime, timezone, timedelta
 
-from bot_secrets import YOUTUBE_API_KEY, YOUTUBE_CHANNEL_NAME
-from simpleQoC.qoc import ffmpegExists, getFileMetadataMutagen, getFileMetadataFfprobe 
-from simpleQoC.metadata import countDupe, isDupe
+from bot_secrets import YOUTUBE_API_KEY, YOUTUBE_CHANNEL_NAME, PLAYLISTS_SPREADSHEET_ID
+from hq_qoc import ffmpegExists, getFileMetadataMutagen, getFileMetadataFfprobe 
+from hq_metadata import countDupe, isDupe
 from sourceFinder import search_rip_sources 
 
 from hq_types import *

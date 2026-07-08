@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from hq_strings import TitleType, score_title_similarity 
 from hq_config import get_config, get_channel_ids_of_types 
 from hq_discord import FloatAndErrors, StringAndErrors, MessagesAndErrors, run_blocking, discord_find_channel, discord_delete_messages, discord_get_channel_messages, discord_fetch_message
-from simpleQoC.qoc import getAudioLengthInSecondsFFprobe 
+from hq_qoc import getAudioLengthInSecondsFFprobe 
 
 JE_DATABASE = shelve.open("je_database", writeback=True)
 THUMBNAIL_DATABASE = shelve.open("thumbnail_database", writeback=True)

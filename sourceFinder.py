@@ -8,7 +8,7 @@ from enum import Enum, auto
 
 from hq_strings import *
 from hq_sheets import QoCSheetData
-from simpleQoC.metadata import desc_to_dict, get_music_from_desc
+from hq_metadata import desc_to_dict, get_music_from_desc
 
 requests_session: requests.Session = requests.Session(impersonate="chrome124")
 

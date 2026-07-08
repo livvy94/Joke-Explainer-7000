@@ -6,7 +6,7 @@ import json
 import os
 from pathlib import Path
 from inspect import getsourcefile
-from simpleQoC.qoc import CheckResultType, QoCCheck
+from hq_qoc import CheckResultType, QoCCheck
 
 PATTERNS_FILE = Path(os.path.abspath(getsourcefile(lambda:0))).parent / 'patterns.json'
 

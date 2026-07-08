@@ -6,8 +6,8 @@ from hq_rip import *
 from hq_database import * 
 
 from bot_secrets import YOUTUBE_API_KEY, YOUTUBE_CHANNEL_NAME
-from simpleQoC.qoc import CheckResultType, QoCCheckType, QoCCheck, performQoC
-from simpleQoC.metadata import checkMetadata, isDupe
+from hq_qoc import CheckResultType, QoCCheckType, QoCCheck, performQoC
+from hq_metadata import checkMetadata, isDupe
 
 #===============================================#
 #                  RIP VETTING                  #

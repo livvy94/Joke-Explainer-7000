@@ -1,4 +1,4 @@
-from simpleQoC.metadata import *
+from hq_metadata import *
 from hq_sheets import *
 from bot_secrets import YOUTUBE_API_KEY, PLAYLISTS_SPREADSHEET_ID
 from dateutil import parser, tz

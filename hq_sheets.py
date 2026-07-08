@@ -7,7 +7,7 @@ from googleapiclient.discovery import build
 from bot_secrets import SPECIALISTS_SPREADSHEET_ID 
 from hq_strings import * 
 from hq_discord import * 
-from simpleQoC.metadata import desc_to_dict, get_music_from_desc, remove_links
+from hq_metadata import desc_to_dict, get_music_from_desc, remove_links
 from discord import Guild
 
 from typing import NamedTuple

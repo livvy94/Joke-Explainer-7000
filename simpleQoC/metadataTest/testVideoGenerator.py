@@ -4,7 +4,7 @@ from pathlib import Path
 from inspect import getsourcefile
 
 from bot_secrets import YOUTUBE_API_KEY
-from simpleQoC.metadata import get_playlist_videos
+from hq_metadata import get_playlist_videos
 
 TEST_DIR = Path(os.path.abspath(getsourcefile(lambda:0))).parent
 

@@ -4,7 +4,7 @@ from pathlib import Path
 from inspect import getsourcefile
 from mutagen import File
 
-from simpleQoC.qoc import parseUrl, downloadAudioFromUrl, checkBitrateFromFile, checkClippingFromFile, \
+from hq_qoc import parseUrl, downloadAudioFromUrl, checkBitrateFromFile, checkClippingFromFile, \
                     checkBitrateFromUrl, checkClippingFromUrl, QoCException, DOWNLOAD_DIR
 
 TEST_DIR = Path(os.path.abspath(getsourcefile(lambda:0))).parent
@@ -344,7 +344,7 @@ class TestClippingFromUrl(unittest.TestCase, BaseTestClipping):
 #            Main Function              #
 #=======================================#
 
-from simpleQoC.qoc import performQoC
+from hq_qoc import performQoC
 
 class TestOverall(unittest.TestCase):
     """
