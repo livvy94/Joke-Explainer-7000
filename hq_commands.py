@@ -2562,6 +2562,7 @@ async def stats(args: list[str], command_context: CommandContext):
 
     await send_and_if_errors(ret, "Stats may be inaccurate, errors during counting.", error_strings, command_context.channel)
 
+
 @command(
     command_type=CommandType.PLAYLIST,
     public=True,
@@ -2578,6 +2579,8 @@ async def playlistsort(args: list[str], command_context: CommandContext):
     if not len(playlist_id):
         return await send(f"Invalid playlist link: `{args[0]}`. {instructions}", command_context.channel)
 
+    youtube_playlist = None
+    sheet_exists = False
     async with command_context.channel.typing():
         youtube_playlist = await get_playlist_details(playlist_id, YOUTUBE_API_KEY)
         if len(youtube_playlist.error_strings):
@@ -2587,16 +2590,52 @@ async def playlistsort(args: list[str], command_context: CommandContext):
         bool_and_errors = await does_sheet_exist(PLAYLISTS_SPREADSHEET_ID, youtube_playlist.title, credentials)
         if len(bool_and_errors.error_strings):
             return await send_if_errors(f"Failed to check if sheet exists for `{youtube_playlist.title}`", bool_and_errors.error_strings, command_context.channel)
+        sheet_exists = bool_and_errors.result
 
-        return_message = "" 
-        if bool_and_errors.result:
-            return_message = f"A spreadsheet exists for **{youtube_playlist.title}**. Press the button to sort the track names in the spreadsheet using videos currently on the channel!" 
-        else:
-            return_message = f"No spreadsheet found for **{youtube_playlist.title}**. Press the button to create it using videos currently on the channel!" 
+    return_message = "" 
+    start_button_label = ""
+    return_message += f"\nThe **{youtube_playlist.title}** playlist has **{youtube_playlist.video_count} videos**."
+    if sheet_exists:
+        return_message += f"\nA spreadsheet exists for **{youtube_playlist.title}**. Press the button to sort the track names in the spreadsheet using videos currently on the channel!" 
+        start_button_label = "Open spreadsheet and sort track names"
+        start_buttn_style = discord.ButtonStyle.primary
+    else:
+        return_message += f"\nNo spreadsheet found for **{youtube_playlist.title}**. Press the button to create one using videos currently on the channel!" 
+        start_button_label = "Create spreadsheet"
+        start_buttn_style = discord.ButtonStyle.green
 
-        return_message += f"\nThe **{youtube_playlist.title}** playlist has **{youtube_playlist.video_count} videos**."
 
-        await send(return_message, command_context.channel)
+    class SortView(discord.ui.View):
+        def __init__(self):
+            super().__init__()
+
+        @discord.ui.button(label='Sort track names in spreadsheet', style=discord.ButtonStyle.primary)
+        async def sortButton(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await interaction.response.edit_message(content='Sort!', view=self)
+
+        @discord.ui.button(label='Generate Tampermonkey Script', style=discord.ButtonStyle.red)
+        async def scriptButton(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await interaction.response.edit_message(content='Ooo Ooo Ahh Ahh!!!!', view=self)
+
+
+    class StartButton(discord.ui.View):
+        def __init__(self, youtube_playlist: YouTubePlaylist, sheet_exists: bool):
+            super().__init__()
+            self.youtube_playlist = youtube_playlist
+            self.sheet_exists = sheet_exists 
+
+        @discord.ui.button(label=start_button_label, style=start_buttn_style)
+        async def button(self, interaction: discord.Interaction, button: discord.ui.Button):
+            self.value = True
+            button.disabled = True
+            view = SortView()
+            await interaction.response.edit_message(content="Click to sort!", view=view)
+            await view.wait()
+
+
+    view = StartButton(youtube_playlist, sheet_exists)
+    await command_context.channel.send(return_message, view=view)
+    await view.wait()
 
 
 # While it might occur to folks in the future that a good command to write would be a rip feedback-sending command, something like that
