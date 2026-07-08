@@ -3,12 +3,16 @@ from hq_config import *
 from hq_strings import *
 from hq_types import *
 
-#NOTE: (Ahmayk) define functionality, dependent on each other
+#NOTE: (Ahmayk) define functionality, dependent on higher files
 from hq_discord import *
 from hq_react import *
+from hq_qoc import *
+from hq_database import *
+from hq_embed import *
+from hq_metadata import *
+from hq_sheets import *
 from hq_rip import *
 from hq_vet import *
-from hq_sheets import *
 
 #NOTE: (Ahmayk) define discord bot events and commands
 from hq_events import *
