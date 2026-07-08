@@ -11,6 +11,7 @@ from hq_database import *
 from hq_embed import *
 from hq_metadata import *
 from hq_sheets import *
+from hq_source import *
 from hq_rip import *
 from hq_vet import *
 

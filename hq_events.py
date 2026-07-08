@@ -14,7 +14,7 @@ from hq_vet import *
 from hq_sheets import * 
 from hq_embed import *
 from hq_commands import CommandContext, CommandType, find_command_info
-from sourceFinder import search_rip_sources 
+from hq_source import search_rip_sources 
 
 #===============================================#
 #                    EVENTS                     #

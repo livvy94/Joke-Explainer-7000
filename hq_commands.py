@@ -6,7 +6,7 @@ from datetime import datetime, timezone, timedelta
 from bot_secrets import YOUTUBE_API_KEY, YOUTUBE_CHANNEL_NAME, PLAYLISTS_SPREADSHEET_ID
 from hq_qoc import ffmpegExists, getFileMetadataMutagen, getFileMetadataFfprobe 
 from hq_metadata import countDupe, isDupe
-from sourceFinder import search_rip_sources 
+from hq_source import search_rip_sources 
 
 from hq_types import *
 from hq_config import *
