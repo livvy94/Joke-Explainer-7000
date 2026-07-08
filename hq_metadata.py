@@ -7,68 +7,9 @@ import os
 from pathlib import Path
 from inspect import getsourcefile
 from hq_qoc import CheckResultType, QoCCheck
+from hq_youtube import * 
 
-PATTERNS_FILE = Path(os.path.abspath(getsourcefile(lambda:0))).parent / 'patterns.json'
-
-class MetadataException(Exception):
-    def __init__(self, message, *args):
-        self.message = message # without this you may get DeprecationWarning
-  
-        # allow users initialize misc. arguments as any other builtin Error
-        super(MetadataException, self).__init__(message, *args) 
-
-
-def get_playlist_details(playlist_id, api_key):
-    url = 'https://www.googleapis.com/youtube/v3/playlists'
-    params = {
-        'part': 'snippet',
-        'id': playlist_id,
-        'key': api_key
-    }
-
-    response = requests.get(url, params=params)
-    response.raise_for_status()  # Raises an HTTPError for bad responses
-    data = response.json()
-
-    if 'error' in data:
-        raise MetadataException(f"API Error: {data['error']['message']}")
-    elif 'items' in data and len(data['items']) > 0:
-        playlist_title = data['items'][0]['snippet']['title']
-        playlist_creator = data['items'][0]['snippet']['channelTitle']
-        return playlist_title, playlist_creator
-    else:
-        raise MetadataException("Playlist not found or empty.")
-    
-
-def get_playlist_videos(playlist_id, api_key) -> List[Dict[str, str]]:
-    videos = []
-    next_page_token = None
-
-    while True:
-        url = f'https://www.googleapis.com/youtube/v3/playlistItems'
-        params = {
-            'part': 'snippet',
-            'playlistId': playlist_id,
-            'key': api_key,
-            'pageToken': next_page_token
-        }
-
-        response = requests.get(url, params=params)
-        response.raise_for_status()  # Raises an HTTPError for bad responses
-        data = response.json()
-
-        if 'error' in data:
-            raise MetadataException(f"API Error: {data['error']['message']}")
-
-        for item in data.get('items', []):
-            videos.append({k: item['snippet'][k] for k in ['title', 'description']})
-
-        next_page_token = data.get('nextPageToken')
-        if not next_page_token:
-            break
-
-    return videos
-
+PATTERNS_FILE = Path(os.path.abspath(getsourcefile(lambda:0))).parent / 'simpleQoc/patterns.json'
 
 def remove_links(text):
     # Regular expression pattern to match URLs
@@ -130,7 +71,7 @@ def crosscheck_description_key(key: str, video_descs: List[str], threshold: floa
         return any([key in desc for desc in video_descs])
 
 
-def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key: str, use_youtube_api: bool, advanced: bool) -> List[QoCCheck]:
+async def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key: str, use_youtube_api: bool, advanced: bool) -> List[QoCCheck]:
     """
     Perform metadata checking.
 
@@ -168,36 +109,28 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
                 adv_messages.add('Playlist field is not a valid playlist, YouTube redirect or Drive link. Ignore if this is intentional.')
 
     # Check metadata based on provided playlist ID
-    playlist_name = "" 
-    videos = []
+    youtube_playlist = YouTubePlaylist("", "", [])
+    videos: list[PlaylistVideo] = []
     if not len(api_key):
         error_messages.add(":warning: YouTube API Key not defined. No YouTube videos or playlists checked.")
 
     if len(playlist_id) > 0 and len(api_key):
-        channel = "" 
-        try:
-            try:
-                playlist_name, channel = get_playlist_details(playlist_id, api_key)
-                videos = get_playlist_videos(playlist_id, api_key)
-        
-            except requests.exceptions.Timeout:
-                raise MetadataException('Request timed out.')
-            except requests.exceptions.TooManyRedirects:
-                raise MetadataException('Bad URL.')
-            except requests.exceptions.HTTPError as http_err:
-                raise MetadataException(f"HTTP error occurred: {http_err}")
-            except requests.exceptions.RequestException as e: # Other errors
-                raise MetadataException('Unknown URL error. {}'.format(e))
-            
-        except MetadataException as e:
-            error_messages.add(remove_links(e.message))
 
-        if len(channel_name) and len(channel) and channel_name != channel:
+        youtube_playlist = await get_playlist_details(playlist_id, api_key)
+        for err in youtube_playlist.error_strings:
+            error_messages.add(err)
+
+        playlist_videos_and_errors = await get_playlist_videos(playlist_id, api_key)
+        videos = playlist_videos_and_errors.videos
+        for err in playlist_videos_and_errors.error_strings:
+            error_messages.add(err)
+        
+        if len(channel_name) and len(youtube_playlist.channel_name) and channel_name != youtube_playlist.channel_name:
             # Playlist source check
-            fail_messages.add("Playlist is not from {} (found playlist from {})".format(channel_name, channel))
+            fail_messages.add("Playlist is not from {} (found playlist from {})".format(channel_name, youtube_playlist.channel_name))
         else:
             # Duplicate title check
-            if len(videos) and title in [video['title'] for video in videos]:
+            if len(videos) and title in [video.title for video in videos]:
                 fail_messages.add("Video title already exists in playlist.")
 
     # Check metadata by patterns
@@ -218,7 +151,7 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
             pass
         else:
             # Compare desc with existing videos
-            existing_descs = [video['description'] for video in videos]
+            existing_descs = [video.desc for video in videos]
             extra_fields = []
             for key in desc.keys():
                 # ignore ones already covered by patterns.json
@@ -250,24 +183,24 @@ def checkMetadata(description: str, channel_name: str, playlist_id: str, api_key
                     match = re.match(p.replace('[[TRACK]]', re.escape(track)), title)
                     if match:
                         game = match.group('game')
-                        existing_titles = [video['title'] for video in videos]
+                        existing_titles = [video.title for video in videos]
 
                         # Check game name
                         if p.startswith('[[TRACK]]'):
-                            game_match = any([video.endswith(game) for video in existing_titles])
+                            game_match = any([title.endswith(game) for title in existing_titles])
                         elif p.endswith('[[TRACK]]'):
-                            game_match = any([video.startswith(game) for video in existing_titles])
+                            game_match = any([title.startswith(game) for title in existing_titles])
                         else:
                             # unsupported game matching
                             game_match = True
                         
-                        if len(playlist_name) and len(existing_titles) > 0 and (game != playlist_name) and not game_match:
+                        if len(youtube_playlist.title) and len(existing_titles) > 0 and (game != youtube_playlist.title) and not game_match:
                             if title[-1] == ' ':
                                 temp_messages.add('Trailing whitespace detected at end of title.')
-                            elif len(title) == 100 or (game in playlist_name or any([game in video for video in existing_titles])):
+                            elif len(title) == 100 or (game in youtube_playlist.title or any([game in video for video in existing_titles])):
                                 temp_messages.add('Game in title appears to be cut off. Ignore if this was intentional to go under 100-character limit.')
                             else:
-                                temp_messages.add(f'Game in title does not match playlist name (``{playlist_name}``) nor any existing videos in playlist.')
+                                temp_messages.add(f'Game in title does not match playlist name (``{youtube_playlist.title}``) nor any existing videos in playlist.')
                         else:
                             # Check that at least one other existing video has the same title formatting
                             other_p = p.replace('[[TRACK]]', r'(?P<track>[^\n]*)').replace(r'(?P<game>[^\n]*)', re.escape(game))
@@ -326,53 +259,30 @@ def isDupe(desc1: str, desc2: str, desc2_is_main: bool = False) -> bool:
         return track1_base == track2_base or track1_base == track2
 
 
-def countDupe(description: str, channel_name: str, playlist_id: str, api_key: str) -> Tuple[int, str]:
+async def countDupe(description: str, channel_name: str, playlist_id: str, api_key: str) -> Tuple[int, str]:
     """
     Check the playlist and count the number of dupes.
-    TODO: a lot of code is borrowed from checkMetadata. Merge them?
     """
+    youtube_playlist = YouTubePlaylist("", "", [])
+    videos: list[PlaylistVideo] = []
+    error_msg = ""
     if len(playlist_id) > 0:
-        try:
-            try:
-                _, channel = get_playlist_details(playlist_id, api_key)
-                videos = get_playlist_videos(playlist_id, api_key)
-        
-            except requests.exceptions.Timeout:
-                raise MetadataException('Request timed out.')
-            except requests.exceptions.TooManyRedirects:
-                raise MetadataException('Bad URL.')
-            except requests.exceptions.HTTPError as http_err:
-                raise MetadataException(f"HTTP error occurred: {http_err}")
-            except requests.exceptions.RequestException as e: # Other errors
-                raise MetadataException('Unknown URL error. {}'.format(e))
-            
-        except MetadataException as e:
-            return 0, remove_links(e.message)
 
-        if channel_name != channel:
-            return 0, "Playlist is not from {} (found playlist from {})".format(channel_name, channel)
+        youtube_playlist = await get_playlist_details(playlist_id, api_key)
+        error_msg = "\n".join(youtube_playlist.error_strings)
+
+        playlist_videos_and_errors = await get_playlist_videos(playlist_id, api_key)
+        videos = playlist_videos_and_errors.videos
+        error_msg = "\n".join(playlist_videos_and_errors.error_strings)
     else:
-        return 0, "Playlist not found."
+        error_msg = "Playlist not found"
+
+    if not len(error_msg) and len(channel_name) and len(youtube_playlist.channel_name) and channel_name != youtube_playlist.channel_name:
+        error_msg = "Playlist is not from {} (found playlist from {})".format(channel_name, youtube_playlist.channel_name)
     
-    if len(videos) == 0:
-        return 0, "Playlist is empty."
+    if not len(error_msg) and len(videos) == 0:
+        error_msg = "Playlist is empty."
 
-    return sum([isDupe(description, video['title'] + '\n' + video['description'].replace('\r', '').split('\n\n')[0]) for video in videos]), ""
+    total = sum([isDupe(description, video.title + '\n' + video.desc.replace('\r', '').split('\n\n')[0]) for video in videos])
 
-
-# Example usage
-from bot_secrets import YOUTUBE_CHANNEL_NAME, YOUTUBE_API_KEY
-
-# paste description here for testing
-DESC = """
-"""
-
-if __name__ == "__main__":
-    CHANNEL_NAME = YOUTUBE_CHANNEL_NAME if len(YOUTUBE_CHANNEL_NAME) > 0 else input("Paste expected channel name: ")
-    API_KEY = YOUTUBE_API_KEY if len(YOUTUBE_API_KEY) > 0 else input("Paste the API key: ")
-    match = re.search(r'(?:https?://)?(?:www\.)?(?:youtube\.com/|youtu\.be/)playlist\?list=([a-zA-Z0-9_-]+)', DESC)
-    playlist = match.group(1) if match else ""
-
-    qoc_checks = checkMetadata(DESC, CHANNEL_NAME, playlist, API_KEY, True)
-    for qoc_check in qoc_checks:
-        print(qoc_check)
+    return total, error_msg

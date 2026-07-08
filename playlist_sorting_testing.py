@@ -1,56 +1,12 @@
 from hq_metadata import *
 from hq_sheets import *
+from hq_youtube import *
 from bot_secrets import YOUTUBE_API_KEY, PLAYLISTS_SPREADSHEET_ID
-from dateutil import parser, tz
+from dateutil import tz
 
 import shelve 
 FOO_DATABASE = shelve.open("foo", writeback=True)
 DELTARUNE_KEY = "DELTARUNE"
-
-class PlaylistVideo(NamedTuple):
-    video_id: str 
-    date: datetime
-    title: str 
-    desc: str
-    playlist_position: int
-    isPrivate: bool
-
-def get_playlist_videos_foo(playlist_id, api_key) -> list[PlaylistVideo]: 
-    videos = []
-    next_page_token = None
-
-    while True:
-        url = f'https://www.googleapis.com/youtube/v3/playlistItems'
-        params = {
-            'part': 'snippet,status',
-            'playlistId': playlist_id,
-            'key': api_key,
-            'pageToken': next_page_token
-        }
-
-        response = requests.get(url, params=params)
-        response.raise_for_status()  # Raises an HTTPError for bad responses
-        data = response.json()
-
-        if 'error' in data:
-            raise MetadataException(f"API Error: {data['error']['message']}")
-
-        for item in data.get('items', []):
-            playlist_video = PlaylistVideo(
-                item["snippet"]["resourceId"]["videoId"],
-                parser.parse(item["snippet"]["publishedAt"]),
-                item["snippet"]["title"],
-                item["snippet"]["description"],
-                item["snippet"]["position"],
-                item["status"]["privacyStatus"] == 'private'
-            )
-            videos.append(playlist_video)
-
-        next_page_token = data.get('nextPageToken')
-        if not next_page_token:
-            break
-
-    return videos
 
 def rip_title_matches_rip_title(video_track_name: str, official_track_name: str) -> bool:
     result = False
@@ -67,12 +23,15 @@ def rip_title_matches_rip_title(video_track_name: str, official_track_name: str)
 
 async def playlist_test() -> bool:
 
+    error_strings = []
+
     playlist_videos: list[PlaylistVideo] = [] 
     if DELTARUNE_KEY in FOO_DATABASE:
         playlist_videos = FOO_DATABASE[DELTARUNE_KEY]
     else:
         DELTARUNE_PLAYLIST = "PLL0CQjrcN8D0VeG0AJrHzrq5sRNNWjkDP"
-        playlist_videos = get_playlist_videos_foo(DELTARUNE_PLAYLIST, YOUTUBE_API_KEY)
+        playlist_videos_and_errors = await get_playlist_videos(DELTARUNE_PLAYLIST, YOUTUBE_API_KEY)
+        error_strings.extend(playlist_videos_and_errors.error_strings)
         FOO_DATABASE[DELTARUNE_KEY] = playlist_videos
         FOO_DATABASE.sync()
 

@@ -2082,7 +2082,7 @@ async def count_dupe(args: list[str], command_context: CommandContext):
         description = get_rip_description(message.content)
         rip_title = get_rip_title(message.content)
 
-        p, msg = await run_blocking(countDupe, description, YOUTUBE_CHANNEL_NAME, playlistId, YOUTUBE_API_KEY)
+        p, msg = await countDupe(description, YOUTUBE_CHANNEL_NAME, playlistId, YOUTUBE_API_KEY)
         if len(msg) > 0:
             await send(msg, command_context.channel)
 

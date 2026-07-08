@@ -427,12 +427,13 @@ async def get_message_from_referece_or_args(message_reference: discord.MessageRe
 
 
 ##NOTE: (Ahmayk) idk where to put this, not a discord thing
+##NOTE: (Ahmayk later) actually this does belong here because it's using discord.py
 import functools
 # https://stackoverflow.com/a/65882269
 async def run_blocking(blocking_func: typing.Callable, *args, **kwargs) -> typing.Any:
     """
     Runs a blocking function in a non-blocking way.
-    Needed because QoC functions take a while to run.
+    For API calls and long operations
     """
     func = functools.partial(blocking_func, *args, **kwargs) # `run_in_executor` doesn't support kwargs, `functools.partial` does
     return await bot.loop.run_in_executor(None, func)

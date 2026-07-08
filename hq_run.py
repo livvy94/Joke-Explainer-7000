@@ -5,6 +5,7 @@ from hq_types import *
 
 #NOTE: (Ahmayk) define functionality, dependent on higher files
 from hq_discord import *
+from hq_youtube import *
 from hq_react import *
 from hq_qoc import *
 from hq_database import *
