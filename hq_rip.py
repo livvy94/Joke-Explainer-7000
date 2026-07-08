@@ -506,12 +506,14 @@ async def get_formatted_rip_length(text: str, force_download: bool, use_jingle_e
     error_strings = []
     if len(urls):
         floatAndErrors = await get_rip_url_length(urls[0], GetRipUrlLengthDesc(force_download=force_download))
-        if not len(floatAndErrors.error_strings):
-            return_message = format_rip_timecode(floatAndErrors.result) 
-            if len(return_message) and use_jingle_emoji and floatAndErrors.result <= get_config("jingle_length_in_seconds"):
-                return_message = f'{react_type_to_react(ReactType.JINGLE, guild).string} {return_message}'
-        else:
-            error_strings.extend(floatAndErrors.error_strings)
+        error_strings.extend(floatAndErrors.error_strings)
+        return_message = format_rip_timecode(floatAndErrors.result) 
+        if (not len(floatAndErrors.error_strings) 
+            and len(return_message) 
+            and use_jingle_emoji 
+            and floatAndErrors.result <= get_config("jingle_length_in_seconds")
+        ):
+            return_message = f'{react_type_to_react(ReactType.JINGLE, guild).string} {return_message}'
     return StringAndErrors(return_message, error_strings)
 
 

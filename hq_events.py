@@ -157,7 +157,9 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
                                         break
 
                                 string_and_errors = await get_formatted_rip_length(rip.text, False, False, channel.guild)
-                                error_strings.extend(string_and_errors.error_strings)
+                                ##NOTE: (Ahmayk) No one cares if length processing errors out here, don't say anything
+                                #perhaps dangerous but whatever
+                                # error_strings.extend(string_and_errors.error_strings)
 
                                 formatted_rip = format_rip(rip, string_and_errors.string, channel.guild, True, spec_overdue_days, overdue_days)
                                 txt += f'\n{UNPIN_START_STRING} **{user_string}** unpinned\n{formatted_rip}'
