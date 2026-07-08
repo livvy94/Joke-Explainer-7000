@@ -11,6 +11,7 @@ from hq_source import search_rip_sources
 from hq_types import *
 from hq_config import *
 from hq_discord import *
+from hq_youtube import *
 from hq_embed import *
 from hq_react import *
 from hq_rip import *
@@ -35,6 +36,7 @@ class CommandType(Enum):
     ANALYZE = auto()
     SOURCE = auto()
     UPLOAD_MISTAKES = auto()
+    PLAYLIST = auto()
     SECRET = auto()
     MANAGEMENT = auto()
 
@@ -49,6 +51,7 @@ COMMAND_TYPE_DATA[CommandType.STATS] = CommandTypeData('get miscellaneous info o
 COMMAND_TYPE_DATA[CommandType.ANALYZE] = CommandTypeData('analyze rip metadata or audio for common issues')
 COMMAND_TYPE_DATA[CommandType.SOURCE] = CommandTypeData('search for rip sources from online VGM databases')
 COMMAND_TYPE_DATA[CommandType.UPLOAD_MISTAKES] = CommandTypeData('commands related to reported upload mistakes')
+COMMAND_TYPE_DATA[CommandType.PLAYLIST] = CommandTypeData('assists with sorting YouTube playlists')
 COMMAND_TYPE_DATA[CommandType.MANAGEMENT] = CommandTypeData('manage or learn about the bot')
 
 class CommandContext(NamedTuple):
@@ -2558,6 +2561,42 @@ async def stats(args: list[str], command_context: CommandContext):
             error_strings.extend(string_and_errors.error_strings)
 
     await send_and_if_errors(ret, "Stats may be inaccurate, errors during counting.", error_strings, command_context.channel)
+
+@command(
+    command_type=CommandType.PLAYLIST,
+    public=True,
+    format="[youtube rip playlist]",
+    brief="Get or generate a sorting playlist sheet",
+)
+async def playlistsort(args: list[str], command_context: CommandContext):
+
+    instructions = "Send a playlist link an I'll get or generate a playlist you can use to define the order of the playlist for sorting." 
+    if not len(args):
+        return await send(instructions, command_context.channel)
+
+    playlist_id = extract_playlist_id(args[0])
+    if not len(playlist_id):
+        return await send(f"Invalid playlist link: `{args[0]}`. {instructions}", command_context.channel)
+
+    async with command_context.channel.typing():
+        youtube_playlist = await get_playlist_details(playlist_id, YOUTUBE_API_KEY)
+        if len(youtube_playlist.error_strings):
+            return await send_if_errors(f"Failed to get info from YouTube about `{args[0]}`", youtube_playlist.error_strings, command_context.channel)
+
+        credentials = await refresh_credentials()
+        bool_and_errors = await does_sheet_exist(PLAYLISTS_SPREADSHEET_ID, youtube_playlist.title, credentials)
+        if len(bool_and_errors.error_strings):
+            return await send_if_errors(f"Failed to check if sheet exists for `{youtube_playlist.title}`", bool_and_errors.error_strings, command_context.channel)
+
+        return_message = "" 
+        if bool_and_errors.result:
+            return_message = f"A spreadsheet exists for **{youtube_playlist.title}**. Press the button to sort the track names in the spreadsheet using videos currently on the channel!" 
+        else:
+            return_message = f"No spreadsheet found for **{youtube_playlist.title}**. Press the button to create it using videos currently on the channel!" 
+
+        return_message += f"\nThe **{youtube_playlist.title}** playlist has **{youtube_playlist.video_count} videos**."
+
+        await send(return_message, command_context.channel)
 
 
 # While it might occur to folks in the future that a good command to write would be a rip feedback-sending command, something like that

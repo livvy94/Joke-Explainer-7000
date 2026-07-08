@@ -109,7 +109,7 @@ async def checkMetadata(description: str, channel_name: str, playlist_id: str, a
                 adv_messages.add('Playlist field is not a valid playlist, YouTube redirect or Drive link. Ignore if this is intentional.')
 
     # Check metadata based on provided playlist ID
-    youtube_playlist = YouTubePlaylist("", "", [])
+    youtube_playlist = YouTubePlaylist()
     videos: list[PlaylistVideo] = []
     if not len(api_key):
         error_messages.add(":warning: YouTube API Key not defined. No YouTube videos or playlists checked.")
@@ -263,7 +263,7 @@ async def countDupe(description: str, channel_name: str, playlist_id: str, api_k
     """
     Check the playlist and count the number of dupes.
     """
-    youtube_playlist = YouTubePlaylist("", "", [])
+    youtube_playlist = YouTubePlaylist()
     videos: list[PlaylistVideo] = []
     error_msg = ""
     if len(playlist_id) > 0:

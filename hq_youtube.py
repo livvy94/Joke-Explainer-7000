@@ -35,19 +35,21 @@ async def youtube_api_call(url, params) -> JSONAndErrors:
 
 
 class YouTubePlaylist(NamedTuple):
-    title: str
-    channel_name: str
-    error_strings: list[str]
+    title: str = ""
+    channel_name: str = ""
+    video_count: int = 0
+    error_strings: list[str] = []
 
 async def get_playlist_details(playlist_id, api_key) -> YouTubePlaylist:
 
     title = ""
     channel_name = ""
+    video_count = 0
     error_strings: list[str] = []
 
     url = 'https://www.googleapis.com/youtube/v3/playlists'
     params = {
-        'part': 'snippet',
+        'part': 'snippet, contentDetails',
         'id': playlist_id,
         'key': api_key
     }
@@ -59,10 +61,11 @@ async def get_playlist_details(playlist_id, api_key) -> YouTubePlaylist:
         if 'items' in data and len(data['items']) > 0:
             title = data['items'][0]['snippet']['title']
             channel_name = data['items'][0]['snippet']['channelTitle']
+            video_count = data['items'][0]['contentDetails']['itemCount']
         else:
             error_strings.append(f"Playlist not found.")
 
-    return YouTubePlaylist(title, channel_name, error_strings)
+    return YouTubePlaylist(title, channel_name, video_count, error_strings)
     
 
 class PlaylistVideo(NamedTuple):

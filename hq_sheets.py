@@ -4,7 +4,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-from bot_secrets import SPECIALISTS_SPREADSHEET_ID 
+from bot_secrets import SPECIALISTS_SPREADSHEET_ID, PLAYLISTS_SPREADSHEET_ID
 from hq_strings import * 
 from hq_discord import * 
 from hq_metadata import desc_to_dict, get_music_from_desc, remove_links
@@ -13,30 +13,34 @@ from discord import Guild
 from typing import NamedTuple
 from datetime import datetime, timezone
 
-class SpecialistEntry(NamedTuple):
-    specialists: str 
-    notes: str
-    game_title: str
-    alternate_game_titles: list[str] 
-    composer_name: str
-    alternate_composer_names: list[str] 
-    source: str
-    alternate_source_names: list[str]
+async def does_sheet_exist(spreadsheet_id: str, sheet_name: str, credentials: Credentials) -> BoolAndErrors: 
+    error_strings: list[str] = []
+    result = False
+    try:
+        service = build("sheets", "v4", credentials=credentials)
+        output = (
+            service.spreadsheets()
+            .get(
+                spreadsheetId=spreadsheet_id,
+                ranges=sheet_name
+            )
+            .execute()
+        )
+        result = True 
+    except Exception as error:
+        if "Unable to parse range" not in error.reason:
+            await log_exception(f"Google sheet API data call failed for {sheet_name}", error, error_strings, True)
 
-class SourceExclusion(NamedTuple):
-    track_title: str
-    game_title: str
-    skip_database_search: bool
-    skip_youtube_search_link: bool
-    no_results_message: str
-    notes: str
+    return BoolAndErrors(result, error_strings)
 
-class QoCSheetData(NamedTuple):
-    specialist_entries: list[SpecialistEntry]
-    source_exclusions: list[SourceExclusion]
 
-async def get_raw_sheet_data(spreadsheet_id: str, sheet_name: str, row_start: int, last_column: str, credentials: Credentials) -> list[list[str]]: 
-    result: list[list[str]] = []
+class RawSheetData(NamedTuple):
+    rows: list[list[str]]
+    error_strings: list[str]
+
+async def get_raw_sheet_data(spreadsheet_id: str, sheet_name: str, row_start: int, last_column: str, credentials: Credentials) -> RawSheetData: 
+    cells: list[list[str]] = []
+    error_strings: list[str] = []
 
     try:
         service = build("sheets", "v4", credentials=credentials)
@@ -50,18 +54,15 @@ async def get_raw_sheet_data(spreadsheet_id: str, sheet_name: str, row_start: in
             )
             .execute()
         )
-        rows = output["sheets"][0]["data"][0]["rowData"]
-
-        for row in rows:
-            cells = []
-            for cell in row.get("values", []):
-                cells.append(cell.get("formattedValue", "").strip())
-            result.append(cells)
-
+        for rowJson in output["sheets"][0]["data"][0]["rowData"]:
+            rowList = []
+            for cell in rowJson.get("values", []):
+                rowList.append(cell.get("formattedValue", "").strip())
+            cells.append(rowList)
     except Exception as error:
-        await log_exception(f"Failed get google sheet data from {sheet_name}", error, [], True)
+        await log_exception(f"Failed get google sheet data from {sheet_name}", error, error_strings, True)
 
-    return result
+    return RawSheetData(cells, error_strings) 
 
 async def write_data_to_sheet(spreadsheet_id: str, sheet_name: str, sheet_cells: list[list[str]],
                               starting_cell: str, credentials: Credentials) -> bool:
@@ -107,9 +108,32 @@ async def clear_cells(spreadsheet_id: str, sheet_name: str,
     return result
 
 
+class SpecialistEntry(NamedTuple):
+    specialists: str 
+    notes: str
+    game_title: str
+    alternate_game_titles: list[str] 
+    composer_name: str
+    alternate_composer_names: list[str] 
+    source: str
+    alternate_source_names: list[str]
+
+class SourceExclusion(NamedTuple):
+    track_title: str
+    game_title: str
+    skip_database_search: bool
+    skip_youtube_search_link: bool
+    no_results_message: str
+    notes: str
+
+class QoCSheetData(NamedTuple):
+    specialist_entries: list[SpecialistEntry]
+    source_exclusions: list[SourceExclusion]
+    error_strings: list[str]
+
 CREDENTIALS = None
 SHEET_LAST_UPDATED: datetime = datetime.now(timezone.utc)
-QOC_SHEET_DATA: QoCSheetData = QoCSheetData([], []) 
+QOC_SHEET_DATA: QoCSheetData = QoCSheetData([], [], []) 
 
 class GetQoCSheetDataDesc(NamedTuple):
     bypass_cache: bool = False
@@ -184,13 +208,14 @@ async def get_qoc_sheet_data(desc: GetQoCSheetDataDesc) -> QoCSheetData:
     global CREDENTIALS
     global QOC_SHEET_DATA 
 
-    result = QOC_SHEET_DATA 
+    qoc_sheet_data = QOC_SHEET_DATA 
+    error_strings: list[str] = []
 
     if not CREDENTIALS or not CREDENTIALS.valid or CREDENTIALS.expired:
         await refresh_credentials()
 
     if not CREDENTIALS or not CREDENTIALS.valid:
-        await write_log(":warning: **Google sheet credentials not valid.**")
+        error_strings.append("**Google sheet credentials not valid.**")
 
     if CREDENTIALS and CREDENTIALS.valid:
 
@@ -201,7 +226,8 @@ async def get_qoc_sheet_data(desc: GetQoCSheetDataDesc) -> QoCSheetData:
             specialist_entries: list[SpecialistEntry] = []
 
             game_sheet_data = await get_raw_sheet_data(SPECIALISTS_SPREADSHEET_ID, "Game Strict Rules", 3, 'D', CREDENTIALS)
-            for row in game_sheet_data:
+            error_strings.extend(game_sheet_data.error_strings)
+            for row in game_sheet_data.rows:
                 if len(row) > 1:
                     game_title = row[0] 
                     specialists = row[1]
@@ -215,60 +241,67 @@ async def get_qoc_sheet_data(desc: GetQoCSheetDataDesc) -> QoCSheetData:
                         notes = row[3]
                     specialist_entries.append(SpecialistEntry(specialists, notes, game_title, alternate_game_titles, "", [], "", []))
 
-            composer_sheet_data = await get_raw_sheet_data(SPECIALISTS_SPREADSHEET_ID, "Composer Strict Rules", 3, 'D', CREDENTIALS)
-            for row in composer_sheet_data:
-                if len(row) > 1:
-                    composer_string = row[0]
-                    specialists = row[1]
-                    alternate_composer_names = []
-                    if len(row) > 2:
-                        names = row[2].split("/") 
-                        for name in names:
-                            alternate_composer_names.append(name.strip())
-                    notes = "" 
-                    if len(row) > 3:
-                        notes = row[3]
-                    specialist_entries.append(SpecialistEntry(specialists, notes, "", [], composer_string, alternate_composer_names, "", []))
+            if not len(error_strings):
+                composer_sheet_data = await get_raw_sheet_data(SPECIALISTS_SPREADSHEET_ID, "Composer Strict Rules", 3, 'D', CREDENTIALS)
+                error_strings.extend(composer_sheet_data.error_strings)
+                for row in composer_sheet_data.rows:
+                    if len(row) > 1:
+                        composer_string = row[0]
+                        specialists = row[1]
+                        alternate_composer_names = []
+                        if len(row) > 2:
+                            names = row[2].split("/") 
+                            for name in names:
+                                alternate_composer_names.append(name.strip())
+                        notes = "" 
+                        if len(row) > 3:
+                            notes = row[3]
+                        specialist_entries.append(SpecialistEntry(specialists, notes, "", [], composer_string, alternate_composer_names, "", []))
 
-            source_sheet_data = await get_raw_sheet_data(SPECIALISTS_SPREADSHEET_ID, "Source Strict Rules", 3, 'D', CREDENTIALS)
-            for row in source_sheet_data:
-                if len(row) > 1:
-                    source_string = row[0]
-                    specialists = row[1]
-                    alternate_source_names = []
-                    if len(row) > 2:
-                        names = row[2].split("/") 
-                        for name in names:
-                            alternate_source_names.append(name.strip())
-                    notes = "" 
-                    if len(row) > 3:
-                        notes = row[3]
-                    specialist_entries.append(SpecialistEntry(specialists, notes, "", [], "", [], source_string, alternate_source_names))
+            if not len(error_strings):
+                source_sheet_data = await get_raw_sheet_data(SPECIALISTS_SPREADSHEET_ID, "Source Strict Rules", 3, 'D', CREDENTIALS)
+                error_strings.extend(source_sheet_data.error_strings)
+                for row in source_sheet_data.rows:
+                    if len(row) > 1:
+                        source_string = row[0]
+                        specialists = row[1]
+                        alternate_source_names = []
+                        if len(row) > 2:
+                            names = row[2].split("/") 
+                            for name in names:
+                                alternate_source_names.append(name.strip())
+                        notes = "" 
+                        if len(row) > 3:
+                            notes = row[3]
+                        specialist_entries.append(SpecialistEntry(specialists, notes, "", [], "", [], source_string, alternate_source_names))
 
             source_exclusions: list[SourceExclusion] = []
-            source_exclusion_sheet_data = await get_raw_sheet_data(SPECIALISTS_SPREADSHEET_ID, "Source Exclusions", 3, 'F', CREDENTIALS)
-            for row in source_exclusion_sheet_data:
-                if len(row) > 1 and len(row[1]):
-                    track_title = row[0] 
-                    game_title = row[1]
-                    skip_database_search = False
-                    if len(row) > 2:
-                        skip_database_search = (row[2] == 'TRUE')
-                    skip_youtube_search_link = False
-                    if len(row) > 3:
-                        skip_youtube_search_link = (row[3] == 'TRUE')
-                    no_results_message = ""
-                    if len(row) > 4:
-                        no_results_message = row[4]
-                    notes = ""
-                    if len(row) > 5:
-                        notes = row[5]
-                    source_exclusions.append(SourceExclusion(track_title, game_title, skip_database_search, skip_youtube_search_link, no_results_message, notes))
+            if not len(error_strings):
+                source_exclusion_sheet_data = await get_raw_sheet_data(SPECIALISTS_SPREADSHEET_ID, "Source Exclusions", 3, 'F', CREDENTIALS)
+                error_strings.extend(source_exclusion_sheet_data.error_strings)
+                for row in source_exclusion_sheet_data.rows:
+                    if len(row) > 1 and len(row[1]):
+                        track_title = row[0] 
+                        game_title = row[1]
+                        skip_database_search = False
+                        if len(row) > 2:
+                            skip_database_search = (row[2] == 'TRUE')
+                        skip_youtube_search_link = False
+                        if len(row) > 3:
+                            skip_youtube_search_link = (row[3] == 'TRUE')
+                        no_results_message = ""
+                        if len(row) > 4:
+                            no_results_message = row[4]
+                        notes = ""
+                        if len(row) > 5:
+                            notes = row[5]
+                        source_exclusions.append(SourceExclusion(track_title, game_title, skip_database_search, skip_youtube_search_link, no_results_message, notes))
 
-            result = QoCSheetData(specialist_entries, source_exclusions)
-            QOC_SHEET_DATA = result
+            if not len(error_strings):
+                qoc_sheet_data = QoCSheetData(specialist_entries, source_exclusions, error_strings)
+                QOC_SHEET_DATA = qoc_sheet_data 
 
-    return result
+    return qoc_sheet_data 
 
 
 def search_specialists(submissionText: str, qoc_sheet_data: QoCSheetData, guild: Guild) -> str:
