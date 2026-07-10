@@ -2603,11 +2603,6 @@ async def playlistsort(args: list[str], command_context: CommandContext):
         start_button_label = "Get videos and create spreadsheet"
         start_buttn_style = discord.ButtonStyle.green
 
-    test_cell = Cell(text="test", is_bold=True, font_size=24, background_color=ColorRGBFloat(1, 0, 1))
-
-    request = parse_update_cells_request(sheet_info.spreadsheet_tab_id, [[test_cell]], 7, 2)
-
-    await send_sheet_batch_requests(PLAYLISTS_SPREADSHEET_ID, [request], credentials)
 
     class SortView(discord.ui.View):
         def __init__(self):
@@ -2623,20 +2618,45 @@ async def playlistsort(args: list[str], command_context: CommandContext):
 
 
     class StartButton(discord.ui.View):
-        def __init__(self, youtube_playlist: YouTubePlaylist, sheet_exists: bool):
-            super().__init__()
-            self.youtube_playlist = youtube_playlist
-            self.sheet_exists = sheet_exists 
-
         @discord.ui.button(label=start_button_label, style=start_buttn_style)
         async def button(self, interaction: discord.Interaction, button: discord.ui.Button):
-            self.value = True
-            button.disabled = True
-            view = SortView()
-            await interaction.response.edit_message(content="Click to sort!", view=view)
-            await view.wait()
+            try:
+                waiting_message = "Getting videos and creating sheet. This may take a moment..."
+                if sheet_info.sheet_exists:
+                    waiting_message = "Getting videos and sorting sheet. This may take a moment.."
+                await interaction.response.edit_message(content=waiting_message, view=None)
 
-    view = StartButton(youtube_playlist, sheet_info.sheet_exists)
+                async with command_context.channel.typing():
+                    return_message = ""
+                    error_strings = [] 
+                    if sheet_info.sheet_exists:
+                        ##TODO: (ahmayk) other path
+                        pass
+                    else:
+                        create_sheet_request = parse_create_sheet_request(youtube_playlist.title)
+                        batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, [create_sheet_request], credentials)
+                        error_strings.extend(batch_update_response.error_strings)
+                        if not len(error_strings):
+                            properties = batch_update_response.response['replies'][0]['addSheet']['properties']
+                            new_sheet_id = properties['sheetId']
+                            new_sheet_url = f'https://docs.google.com/spreadsheets/d/{PLAYLISTS_SPREADSHEET_ID}?gid={new_sheet_id}'
+
+                            test_cell = Cell(text="test", is_bold=True, font_size=24, background_color=ColorRGBFloat(1, 0, 1))
+                            update_cells_request = parse_update_cells_request(new_sheet_id, [[test_cell]], 7, 2)
+                            batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, [update_cells_request], credentials)
+                            error_strings.extend(batch_update_response.error_strings)
+                            if not len(error_strings):
+                                return_message = f"New sheet created! {new_sheet_url}"
+
+                    view = SortView()
+                    await interaction.message.edit(content=return_message, view=view)
+
+                await view.wait()
+            except Exception as error:
+                await send_crash(f'ERROR on playlistsort button:', error, interaction.channel)
+
+
+    view = StartButton()
     await command_context.channel.send(return_message, view=view)
     await view.wait()
 

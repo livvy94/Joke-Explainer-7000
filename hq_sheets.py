@@ -75,6 +75,18 @@ async def get_raw_sheet_data(spreadsheet_id: str, sheet_name: str, row_start: in
 
     return RawSheetData(cells, error_strings) 
 
+
+def parse_create_sheet_request(name: str) -> dict[str, typing.Any]:
+    result = {
+        'addSheet': {
+            'properties': {
+                'title': name,
+            }
+        }
+    }
+    return result
+
+
 class ColorRGBFloat(NamedTuple):
     r: float
     g: float
@@ -133,15 +145,18 @@ def parse_update_cells_request(spreadsheet_tab_id: int, cell_rows: list[list[Cel
 
     return result
 
+class BatchUpdateResponse(NamedTuple):
+    response: typing.Any | None
+    error_strings: list[str]
 
-async def send_sheet_batch_requests(spreadsheet_id: str, requests: dict[str, typing.Any],
-                                    credentials: Credentials) -> list[str]:
-
+async def send_sheet_batch_update(spreadsheet_id: str, requests: dict[str, typing.Any],
+                                    credentials: Credentials) -> BatchUpdateResponse:
+    response = None
     error_strings: list[str] = []
         
     try:
         service = build("sheets", "v4", credentials=credentials)
-        output = (
+        response = (
             service.spreadsheets()
             .batchUpdate(
                 spreadsheetId=spreadsheet_id,
@@ -151,7 +166,8 @@ async def send_sheet_batch_requests(spreadsheet_id: str, requests: dict[str, typ
         )
     except Exception as error:
         await log_exception(f"Failed to send google sheets batch requests", error, error_strings, True)
-    return error_strings 
+
+    return BatchUpdateResponse(response, error_strings) 
 
 
 async def clear_cells(spreadsheet_id: str, sheet_name: str, 
