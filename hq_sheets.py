@@ -64,27 +64,79 @@ async def get_raw_sheet_data(spreadsheet_id: str, sheet_name: str, row_start: in
 
     return RawSheetData(cells, error_strings) 
 
-async def write_data_to_sheet(spreadsheet_id: str, sheet_name: str, sheet_cells: list[list[str]],
-                              starting_cell: str, credentials: Credentials) -> bool:
-    result = False
+class ColorRGBFloat(NamedTuple):
+    r: float
+    g: float
+    b: float
+
+class Cell(NamedTuple):
+    text: str = "" 
+    font_size: int = 0
+    is_bold: bool = False
+    background_color: ColorRGBFloat = ColorRGBFloat(0, 0, 0)
+
+async def write_data_to_sheet(spreadsheet_id: str, sheet_name: str, cell_rows: list[list[Cell]],
+                              starting_row_index: int, starting_column_index: int,
+                              credentials: Credentials) -> list[str]:
+    error_strings: list[str] = []
+
+    cell_datas = []
+    for cell_row in cell_rows:
+        cell_data_row = []
+        for cell in cell_row:
+            cell_data: dict[str, typing.Any] = {"userEnteredValue": {"stringValue": cell.text }}
+            cell_format: dict[str, typing.Any] = {}
+            if cell.font_size or cell.is_bold:
+                cell_format["textFormat"] = {}
+                if cell.font_size:
+                    cell_format["textFormat"]["fontSize"] = cell.font_size
+                if cell.is_bold:
+                    cell_format["textFormat"]["bold"] = cell.is_bold
+
+            if (cell.background_color.r
+                or cell.background_color.g
+                or cell.background_color.b
+            ):
+                cell_format["backgroundColorStyle"] = {
+                    "rgbColor": {
+                        "red": cell.background_color.r,
+                        "green": cell.background_color.g,
+                        "blue": cell.background_color.b
+                    }
+                }
+            if len(cell_format):
+                cell_data["userEnteredFormat"] = cell_format
+            cell_data_row.append(cell_data)
+        cell_datas.append(cell_data_row)
+
+    body = {
+        "requests": [{
+            "updateCells": {
+                "rows": {
+                    "values": cell_datas 
+                },
+                "fields": "*",
+                "start": {
+                    "rowIndex": starting_row_index,
+                    "columnIndex": starting_column_index
+                }
+            }
+        }]
+    }
+        
     try:
         service = build("sheets", "v4", credentials=credentials)
         output = (
             service.spreadsheets()
-            .values()
-            .update(
+            .batchUpdate(
                 spreadsheetId=spreadsheet_id,
-                range=f"{sheet_name}!{starting_cell}",
-                valueInputOption="RAW",
-                body={"majorDimension": "COLUMNS", "values": sheet_cells},
+                body=body
             )
             .execute()
         )
-        print(f"{output.get('updatedCells')} cells updated.")
-        result = True
     except Exception as error:
-        await log_exception(f"Failed to write google sheet data into {sheet_name}", error, [], True)
-    return result
+        await log_exception(f"Failed to write google sheet data into {sheet_name}", error, error_strings, True)
+    return error_strings 
 
 
 async def clear_cells(spreadsheet_id: str, sheet_name: str, 

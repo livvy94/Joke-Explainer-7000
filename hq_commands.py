@@ -2604,6 +2604,9 @@ async def playlistsort(args: list[str], command_context: CommandContext):
         start_button_label = "Create spreadsheet"
         start_buttn_style = discord.ButtonStyle.green
 
+    test_cell = Cell(text="test", is_bold=True, font_size=18, background_color=ColorRGBFloat(1, 0, 0))
+
+    await write_data_to_sheet(PLAYLISTS_SPREADSHEET_ID, "deltarune", [[test_cell]], 7, 2, credentials)
 
     class SortView(discord.ui.View):
         def __init__(self):
