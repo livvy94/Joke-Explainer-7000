@@ -2580,33 +2580,34 @@ async def playlistsort(args: list[str], command_context: CommandContext):
         return await send(f"Invalid playlist link: `{args[0]}`. {instructions}", command_context.channel)
 
     youtube_playlist = None
-    sheet_exists = False
+    sheet_info = SheetInfo(False, 0, "", [])
     async with command_context.channel.typing():
         youtube_playlist = await get_playlist_details(playlist_id, YOUTUBE_API_KEY)
         if len(youtube_playlist.error_strings):
             return await send_if_errors(f"Failed to get info from YouTube about `{args[0]}`", youtube_playlist.error_strings, command_context.channel)
 
         credentials = await refresh_credentials()
-        bool_and_errors = await does_sheet_exist(PLAYLISTS_SPREADSHEET_ID, youtube_playlist.title, credentials)
-        if len(bool_and_errors.error_strings):
-            return await send_if_errors(f"Failed to check if sheet exists for `{youtube_playlist.title}`", bool_and_errors.error_strings, command_context.channel)
-        sheet_exists = bool_and_errors.result
+        sheet_info = await get_sheet_info(PLAYLISTS_SPREADSHEET_ID, youtube_playlist.title, credentials)
+        if len(sheet_info.error_strings):
+            return await send_if_errors(f"Failed to get sheet info for `{youtube_playlist.title}`", sheet_info.error_strings, command_context.channel)
 
     return_message = "" 
     start_button_label = ""
     return_message += f"\nThe **{youtube_playlist.title}** playlist has **{youtube_playlist.video_count} videos**."
-    if sheet_exists:
-        return_message += f"\nA spreadsheet exists for **{youtube_playlist.title}**. Press the button to sort the track names in the spreadsheet using videos currently on the channel!" 
-        start_button_label = "Open spreadsheet and sort track names"
+    if sheet_info.sheet_exists:
+        return_message += f"\nA spreadsheet exists for **{youtube_playlist.title}** {sheet_info.spreadsheet_url}.\nPress the button to sort the track names in the spreadsheet using videos currently on the channel!" 
+        start_button_label = "Get videos and sort track names"
         start_buttn_style = discord.ButtonStyle.primary
     else:
-        return_message += f"\nNo spreadsheet found for **{youtube_playlist.title}**. Press the button to create one using videos currently on the channel!" 
-        start_button_label = "Create spreadsheet"
+        return_message += f"\nNo spreadsheet found for **{youtube_playlist.title}**.\nPress the button to create one using videos currently on the channel!" 
+        start_button_label = "Get videos and create spreadsheet"
         start_buttn_style = discord.ButtonStyle.green
 
-    test_cell = Cell(text="test", is_bold=True, font_size=18, background_color=ColorRGBFloat(1, 0, 0))
+    test_cell = Cell(text="test", is_bold=True, font_size=24, background_color=ColorRGBFloat(1, 0, 1))
 
-    await write_data_to_sheet(PLAYLISTS_SPREADSHEET_ID, "deltarune", [[test_cell]], 7, 2, credentials)
+    request = parse_update_cells_request(sheet_info.spreadsheet_tab_id, [[test_cell]], 7, 2)
+
+    await send_sheet_batch_requests(PLAYLISTS_SPREADSHEET_ID, [request], credentials)
 
     class SortView(discord.ui.View):
         def __init__(self):
@@ -2635,8 +2636,7 @@ async def playlistsort(args: list[str], command_context: CommandContext):
             await interaction.response.edit_message(content="Click to sort!", view=view)
             await view.wait()
 
-
-    view = StartButton(youtube_playlist, sheet_exists)
+    view = StartButton(youtube_playlist, sheet_info.sheet_exists)
     await command_context.channel.send(return_message, view=view)
     await view.wait()
 

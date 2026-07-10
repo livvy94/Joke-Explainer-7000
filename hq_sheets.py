@@ -3,6 +3,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 from bot_secrets import SPECIALISTS_SPREADSHEET_ID, PLAYLISTS_SPREADSHEET_ID
 from hq_strings import * 
@@ -13,9 +14,17 @@ from discord import Guild
 from typing import NamedTuple
 from datetime import datetime, timezone
 
-async def does_sheet_exist(spreadsheet_id: str, sheet_name: str, credentials: Credentials) -> BoolAndErrors: 
+class SheetInfo(NamedTuple):
+    sheet_exists: bool
+    spreadsheet_tab_id: str
+    spreadsheet_url: str
+    error_strings: list[str]
+
+async def get_sheet_info(spreadsheet_id: str, sheet_name: str, credentials: Credentials) -> SheetInfo: 
+    sheet_exists = False
+    spreadsheet_tab_id = ""
+    spreadsheet_url = ""
     error_strings: list[str] = []
-    result = False
     try:
         service = build("sheets", "v4", credentials=credentials)
         output = (
@@ -26,12 +35,14 @@ async def does_sheet_exist(spreadsheet_id: str, sheet_name: str, credentials: Cr
             )
             .execute()
         )
-        result = True 
+        sheet_exists = True
+        spreadsheet_tab_id = output['sheets'][0]['properties']['sheetId']
+        spreadsheet_url = output['spreadsheetUrl']
     except Exception as error:
-        if "Unable to parse range" not in error.reason:
+        if not isinstance(error, HttpError) or "Unable to parse range" not in error.reason:
             await log_exception(f"Google sheet API data call failed for {sheet_name}", error, error_strings, True)
 
-    return BoolAndErrors(result, error_strings)
+    return SheetInfo(sheet_exists, spreadsheet_tab_id, spreadsheet_url, error_strings)
 
 
 class RawSheetData(NamedTuple):
@@ -75,11 +86,8 @@ class Cell(NamedTuple):
     is_bold: bool = False
     background_color: ColorRGBFloat = ColorRGBFloat(0, 0, 0)
 
-async def write_data_to_sheet(spreadsheet_id: str, sheet_name: str, cell_rows: list[list[Cell]],
-                              starting_row_index: int, starting_column_index: int,
-                              credentials: Credentials) -> list[str]:
-    error_strings: list[str] = []
-
+def parse_update_cells_request(spreadsheet_tab_id: int, cell_rows: list[list[Cell]], 
+                               starting_row_index: int, starting_column_index: int) -> dict[str, typing.Any]:
     cell_datas = []
     for cell_row in cell_rows:
         cell_data_row = []
@@ -109,20 +117,27 @@ async def write_data_to_sheet(spreadsheet_id: str, sheet_name: str, cell_rows: l
             cell_data_row.append(cell_data)
         cell_datas.append(cell_data_row)
 
-    body = {
-        "requests": [{
-            "updateCells": {
-                "rows": {
-                    "values": cell_datas 
-                },
-                "fields": "*",
-                "start": {
-                    "rowIndex": starting_row_index,
-                    "columnIndex": starting_column_index
-                }
+    result = {
+        "updateCells": {
+            "rows": {
+                "values": cell_datas 
+            },
+            "fields": "*",
+            "start": {
+                "sheetId": spreadsheet_tab_id,
+                "rowIndex": starting_row_index,
+                "columnIndex": starting_column_index
             }
-        }]
+        }
     }
+
+    return result
+
+
+async def send_sheet_batch_requests(spreadsheet_id: str, requests: dict[str, typing.Any],
+                                    credentials: Credentials) -> list[str]:
+
+    error_strings: list[str] = []
         
     try:
         service = build("sheets", "v4", credentials=credentials)
@@ -130,12 +145,12 @@ async def write_data_to_sheet(spreadsheet_id: str, sheet_name: str, cell_rows: l
             service.spreadsheets()
             .batchUpdate(
                 spreadsheetId=spreadsheet_id,
-                body=body
+                body = {"requests": requests}
             )
             .execute()
         )
     except Exception as error:
-        await log_exception(f"Failed to write google sheet data into {sheet_name}", error, error_strings, True)
+        await log_exception(f"Failed to send google sheets batch requests", error, error_strings, True)
     return error_strings 
 
 
