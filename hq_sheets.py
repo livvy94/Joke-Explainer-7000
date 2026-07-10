@@ -92,16 +92,39 @@ class ColorRGBFloat(NamedTuple):
     g: float
     b: float
 
+class WRAP_STRATEGY(Enum):
+    NULL = 0 
+    OVERFLOW_CELL = "OVERFLOW_CELL"
+    CLIP = "CLIP"
+    WRAP = "WRAP"
+
 class Cell(NamedTuple):
     text: str = "" 
     font_size: int = 0
     is_bold: bool = False
     background_color: ColorRGBFloat = ColorRGBFloat(0, 0, 0)
+    wrap_strategy: WRAP_STRATEGY = WRAP_STRATEGY.NULL 
+
+def cell_bulk_create(texts: list[str], format_cell: Cell) -> list[Cell]:
+    result = []
+    for text in texts:
+        result.append(
+            Cell(
+                text=text,
+                font_size=format_cell.font_size,
+                is_bold=format_cell.is_bold,
+                background_color=format_cell.background_color,
+                wrap_strategy=format_cell.wrap_strategy,
+            )
+        )
+    return result
+
 
 def parse_update_cells_request(spreadsheet_tab_id: int, cell_rows: list[list[Cell]], 
-                               starting_row_index: int, starting_column_index: int) -> dict[str, typing.Any]:
-    cell_datas = []
-    for cell_row in cell_rows:
+                               starting_row_index: int, starting_column_index: int) -> list[dict[str, typing.Any]]:
+    requests = []
+
+    for i, cell_row in enumerate(cell_rows):
         cell_data_row = []
         for cell in cell_row:
             cell_data: dict[str, typing.Any] = {"userEnteredValue": {"stringValue": cell.text }}
@@ -124,26 +147,30 @@ def parse_update_cells_request(spreadsheet_tab_id: int, cell_rows: list[list[Cel
                         "blue": cell.background_color.b
                     }
                 }
+
+            if cell.wrap_strategy:
+                cell_format["wrapStrategy"] = str(cell.wrap_strategy.value)
+
             if len(cell_format):
                 cell_data["userEnteredFormat"] = cell_format
             cell_data_row.append(cell_data)
-        cell_datas.append(cell_data_row)
 
-    result = {
-        "updateCells": {
-            "rows": {
-                "values": cell_datas 
-            },
-            "fields": "*",
-            "start": {
-                "sheetId": spreadsheet_tab_id,
-                "rowIndex": starting_row_index,
-                "columnIndex": starting_column_index
+        request = {
+            "updateCells": {
+                "rows": {
+                    "values": cell_data_row
+                },
+                "fields": "*",
+                "start": {
+                    "sheetId": spreadsheet_tab_id,
+                    "rowIndex": starting_row_index + i,
+                    "columnIndex": starting_column_index
+                }
             }
         }
-    }
+        requests.append(request)
 
-    return result
+    return requests 
 
 class BatchUpdateResponse(NamedTuple):
     response: typing.Any | None

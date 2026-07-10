@@ -2641,9 +2641,35 @@ async def playlistsort(args: list[str], command_context: CommandContext):
                             new_sheet_id = properties['sheetId']
                             new_sheet_url = f'https://docs.google.com/spreadsheets/d/{PLAYLISTS_SPREADSHEET_ID}?gid={new_sheet_id}'
 
-                            test_cell = Cell(text="test", is_bold=True, font_size=24, background_color=ColorRGBFloat(1, 0, 1))
-                            update_cells_request = parse_update_cells_request(new_sheet_id, [[test_cell]], 7, 2)
-                            batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, [update_cells_request], credentials)
+                            cell_rows = [[], [], []]
+                            cell_rows[0].append(Cell(text=youtube_playlist.title, font_size=32))
+                            texts = [
+                                "Track Name Order",
+                                "Alternate Track Name"
+                            ]
+                            cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(0.811, 0.886, 0.952), wrap_strategy=WRAP_STRATEGY.WRAP)))
+                            texts = [
+                                "Unmatched",
+                                "# Now",
+                                "Sorted",
+                                "Last Sheet Update Time"
+                            ]
+                            cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(0.866, 0.494, 0.419), wrap_strategy=WRAP_STRATEGY.WRAP)))
+                            texts = [
+                                "List track names HERE without their mixnames to define the ordering of the OST. Capitalization matters! Color does not.",
+                                "If a track has an alternate spelling, list it here. It will be sorted alongside the primary track name on the left."
+                            ]
+                            cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.952, 0.952, 0.952), wrap_strategy=WRAP_STRATEGY.WRAP)))
+                            texts = [
+                                "AUTO POPULATED COLUMN. Video titles that were not matched to a track in the \"Track Name Order\" row. When this column is empty, all videos are properly sorted!",
+                                "Current order",
+                                "AUTO POPULATED COLUMN. The resulting sorted order. Ordered as: (1) Matched tracks sorted (2) Unmatched tracks unsorted (3) Private videos",
+                                ""
+                            ]
+                            cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.917, 0.6, 0.6), wrap_strategy=WRAP_STRATEGY.WRAP)))
+
+                            requests = parse_update_cells_request(new_sheet_id, cell_rows, 0, 0)
+                            batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, requests, credentials)
                             error_strings.extend(batch_update_response.error_strings)
                             if not len(error_strings):
                                 return_message = f"New sheet created! {new_sheet_url}"
