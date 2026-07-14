@@ -2,6 +2,7 @@
 import discord
 from discord import TextChannel, Thread, Guild
 from datetime import datetime, timezone, timedelta
+from dateutil import tz
 
 from bot_secrets import YOUTUBE_API_KEY, YOUTUBE_CHANNEL_NAME, PLAYLISTS_SPREADSHEET_ID
 from hq_qoc import ffmpegExists, getFileMetadataMutagen, getFileMetadataFfprobe 
@@ -2563,6 +2564,161 @@ async def stats(args: list[str], command_context: CommandContext):
     await send_and_if_errors(ret, "Stats may be inaccurate, errors during counting.", error_strings, command_context.channel)
 
 
+import shelve 
+FOO_DATABASE = shelve.open("foo", writeback=True)
+DELTARUNE_KEY = "DELTARUNE"
+
+def rip_title_matches_rip_title(video_track_name: str, official_track_name: str) -> bool:
+    result = False
+    if (
+        official_track_name == video_track_name
+        or (
+            len(video_track_name) > len(official_track_name) 
+            and video_track_name.startswith(official_track_name) 
+            and (video_track_name[len(official_track_name):].startswith(" (")
+        ))
+    ): 
+        result = True
+    return result 
+
+
+class SortPlaylistVideosResult(NamedTuple):
+    matched_sorted: list[PlaylistVideo]
+    unmatched: list[PlaylistVideo]
+    private: list[PlaylistVideo]
+    requests: list[dict[str, typing.Any]]
+    error_strings: list[str]
+
+async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_videos: list[PlaylistVideo], 
+                               credentials: Credentials) -> SortPlaylistVideosResult:
+
+    error_strings: list[str] = []
+
+    class OfficialName(NamedTuple):
+        name: str
+        alt: str
+
+    official_names: list[OfficialName] = [] 
+    sheet_data = RawSheetData([[]], []) 
+    if credentials and credentials.valid:
+        sheet_data = await get_raw_sheet_data(PLAYLISTS_SPREADSHEET_ID, sheet_name, 4, 'b', credentials)
+        error_strings.extend(sheet_data.error_strings)
+
+    if not len(error_strings):
+        for row in sheet_data.rows:
+            if len(row):
+                name = row[0]
+                alt = ""
+                if len(row) >= 2:
+                    alt = row[1]
+                official_names.append(OfficialName(name, alt))
+    
+    class TrackAndMixname(NamedTuple):
+        track: str
+        mixname: str
+        playlist_video: PlaylistVideo
+
+    matched_sorted: list[PlaylistVideo] = []
+    unmatched: list[PlaylistVideo] = []
+    private : list[PlaylistVideo] = []
+    requests: list[dict[str, typing.Any]] = []
+
+    if not len(error_strings):
+        sort_dict: dict[OfficialName, list[TrackAndMixname]] = {} 
+        for playlist_video in playlist_videos:
+            if playlist_video.isPrivate:
+                private.append(playlist_video)
+            else:
+                video_track_name = playlist_video.title.replace(f" - {playlist_video.title}", "")
+                matched_official_name = OfficialName("", "") 
+                is_matched_alt = False
+
+                for official_name in official_names:
+                    if (
+                        (len(official_name.name) > len(matched_official_name.name)) 
+                        and rip_title_matches_rip_title(video_track_name, official_name.name)
+                    ): 
+                        matched_official_name = official_name
+
+                    if ( 
+                        len(official_name.alt)
+                        and (len(official_name.alt) > len(matched_official_name.alt)) 
+                        and rip_title_matches_rip_title(video_track_name, official_name.alt)
+                    ):
+                        matched_official_name = official_name
+                        is_matched_alt = True
+
+                if len(matched_official_name.name):
+                    if matched_official_name not in sort_dict:
+                        sort_dict[matched_official_name] = []
+                    track = matched_official_name.name
+                    if is_matched_alt:
+                        track = matched_official_name.alt
+                    mixname = playlist_video.title[len(track) + 1:]
+                    sort_dict[matched_official_name].append(TrackAndMixname(track, mixname, playlist_video))
+                else:
+                    unmatched.append(playlist_video)
+        
+        for official_name in official_names:
+            if official_name in sort_dict:
+                sort_dict[official_name].sort(key=lambda t: t.mixname.lower())
+                if len(sort_dict[official_name]) > 1:
+                    mixless = sort_dict[official_name].pop()
+                    sort_dict[official_name].insert(0, mixless)
+                for track_and_title in sort_dict[official_name]:
+                    matched_sorted.append(track_and_title.playlist_video)
+
+
+        cell_rows: list[list[Cell]] = [[], []]
+
+        default_cell = Cell(background_color=ColorRGBFloat(0.95686, 0.8, 0.8))
+
+        resulting_order: list[PlaylistVideo] = []
+        resulting_order.extend(matched_sorted) 
+        unmatched_index_start = len(resulting_order)
+        resulting_order.extend(unmatched) 
+        private_index_start = len(resulting_order)
+        resulting_order.extend(private) 
+
+        date = datetime.now(tz=tz.UTC)
+        date = date.astimezone(tz.gettz('America/Los_Angeles'))
+        timestring = date.strftime("%H:%M:%S (PST) - %d/%m/%Y") 
+
+        count_header = [f'COUNT: {len(unmatched)}', "", f'COUNT: {len(resulting_order)}', timestring]
+        cell_rows[0] = cell_bulk_create(count_header, Cell(is_bold=True, background_color=ColorRGBFloat(0.95686, 0.8, 0.8)))
+        cell_rows[1] = [default_cell, default_cell, default_cell]
+
+        row_index = 2
+        for playlist_video in unmatched:
+            video_track_name = playlist_video.title.replace(f" - {playlist_video.title}", "")
+            cell_rows.append([])
+            cell_rows[row_index] = cell_bulk_create([f'{video_track_name}'], Cell(is_bold=True, background_color=ColorRGBFloat(1, 0.32, 0.32)))
+            row_index += 1
+
+        row_index = 2
+
+        for i, playlist_video in enumerate(resulting_order):
+            if len(cell_rows) < row_index:
+                cell_rows.append([default_cell])
+
+            cell_format = Cell(background_color=ColorRGBFloat(0.713, 0.843, 0.658)) 
+            if i >= private_index_start: 
+                cell_format = Cell(background_color=ColorRGBFloat(0.7, 0.7, 0.7))
+            if i >= unmatched_index_start:
+                cell_format = Cell(background_color=ColorRGBFloat(1, 0.32, 0.32))
+
+            video_track_name = playlist_video.title.replace(" - DELTARUNE", "")
+            strings = [f'{(playlist_video.playlist_position + 1):03}', f'{video_track_name}'] 
+            cell_rows[row_index].extend(cell_bulk_create(strings, cell_format))
+            row_index += 1
+
+        requests = parse_update_cells_requests(spreadsheet_tab_id, cell_rows, 3, 2)
+
+    return SortPlaylistVideosResult(matched_sorted, unmatched, private, requests, error_strings) 
+
+
+
+
 @command(
     command_type=CommandType.PLAYLIST,
     public=True,
@@ -2629,55 +2785,72 @@ async def playlistsort(args: list[str], command_context: CommandContext):
                 async with command_context.channel.typing():
                     return_message = ""
                     error_strings = [] 
-                    if sheet_info.sheet_exists:
-                        ##TODO: (ahmayk) other path
-                        pass
+
+                    ##TODO: (Ahmayk) cache purposefully and repull if outdated (prevent spamming same playlist wasting credits)
+                    playlist_videos: list[PlaylistVideo] = [] 
+                    if playlist_id in FOO_DATABASE:
+                        playlist_videos = FOO_DATABASE[playlist_id]
                     else:
-                        create_sheet_request = parse_create_sheet_request(youtube_playlist.title)
-                        batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, [create_sheet_request], credentials)
-                        error_strings.extend(batch_update_response.error_strings)
-                        if not len(error_strings) and batch_update_response.response:
-                            properties = batch_update_response.response['replies'][0]['addSheet']['properties']
-                            new_sheet_id = properties['sheetId']
-                            new_sheet_url = f'https://docs.google.com/spreadsheets/d/{PLAYLISTS_SPREADSHEET_ID}?gid={new_sheet_id}'
+                        playlist_videos_and_errors = await get_playlist_videos(playlist_id, YOUTUBE_API_KEY)
+                        playlist_videos = playlist_videos_and_errors.videos
+                        error_strings.extend(playlist_videos_and_errors.error_strings)
+                        FOO_DATABASE[playlist_id] = playlist_videos 
+                        FOO_DATABASE.sync()
 
-                            cell_rows: list[list[Cell]] = [[], [], []]
-                            cell_rows[0].append(Cell(text=youtube_playlist.title, font_size=32))
-                            texts = [
-                                "Track Name Order",
-                                "Alternate Track Name"
-                            ]
-                            cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(0.811, 0.886, 0.952), wrap_strategy=WRAP_STRATEGY.WRAP)))
-                            texts = [
-                                "Unmatched",
-                                "# Now",
-                                "Sorted",
-                                "Last Sheet Update Time"
-                            ]
-                            cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(0.866, 0.494, 0.419), wrap_strategy=WRAP_STRATEGY.WRAP)))
-                            texts = [
-                                "List track names HERE without their mixnames to define the ordering of the OST. Capitalization matters! Color does not.",
-                                "If a track has an alternate spelling, list it here. It will be sorted alongside the primary track name on the left."
-                            ]
-                            cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.952, 0.952, 0.952), wrap_strategy=WRAP_STRATEGY.WRAP)))
-                            texts = [
-                                "AUTO POPULATED COLUMN.\nVideo titles that were not matched to a track in the \"Track Name Order\" row. When this column is empty, all videos are properly sorted!",
-                                "Current order",
-                                "AUTO POPULATED COLUMN.\nThe resulting sorted order. Ordered as: (1) Matched tracks sorted (2) Unmatched tracks unsorted (3) Private videos",
-                                "Last time the bot has sorted the playlist's videos."
-                            ]
-                            cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.917, 0.6, 0.6), wrap_strategy=WRAP_STRATEGY.WRAP)))
-
-                            requestes = parse_update_cells_request(new_sheet_id, cell_rows, 0, 0)
-
-                            requestes.append(parse_update_dimension_properties_request(new_sheet_id, 300, SHEET_DIMENSION.COLUMNS, 0, 1))
-                            requestes.append(parse_update_dimension_properties_request(new_sheet_id, 325, SHEET_DIMENSION.COLUMNS, 2, 5))
-                            requestes.append(parse_update_dimension_properties_request(new_sheet_id, 55,  SHEET_DIMENSION.COLUMNS, 3, 3))
-
-                            batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, requestes, credentials)
+                    if not len(error_strings):
+                        if sheet_info.sheet_exists:
+                            ##TODO: (ahmayk) other path
+                            pass
+                        else:
+                            create_sheet_request = parse_create_sheet_request(youtube_playlist.title)
+                            batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, [create_sheet_request], credentials)
                             error_strings.extend(batch_update_response.error_strings)
-                            if not len(error_strings):
-                                return_message = f"New sheet created! {new_sheet_url}"
+                            if not len(error_strings) and batch_update_response.response:
+                                properties = batch_update_response.response['replies'][0]['addSheet']['properties']
+                                new_sheet_id = properties['sheetId']
+                                new_sheet_url = f'https://docs.google.com/spreadsheets/d/{PLAYLISTS_SPREADSHEET_ID}?gid={new_sheet_id}'
+
+                                cell_rows: list[list[Cell]] = [[], [], []]
+                                cell_rows[0].append(Cell(text=youtube_playlist.title, font_size=32))
+                                texts = [
+                                    "Track Name Order",
+                                    "Alternate Track Name"
+                                ]
+                                cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(0.811, 0.886, 0.952), wrap_strategy=WRAP_STRATEGY.WRAP)))
+                                texts = [
+                                    "Unmatched",
+                                    "# Now",
+                                    "Resulting Order",
+                                    "Last Sheet Update Time"
+                                ]
+                                cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(0.866, 0.494, 0.419), wrap_strategy=WRAP_STRATEGY.WRAP)))
+                                texts = [
+                                    "List track names HERE without their mixnames to define the ordering of the OST. Capitalization matters! Color does not.",
+                                    "If a track has an alternate spelling, list it here. It will be sorted alongside the primary track name on the left."
+                                ]
+                                cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.952, 0.952, 0.952), wrap_strategy=WRAP_STRATEGY.WRAP)))
+                                texts = [
+                                    "AUTO POPULATED COLUMN.\nVideo titles that were not matched to a track in the \"Track Name Order\" row. When this column is empty, all videos are properly sorted!",
+                                    "Current order",
+                                    "AUTO POPULATED COLUMN.\nThe resulting sorted order. Ordered as: (1) (Green) Matched tracks sorted (2) (Red) Unmatched tracks unsorted (3) (Gray) Private videos",
+                                    "Last time the bot has sorted the playlist's videos."
+                                ]
+                                cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.917, 0.6, 0.6), wrap_strategy=WRAP_STRATEGY.WRAP)))
+
+                                requests = parse_update_cells_requests(new_sheet_id, cell_rows, 0, 0)
+
+                                requests.append(parse_update_dimension_properties_request(new_sheet_id, 300, SHEET_DIMENSION.COLUMNS, 0, 1))
+                                requests.append(parse_update_dimension_properties_request(new_sheet_id, 325, SHEET_DIMENSION.COLUMNS, 2, 5))
+                                requests.append(parse_update_dimension_properties_request(new_sheet_id, 55,  SHEET_DIMENSION.COLUMNS, 3, 3))
+
+                                sort_playlist_videos_result = await sort_playlist_videos(youtube_playlist.title, new_sheet_id, playlist_videos, credentials)
+                                requests.extend(sort_playlist_videos_result.requests)
+                                error_strings.extend(sort_playlist_videos_result.error_strings)
+
+                                batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, requests, credentials)
+                                error_strings.extend(batch_update_response.error_strings)
+                                if not len(error_strings):
+                                    return_message = f"New sheet created! {new_sheet_url}"
 
                     view = SortView()
                     await interaction.message.edit(content=return_message, view=view)

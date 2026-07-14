@@ -65,11 +65,12 @@ async def get_raw_sheet_data(spreadsheet_id: str, sheet_name: str, row_start: in
             )
             .execute()
         )
-        for rowJson in output["sheets"][0]["data"][0]["rowData"]:
-            rowList = []
-            for cell in rowJson.get("values", []):
-                rowList.append(cell.get("formattedValue", "").strip())
-            cells.append(rowList)
+        if "rowData" in output["sheets"][0]["data"][0]:
+            for rowJson in output["sheets"][0]["data"][0]["rowData"]:
+                rowList = []
+                for cell in rowJson.get("values", []):
+                    rowList.append(cell.get("formattedValue", "").strip())
+                cells.append(rowList)
     except Exception as error:
         await log_exception(f"Failed get google sheet data from {sheet_name}", error, error_strings, True)
 
@@ -119,7 +120,7 @@ def cell_bulk_create(texts: list[str], format_cell: Cell) -> list[Cell]:
     return result
 
 
-def parse_update_cells_request(spreadsheet_tab_id: int, cell_rows: list[list[Cell]], 
+def parse_update_cells_requests(spreadsheet_tab_id: int, cell_rows: list[list[Cell]], 
                                starting_row_index: int, starting_column_index: int) -> list[dict[str, typing.Any]]:
     requests = []
 
@@ -217,7 +218,7 @@ async def send_sheet_batch_update(spreadsheet_id: str, requests: list[dict[str, 
             .execute()
         )
     except Exception as error:
-        await log_exception(f"Failed to send google sheets batch requests", error, error_strings, True)
+        await log_exception(f"Sending google sheets batch requests failed", error, error_strings, True)
 
     return BatchUpdateResponse(response, error_strings) 
 
