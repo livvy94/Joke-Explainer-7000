@@ -16,13 +16,13 @@ from datetime import datetime, timezone
 
 class SheetInfo(NamedTuple):
     sheet_exists: bool
-    spreadsheet_tab_id: str
+    spreadsheet_tab_id: int
     spreadsheet_url: str
     error_strings: list[str]
 
 async def get_sheet_info(spreadsheet_id: str, sheet_name: str, credentials: Credentials) -> SheetInfo: 
     sheet_exists = False
-    spreadsheet_tab_id = ""
+    spreadsheet_tab_id = 0 
     spreadsheet_url = ""
     error_strings: list[str] = []
     try:
@@ -36,7 +36,7 @@ async def get_sheet_info(spreadsheet_id: str, sheet_name: str, credentials: Cred
             .execute()
         )
         sheet_exists = True
-        spreadsheet_tab_id = output['sheets'][0]['properties']['sheetId']
+        spreadsheet_tab_id = int(output['sheets'][0]['properties']['sheetId'])
         spreadsheet_url = output['spreadsheetUrl']
     except Exception as error:
         if not isinstance(error, HttpError) or "Unable to parse range" not in error.reason:

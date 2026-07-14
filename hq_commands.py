@@ -2629,7 +2629,7 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
             if playlist_video.isPrivate:
                 private.append(playlist_video)
             else:
-                video_track_name = playlist_video.title.replace(f" - {playlist_video.title}", "")
+                video_track_name = playlist_video.title.replace(f" - {sheet_name}", "")
                 matched_official_name = OfficialName("", "") 
                 is_matched_alt = False
 
@@ -2669,7 +2669,7 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
                     matched_sorted.append(track_and_title.playlist_video)
 
 
-        cell_rows: list[list[Cell]] = [[], []]
+        cell_rows: list[list[Cell]] = [[]]
 
         default_cell = Cell(background_color=ColorRGBFloat(0.95686, 0.8, 0.8))
 
@@ -2686,28 +2686,27 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
 
         count_header = [f'COUNT: {len(unmatched)}', "", f'COUNT: {len(resulting_order)}', timestring]
         cell_rows[0] = cell_bulk_create(count_header, Cell(is_bold=True, background_color=ColorRGBFloat(0.95686, 0.8, 0.8)))
-        cell_rows[1] = [default_cell, default_cell, default_cell]
 
-        row_index = 2
+        row_index = 1
         for playlist_video in unmatched:
-            video_track_name = playlist_video.title.replace(f" - {playlist_video.title}", "")
+            video_track_name = playlist_video.title.replace(f" - {sheet_name}", "")
             cell_rows.append([])
             cell_rows[row_index] = cell_bulk_create([f'{video_track_name}'], Cell(is_bold=True, background_color=ColorRGBFloat(1, 0.32, 0.32)))
             row_index += 1
 
-        row_index = 2
+        row_index = 1
 
         for i, playlist_video in enumerate(resulting_order):
-            if len(cell_rows) < row_index:
-                cell_rows.append([default_cell])
+            if row_index >= len(cell_rows):
+                cell_rows.insert(row_index, [default_cell])
 
             cell_format = Cell(background_color=ColorRGBFloat(0.713, 0.843, 0.658)) 
             if i >= private_index_start: 
                 cell_format = Cell(background_color=ColorRGBFloat(0.7, 0.7, 0.7))
-            if i >= unmatched_index_start:
-                cell_format = Cell(background_color=ColorRGBFloat(1, 0.32, 0.32))
+            elif i >= unmatched_index_start:
+                cell_format = Cell(background_color=ColorRGBFloat(1, 0.52, 0.52))
 
-            video_track_name = playlist_video.title.replace(" - DELTARUNE", "")
+            video_track_name = playlist_video.title.replace(f" - {sheet_name}", "")
             strings = [f'{(playlist_video.playlist_position + 1):03}', f'{video_track_name}'] 
             cell_rows[row_index].extend(cell_bulk_create(strings, cell_format))
             row_index += 1
@@ -2725,7 +2724,7 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
     format="[youtube rip playlist]",
     brief="Get or generate a sorting playlist sheet",
 )
-async def playlistsort(args: list[str], command_context: CommandContext):
+async def playlistsheet(args: list[str], command_context: CommandContext):
 
     instructions = "Send a playlist link an I'll get or generate a playlist you can use to define the order of the playlist for sorting." 
     if not len(args):
@@ -2736,7 +2735,7 @@ async def playlistsort(args: list[str], command_context: CommandContext):
         return await send(f"Invalid playlist link: `{args[0]}`. {instructions}", command_context.channel)
 
     youtube_playlist = YouTubePlaylist() 
-    sheet_info = SheetInfo(False, "", "", [])
+    sheet_info = SheetInfo(False, 0, "", [])
     async with command_context.channel.typing():
         youtube_playlist = await get_playlist_details(playlist_id, YOUTUBE_API_KEY)
         if len(youtube_playlist.error_strings):
@@ -2761,12 +2760,29 @@ async def playlistsort(args: list[str], command_context: CommandContext):
 
 
     class SortView(discord.ui.View):
-        def __init__(self):
+        def __init__(self, sorting_sheet_id: int, sorting_sheet_url: string, playlist_videos: list[PlaylistVideo]):
             super().__init__()
+            self.sorting_sheet_id: int = sorting_sheet_id
+            self.sorting_sheet_url: int = sorting_sheet_url
+            self.playlist_videos: list[PlaylistVideo] = playlist_videos 
 
         @discord.ui.button(label='Sort track names in spreadsheet', style=discord.ButtonStyle.primary)
         async def sortButton(self, interaction: discord.Interaction, button: discord.ui.Button):
-            await interaction.response.edit_message(content='Sort!', view=self)
+            try:
+                return_message = ""
+                error_strings = []
+                sort_playlist_videos_result = await sort_playlist_videos(youtube_playlist.title, self.sorting_sheet_id, self.playlist_videos, credentials)
+                error_strings.extend(sort_playlist_videos_result.error_strings)
+
+                batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, sort_playlist_videos_result.requests, credentials)
+                error_strings.extend(batch_update_response.error_strings)
+                if not len(error_strings):
+                    return_message = f"Sorted! {self.sorting_sheet_url}"
+                    await interaction.response.edit_message(content=return_message, view=self)
+
+                await send_if_errors("Errors occured during sorting", error_strings, interaction.channel)
+            except Exception as error:
+                await send_crash(f'ERROR on playlistsort button:', error, interaction.channel)
 
         @discord.ui.button(label='Generate Tampermonkey Script', style=discord.ButtonStyle.red)
         async def scriptButton(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -2787,7 +2803,6 @@ async def playlistsort(args: list[str], command_context: CommandContext):
                     error_strings = [] 
 
                     ##TODO: (Ahmayk) cache purposefully and repull if outdated (prevent spamming same playlist wasting credits)
-                    playlist_videos: list[PlaylistVideo] = [] 
                     if playlist_id in FOO_DATABASE:
                         playlist_videos = FOO_DATABASE[playlist_id]
                     else:
@@ -2797,18 +2812,21 @@ async def playlistsort(args: list[str], command_context: CommandContext):
                         FOO_DATABASE[playlist_id] = playlist_videos 
                         FOO_DATABASE.sync()
 
+                    requests = []
+                    sorting_sheet_id = 0 
+                    sorting_sheet_url = "" 
                     if not len(error_strings):
                         if sheet_info.sheet_exists:
-                            ##TODO: (ahmayk) other path
-                            pass
+                            sorting_sheet_id = sheet_info.spreadsheet_tab_id 
+                            sorting_sheet_url = f'https://docs.google.com/spreadsheets/d/{PLAYLISTS_SPREADSHEET_ID}?gid={sheet_info.spreadsheet_tab_id}'
                         else:
                             create_sheet_request = parse_create_sheet_request(youtube_playlist.title)
                             batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, [create_sheet_request], credentials)
                             error_strings.extend(batch_update_response.error_strings)
                             if not len(error_strings) and batch_update_response.response:
                                 properties = batch_update_response.response['replies'][0]['addSheet']['properties']
-                                new_sheet_id = properties['sheetId']
-                                new_sheet_url = f'https://docs.google.com/spreadsheets/d/{PLAYLISTS_SPREADSHEET_ID}?gid={new_sheet_id}'
+                                sorting_sheet_id = properties['sheetId']
+                                sorting_sheet_url = f'https://docs.google.com/spreadsheets/d/{PLAYLISTS_SPREADSHEET_ID}?gid={sorting_sheet_id}'
 
                                 cell_rows: list[list[Cell]] = [[], [], []]
                                 cell_rows[0].append(Cell(text=youtube_playlist.title, font_size=32))
@@ -2837,22 +2855,23 @@ async def playlistsort(args: list[str], command_context: CommandContext):
                                 ]
                                 cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.917, 0.6, 0.6), wrap_strategy=WRAP_STRATEGY.WRAP)))
 
-                                requests = parse_update_cells_requests(new_sheet_id, cell_rows, 0, 0)
+                                requests = parse_update_cells_requests(sorting_sheet_id, cell_rows, 0, 0)
 
-                                requests.append(parse_update_dimension_properties_request(new_sheet_id, 300, SHEET_DIMENSION.COLUMNS, 0, 1))
-                                requests.append(parse_update_dimension_properties_request(new_sheet_id, 325, SHEET_DIMENSION.COLUMNS, 2, 5))
-                                requests.append(parse_update_dimension_properties_request(new_sheet_id, 55,  SHEET_DIMENSION.COLUMNS, 3, 3))
+                                requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 300, SHEET_DIMENSION.COLUMNS, 0, 1))
+                                requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 325, SHEET_DIMENSION.COLUMNS, 2, 5))
+                                requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 55,  SHEET_DIMENSION.COLUMNS, 3, 3))
 
-                                sort_playlist_videos_result = await sort_playlist_videos(youtube_playlist.title, new_sheet_id, playlist_videos, credentials)
-                                requests.extend(sort_playlist_videos_result.requests)
-                                error_strings.extend(sort_playlist_videos_result.error_strings)
+                    if not len(error_strings):
+                        sort_playlist_videos_result = await sort_playlist_videos(youtube_playlist.title, sorting_sheet_id, playlist_videos, credentials)
+                        requests.extend(sort_playlist_videos_result.requests)
+                        error_strings.extend(sort_playlist_videos_result.error_strings)
 
-                                batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, requests, credentials)
-                                error_strings.extend(batch_update_response.error_strings)
-                                if not len(error_strings):
-                                    return_message = f"New sheet created! {new_sheet_url}"
+                        batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, requests, credentials)
+                        error_strings.extend(batch_update_response.error_strings)
+                        if not len(error_strings):
+                            return_message = f"New sheet created! {sorting_sheet_url}"
 
-                    view = SortView()
+                    view = SortView(sorting_sheet_id, sorting_sheet_url, playlist_videos)
                     await interaction.message.edit(content=return_message, view=view)
 
                 await send_if_errors("Errors occured", error_strings, interaction.channel)
