@@ -2760,11 +2760,13 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
 
 
     class SortView(discord.ui.View):
-        def __init__(self, sorting_sheet_id: int, sorting_sheet_url: string, playlist_videos: list[PlaylistVideo]):
+        def __init__(self, sorting_sheet_id: int, sorting_sheet_url: string, 
+                     playlist_videos: list[PlaylistVideo], sort_playlist_videos_result: SortPlaylistVideosResult):
             super().__init__()
             self.sorting_sheet_id: int = sorting_sheet_id
             self.sorting_sheet_url: int = sorting_sheet_url
             self.playlist_videos: list[PlaylistVideo] = playlist_videos 
+            self.last_sort_playlist_videos_result: SortPlaylistVideosResult = sort_playlist_videos_result
 
         @discord.ui.button(label='Sort track names in spreadsheet', style=discord.ButtonStyle.primary)
         async def sortButton(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -2772,6 +2774,7 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
                 return_message = ""
                 error_strings = []
                 sort_playlist_videos_result = await sort_playlist_videos(youtube_playlist.title, self.sorting_sheet_id, self.playlist_videos, credentials)
+                self.last_sort_playlist_videos_result = sort_playlist_videos_result
                 error_strings.extend(sort_playlist_videos_result.error_strings)
 
                 batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, sort_playlist_videos_result.requests, credentials)
@@ -2786,7 +2789,36 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
 
         @discord.ui.button(label='Generate Tampermonkey Script', style=discord.ButtonStyle.red)
         async def scriptButton(self, interaction: discord.Interaction, button: discord.ui.Button):
-            await interaction.response.edit_message(content='Ooo Ooo Ahh Ahh!!!!', view=self)
+            try:
+                resulting_order: list[PlaylistVideo] = []
+                resulting_order.extend(self.last_sort_playlist_videos_result.matched_sorted) 
+                resulting_order.extend(self.last_sort_playlist_videos_result.unmatched) 
+                resulting_order.extend(self.last_sort_playlist_videos_result.private) 
+
+                video_ids_string = "let videoIds = ["
+                for i, playlist_video in enumerate(resulting_order):
+                    video_ids_string += f'"{playlist_video.video_id}"'
+                    if i != len(resulting_order) - 1:
+                        video_ids_string += ", " 
+                video_ids_string += "]"
+
+                tampermonkey_script = ""
+                with open("./playlistSorting/tampermonkeySorting.js", 'r') as file:
+                    tampermonkey_script = file.read()
+                tampermonkey_script += f"\n\n{video_ids_string}\n//Good Luck!"
+
+                filename = "tampermonkeyscript.js"
+                with open(filename, "w") as f:
+                    f.truncate()
+                    f.write(tampermonkey_script)
+
+                with open(filename, "rb") as f:
+                    await interaction.channel.send(file=discord.File(f, filename))
+                    await interaction.response.edit_message(content='Script sent!', view=self)
+
+            except Exception as error:
+                await send_crash(f'ERROR on playlistsort button:', error, interaction.channel)
+
 
 
     class StartButton(discord.ui.View):
@@ -2861,6 +2893,7 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
                                 requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 325, SHEET_DIMENSION.COLUMNS, 2, 5))
                                 requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 55,  SHEET_DIMENSION.COLUMNS, 3, 3))
 
+                    sort_playlist_videos_result = SortPlaylistVideosResult([], [], [], [], []) 
                     if not len(error_strings):
                         sort_playlist_videos_result = await sort_playlist_videos(youtube_playlist.title, sorting_sheet_id, playlist_videos, credentials)
                         requests.extend(sort_playlist_videos_result.requests)
@@ -2869,9 +2902,11 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
                         batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, requests, credentials)
                         error_strings.extend(batch_update_response.error_strings)
                         if not len(error_strings):
-                            return_message = f"New sheet created! {sorting_sheet_url}"
+                            return_message = f"Here are buttons! {sorting_sheet_url}"
 
-                    view = SortView(sorting_sheet_id, sorting_sheet_url, playlist_videos)
+                    view = None
+                    if not len(error_strings):
+                        view = SortView(sorting_sheet_id, sorting_sheet_url, playlist_videos, sort_playlist_videos_result)
                     await interaction.message.edit(content=return_message, view=view)
 
                 await send_if_errors("Errors occured", error_strings, interaction.channel)

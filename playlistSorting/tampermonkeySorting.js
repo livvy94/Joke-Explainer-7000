@@ -3,7 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      2026-06-28
 // @description  sort shit 
-// @author       You
+// @author       Joke-Explainer™ 7000
 // @match        https://*.youtube.com/playlist*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=youtube.com
 // @grant        none
