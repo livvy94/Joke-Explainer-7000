@@ -2579,8 +2579,8 @@ async def playlistsort(args: list[str], command_context: CommandContext):
     if not len(playlist_id):
         return await send(f"Invalid playlist link: `{args[0]}`. {instructions}", command_context.channel)
 
-    youtube_playlist = None
-    sheet_info = SheetInfo(False, 0, "", [])
+    youtube_playlist = YouTubePlaylist() 
+    sheet_info = SheetInfo(False, "", "", [])
     async with command_context.channel.typing():
         youtube_playlist = await get_playlist_details(playlist_id, YOUTUBE_API_KEY)
         if len(youtube_playlist.error_strings):
@@ -2636,12 +2636,12 @@ async def playlistsort(args: list[str], command_context: CommandContext):
                         create_sheet_request = parse_create_sheet_request(youtube_playlist.title)
                         batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, [create_sheet_request], credentials)
                         error_strings.extend(batch_update_response.error_strings)
-                        if not len(error_strings):
+                        if not len(error_strings) and batch_update_response.response:
                             properties = batch_update_response.response['replies'][0]['addSheet']['properties']
                             new_sheet_id = properties['sheetId']
                             new_sheet_url = f'https://docs.google.com/spreadsheets/d/{PLAYLISTS_SPREADSHEET_ID}?gid={new_sheet_id}'
 
-                            cell_rows = [[], [], []]
+                            cell_rows: list[list[Cell]] = [[], [], []]
                             cell_rows[0].append(Cell(text=youtube_playlist.title, font_size=32))
                             texts = [
                                 "Track Name Order",
@@ -2661,21 +2661,28 @@ async def playlistsort(args: list[str], command_context: CommandContext):
                             ]
                             cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.952, 0.952, 0.952), wrap_strategy=WRAP_STRATEGY.WRAP)))
                             texts = [
-                                "AUTO POPULATED COLUMN. Video titles that were not matched to a track in the \"Track Name Order\" row. When this column is empty, all videos are properly sorted!",
+                                "AUTO POPULATED COLUMN.\nVideo titles that were not matched to a track in the \"Track Name Order\" row. When this column is empty, all videos are properly sorted!",
                                 "Current order",
-                                "AUTO POPULATED COLUMN. The resulting sorted order. Ordered as: (1) Matched tracks sorted (2) Unmatched tracks unsorted (3) Private videos",
-                                ""
+                                "AUTO POPULATED COLUMN.\nThe resulting sorted order. Ordered as: (1) Matched tracks sorted (2) Unmatched tracks unsorted (3) Private videos",
+                                "Last time the bot has sorted the playlist's videos."
                             ]
                             cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.917, 0.6, 0.6), wrap_strategy=WRAP_STRATEGY.WRAP)))
 
-                            requests = parse_update_cells_request(new_sheet_id, cell_rows, 0, 0)
-                            batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, requests, credentials)
+                            requestes = parse_update_cells_request(new_sheet_id, cell_rows, 0, 0)
+
+                            requestes.append(parse_update_dimension_properties_request(new_sheet_id, 300, SHEET_DIMENSION.COLUMNS, 0, 1))
+                            requestes.append(parse_update_dimension_properties_request(new_sheet_id, 325, SHEET_DIMENSION.COLUMNS, 2, 5))
+                            requestes.append(parse_update_dimension_properties_request(new_sheet_id, 55,  SHEET_DIMENSION.COLUMNS, 3, 3))
+
+                            batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, requestes, credentials)
                             error_strings.extend(batch_update_response.error_strings)
                             if not len(error_strings):
                                 return_message = f"New sheet created! {new_sheet_url}"
 
                     view = SortView()
                     await interaction.message.edit(content=return_message, view=view)
+
+                await send_if_errors("Errors occured", error_strings, interaction.channel)
 
                 await view.wait()
             except Exception as error:

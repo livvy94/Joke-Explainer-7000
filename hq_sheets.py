@@ -86,7 +86,6 @@ def parse_create_sheet_request(name: str) -> dict[str, typing.Any]:
     }
     return result
 
-
 class ColorRGBFloat(NamedTuple):
     r: float
     g: float
@@ -172,11 +171,37 @@ def parse_update_cells_request(spreadsheet_tab_id: int, cell_rows: list[list[Cel
 
     return requests 
 
+
+class SHEET_DIMENSION(Enum):
+    ROWS = "ROWS"
+    COLUMNS = "COLUMNS"
+
+def parse_update_dimension_properties_request(sheet_id: int, pixel_size: int, sheet_dimension: SHEET_DIMENSION, 
+                                              start_index: int, end_index: int) -> dict[str, typing.Any]:
+    result = {
+        "updateDimensionProperties": {
+            "properties": {
+                "pixelSize": pixel_size,
+            },
+            "fields": "pixelSize",
+            "range": {
+                "sheetId": sheet_id,
+                "dimension": sheet_dimension.value,
+                "startIndex": start_index,
+                ##NOTE: (Ahmayk) endIndex is expecting expecting the row/column after the last one (exclusive) for some reason,
+                # but that's confusing so our API just does what is more intuitive and does inclusive.
+                "endIndex": end_index + 1
+            }
+        }
+    }
+    return result
+
+
 class BatchUpdateResponse(NamedTuple):
     response: typing.Any | None
     error_strings: list[str]
 
-async def send_sheet_batch_update(spreadsheet_id: str, requests: dict[str, typing.Any],
+async def send_sheet_batch_update(spreadsheet_id: str, requests: list[dict[str, typing.Any]],
                                     credentials: Credentials) -> BatchUpdateResponse:
     response = None
     error_strings: list[str] = []
