@@ -2654,17 +2654,14 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
                     track = matched_official_name.name
                     if is_matched_alt:
                         track = matched_official_name.alt
-                    mixname = playlist_video.title[len(track) + 1:]
+                    mixname = video_track_name[len(track) + 1:]
                     sort_dict[matched_official_name].append(TrackAndMixname(track, mixname, playlist_video))
                 else:
                     unmatched.append(playlist_video)
         
         for official_name in official_names:
             if official_name in sort_dict:
-                sort_dict[official_name].sort(key=lambda t: t.mixname.lower())
-                if len(sort_dict[official_name]) > 1:
-                    mixless = sort_dict[official_name].pop()
-                    sort_dict[official_name].insert(0, mixless)
+                sort_dict[official_name].sort(key=lambda t: t.mixname.casefold())
                 for track_and_title in sort_dict[official_name]:
                     matched_sorted.append(track_and_title.playlist_video)
 
@@ -2892,7 +2889,7 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
                                 texts = [
                                     "AUTO POPULATED COLUMN.\nVideo titles that were not matched to a track in the \"Track Name Order\" row. When this column is empty, all videos are properly sorted!",
                                     "Current order",
-                                    "AUTO POPULATED COLUMN.\nThe resulting sorted order. Ordered as: (1) (Green) Matched tracks sorted (2) (Red) Unmatched tracks unsorted (3) (Gray) Private videos",
+                                    "AUTO POPULATED COLUMN.\nThe resulting sorted order. Ordered as: \n(1) (Green) Matched tracks sorted\n(2) (Red) Unmatched tracks unsorted\n(3) (Gray) Private videos",
                                     "AUTO POPULATED COLUMN."
                                 ]
                                 cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.917, 0.6, 0.6), wrap_strategy=WRAP_STRATEGY.WRAP)))
