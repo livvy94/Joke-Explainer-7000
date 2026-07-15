@@ -2706,9 +2706,19 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
             elif i >= unmatched_index_start:
                 cell_format = Cell(background_color=ColorRGBFloat(1, 0.52, 0.52))
 
+            cell_format_position = cell_format
+            if (
+                (i == 0 and (playlist_video.playlist_position != 0))
+                or (i > 0 and resulting_order[i - 1].playlist_position != playlist_video.playlist_position - 1)
+            ):
+                cell_format_position = Cell(background_color=ColorRGBFloat(1, 0.850, 0.4))
+
+            cell_rows[row_index].extend(cell_bulk_create([f'{(playlist_video.playlist_position + 1):03}'], cell_format_position))
+
             video_track_name = playlist_video.title.replace(f" - {sheet_name}", "")
-            strings = [f'{(playlist_video.playlist_position + 1):03}', f'{video_track_name}'] 
-            cell_rows[row_index].extend(cell_bulk_create(strings, cell_format))
+            video_url = f'https://www.youtube.com/watch?v={playlist_video.video_id}'
+            cell_rows[row_index].extend(cell_bulk_create([video_track_name, video_url], cell_format))
+
             row_index += 1
 
         requests = parse_update_cells_requests(spreadsheet_tab_id, cell_rows, 3, 2)
@@ -2871,7 +2881,7 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
                                     "Unmatched",
                                     "# Now",
                                     "Resulting Order",
-                                    "Last Sheet Update Time"
+                                    ""
                                 ]
                                 cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(0.866, 0.494, 0.419), wrap_strategy=WRAP_STRATEGY.WRAP)))
                                 texts = [
@@ -2883,7 +2893,7 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
                                     "AUTO POPULATED COLUMN.\nVideo titles that were not matched to a track in the \"Track Name Order\" row. When this column is empty, all videos are properly sorted!",
                                     "Current order",
                                     "AUTO POPULATED COLUMN.\nThe resulting sorted order. Ordered as: (1) (Green) Matched tracks sorted (2) (Red) Unmatched tracks unsorted (3) (Gray) Private videos",
-                                    "Last time the bot has sorted the playlist's videos."
+                                    "AUTO POPULATED COLUMN."
                                 ]
                                 cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.917, 0.6, 0.6), wrap_strategy=WRAP_STRATEGY.WRAP)))
 
