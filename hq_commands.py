@@ -2774,8 +2774,7 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
                 cell_format_position = Cell(background_color=ColorRGBFloat(1, 0.850, 0.4))
             cell_rows[row_index].extend(cell_bulk_create([f'{(matched_video.playlist_video.playlist_position + 1):03}'], cell_format_position))
 
-            split_title = split_video_title_guess(playlist_video.title, sheet_name)
-            video_url = f'https://www.youtube.com/watch?v={playlist_video.video_id}'
+            video_url = f'https://www.youtube.com/watch?v={matched_video.playlist_video.video_id}'
             linked_trackname = format_hyperlink_formula(video_url, f"{matched_video.track_name} {matched_video.mixname}")
             cell_rows[row_index].extend(cell_bulk_create_formula([linked_trackname], cell_format))
             cell_rows[row_index].extend(cell_bulk_create([matched_video.game_name], cell_format))

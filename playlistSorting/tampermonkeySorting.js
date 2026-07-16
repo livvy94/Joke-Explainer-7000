@@ -91,10 +91,6 @@ async function sortPlaylist(videoIds) {
             if (videoItem) {
                 break;
             }
-            document.scrollingElement.scrollTop = document.scrollingElement.scrollHeight;
-            let spinnerIcon = document.querySelector('tp-yt-paper-spinner[active]');
-            await sleep(250);
-            await reloadIfVideosUnloaded(totalVideos, playlistVideos);
             let numVideos = playlistVideos.querySelectorAll('ytd-playlist-video-renderer').length;
             if (totalVideos == numVideos) {
                 console.log(`Video id not found: ${videoIds[videoIndex]}`)
@@ -103,6 +99,10 @@ async function sortPlaylist(videoIds) {
                     break;
                 }
             }
+            document.scrollingElement.scrollTop = document.scrollingElement.scrollHeight;
+            let spinnerIcon = document.querySelector('tp-yt-paper-spinner[active]');
+            await sleep(250);
+            await reloadIfVideosUnloaded(totalVideos, playlistVideos);
         }
         if (videoIndex > videoIds.length - 1) {
             break;
