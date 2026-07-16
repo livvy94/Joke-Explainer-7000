@@ -2581,9 +2581,14 @@ def rip_title_matches_rip_title(video_track_name: str, official_track_name: str)
         result = True
     return result 
 
+class MatchedVideo(NamedTuple):
+    track_name: str
+    mixname: str
+    game_name: str
+    playlist_video: PlaylistVideo
 
 class SortPlaylistVideosResult(NamedTuple):
-    matched_sorted: list[PlaylistVideo]
+    matched_sorted: list[MatchedVideo]
     unmatched: list[PlaylistVideo]
     private: list[PlaylistVideo]
     requests: list[dict[str, typing.Any]]
@@ -2594,131 +2599,208 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
 
     error_strings: list[str] = []
 
-    class OfficialName(NamedTuple):
-        name: str
-        alt: str
+    class TrackSheetEntry(NamedTuple):
+        track_name: str
+        game_name_alt: str
+        track_name_alt: str
 
-    official_names: list[OfficialName] = [] 
+    track_sheet_entries: list[TrackSheetEntry] = [] 
     sheet_data = RawSheetData([[]], []) 
     if credentials and credentials.valid:
-        sheet_data = await get_raw_sheet_data(PLAYLISTS_SPREADSHEET_ID, sheet_name, 4, 'b', credentials)
+        sheet_data = await get_raw_sheet_data(PLAYLISTS_SPREADSHEET_ID, sheet_name, 4, 'C', credentials)
         error_strings.extend(sheet_data.error_strings)
 
     if not len(error_strings):
         for row in sheet_data.rows:
             if len(row):
-                name = row[0]
-                alt = ""
+                track_and_mixname = row[0]
+                game_name_alt = "" 
+                track_name_alt = ""
                 if len(row) >= 2:
-                    alt = row[1]
-                official_names.append(OfficialName(name, alt))
+                    game_name_alt = row[1]
+                if len(row) >= 3:
+                    track_name_alt = row[2]
+                track_sheet_entries.append(TrackSheetEntry(track_and_mixname, game_name_alt, track_name_alt))
     
-    class TrackAndMixname(NamedTuple):
-        track: str
-        mixname: str
-        playlist_video: PlaylistVideo
-
-    matched_sorted: list[PlaylistVideo] = []
+    matched_sorted: list[MatchedVideo] = []
     unmatched: list[PlaylistVideo] = []
     private : list[PlaylistVideo] = []
     requests: list[dict[str, typing.Any]] = []
 
     if not len(error_strings):
-        sort_dict: dict[OfficialName, list[TrackAndMixname]] = {} 
+
+        sort_dict: dict[TrackSheetEntry, list[MatchedVideo]] = {} 
+
+        def video_matches(track_sheet_entry_name: str, video_title: str, game_name_string_with_dash: str):
+            if (
+                (video_title.startswith(track_sheet_entry_name))
+            ):
+                if (
+                    video_title[:len(track_sheet_entry_name)] == track_sheet_entry_name
+                    or (
+                        len(video_title[:len(game_name_string_with_dash)]) > len(track_sheet_entry_name) 
+                        and (video_title[len(track_sheet_entry_name):].startswith(" ("))
+                    )
+                ):
+                    return True
+            return False
+
         for playlist_video in playlist_videos:
             if playlist_video.isPrivate:
                 private.append(playlist_video)
             else:
-                video_track_name = playlist_video.title.replace(f" - {sheet_name}", "")
-                matched_official_name = OfficialName("", "") 
+                matched_track_sheet_entry = TrackSheetEntry("", "", "") 
+                matched_game_name = ""
                 is_matched_alt = False
 
-                for official_name in official_names:
-                    if (
-                        (len(official_name.name) > len(matched_official_name.name)) 
-                        and rip_title_matches_rip_title(video_track_name, official_name.name)
-                    ): 
-                        matched_official_name = official_name
+                for track_sheet_entry in track_sheet_entries:
+                    game_name = sheet_name
+                    if len(track_sheet_entry.game_name_alt):
+                        game_name = track_sheet_entry.game_name_alt
+                    game_name_string_with_dash = f" - {game_name}"
+                    if playlist_video.title.endswith(game_name_string_with_dash):
+                        if (
+                            (len(track_sheet_entry.track_name) > len(matched_track_sheet_entry.track_name))
+                            and video_matches(track_sheet_entry.track_name, playlist_video.title, game_name_string_with_dash)
+                        ):
+                            matched_track_sheet_entry = track_sheet_entry
+                            matched_game_name = game_name
+                            is_matched_alt = False
 
-                    if ( 
-                        len(official_name.alt)
-                        and (len(official_name.alt) > len(matched_official_name.alt)) 
-                        and rip_title_matches_rip_title(video_track_name, official_name.alt)
-                    ):
-                        matched_official_name = official_name
-                        is_matched_alt = True
+                        if ( 
+                            len(track_sheet_entry.track_name_alt)
+                            and (len(track_sheet_entry.track_name_alt) > len(matched_track_sheet_entry.track_name_alt)) 
+                            and video_matches(track_sheet_entry.track_name_alt, playlist_video.title, game_name_string_with_dash)
+                        ):
+                            matched_track_sheet_entry = track_sheet_entry
+                            matched_game_name = game_name
+                            is_matched_alt = True
 
-                if len(matched_official_name.name):
-                    if matched_official_name not in sort_dict:
-                        sort_dict[matched_official_name] = []
-                    track = matched_official_name.name
+                    elif track_sheet_entry.track_name == playlist_video.title: 
+                        matched_track_sheet_entry = track_sheet_entry
+                        matched_game_name = ""
+                        is_matched_alt = False
+                    elif len(track_sheet_entry.track_name_alt) and track_sheet_entry.track_name_alt == playlist_video.title: 
+                        matched_track_sheet_entry = track_sheet_entry
+                        matched_game_name = ""
+                        is_matched_alt = True 
+
+                if len(matched_track_sheet_entry.track_name):
+                    track_and_mixname = matched_track_sheet_entry.track_name
                     if is_matched_alt:
-                        track = matched_official_name.alt
-                    mixname = video_track_name[len(track) + 1:]
-                    sort_dict[matched_official_name].append(TrackAndMixname(track, mixname, playlist_video))
+                        track_and_mixname = matched_track_sheet_entry.track_name_alt
+
+                    game_name = sheet_name
+                    if len(matched_track_sheet_entry.game_name_alt):
+                        game_name = matched_track_sheet_entry.game_name_alt
+
+                    game_name_string_with_dash = f" - {game_name}"
+                    track_name_and_mixname = playlist_video.title[:-len(game_name_string_with_dash)]
+                    mixname = track_name_and_mixname[len(track_and_mixname) + 1:]
+                    
+                    if matched_track_sheet_entry not in sort_dict:
+                        sort_dict[matched_track_sheet_entry] = []
+                    sort_dict[matched_track_sheet_entry].append(MatchedVideo(matched_track_sheet_entry.track_name, mixname, matched_game_name, playlist_video))
                 else:
                     unmatched.append(playlist_video)
         
-        for official_name in official_names:
-            if official_name in sort_dict:
-                sort_dict[official_name].sort(key=lambda t: t.mixname.casefold())
-                for track_and_title in sort_dict[official_name]:
-                    matched_sorted.append(track_and_title.playlist_video)
+        for track_sheet_entry in track_sheet_entries:
+            if track_sheet_entry in sort_dict:
+                sort_dict[track_sheet_entry].sort(key=lambda t: t.mixname.casefold())
+                for matched_video in sort_dict[track_sheet_entry]:
+                    matched_sorted.append(matched_video)
 
 
         cell_rows: list[list[Cell]] = [[]]
 
         default_cell = Cell(background_color=ColorRGBFloat(0.95686, 0.8, 0.8))
 
-        resulting_order: list[PlaylistVideo] = []
-        resulting_order.extend(matched_sorted) 
-        unmatched_index_start = len(resulting_order)
-        resulting_order.extend(unmatched) 
-        private_index_start = len(resulting_order)
-        resulting_order.extend(private) 
+        total_length = 0
+        total_length += len(matched_sorted)
+        total_length += len(unmatched)
+        total_length += len(private)
 
         date = datetime.now(tz=tz.UTC)
         date = date.astimezone(tz.gettz('America/Los_Angeles'))
         timestring = date.strftime("%H:%M:%S (PST) - %d/%m/%Y") 
 
-        count_header = [f'COUNT: {len(unmatched)}', "", f'COUNT: {len(resulting_order)}', timestring]
+        count_header = [f'COUNT: {len(unmatched)}', "", "", f'COUNT: {total_length}', f'Sheet last sorted: {timestring}']
         cell_rows[0] = cell_bulk_create(count_header, Cell(is_bold=True, background_color=ColorRGBFloat(0.95686, 0.8, 0.8)))
+
+        class SplitTitle(NamedTuple):
+            track_and_mixname: str
+            game_name: str
+
+        def split_video_title_guess(title: str, sheet_name: str):
+            track_and_mixname = title
+            game_name = ""
+            if title.endswith(f' - {sheet_name}'):
+                game_name = sheet_name
+            elif " - " in title:
+                game_name = title[title.rindex(" - ") + 3:]
+            if len(game_name):
+                track_and_mixname = title[:-(len(game_name) + 3)]
+            return SplitTitle(track_and_mixname, game_name)
 
         row_index = 1
         for playlist_video in unmatched:
-            video_track_name = playlist_video.title.replace(f" - {sheet_name}", "")
+            split_title = split_video_title_guess(playlist_video.title, sheet_name)
             cell_rows.append([])
-            cell_rows[row_index] = cell_bulk_create([f'{video_track_name}'], Cell(is_bold=True, background_color=ColorRGBFloat(1, 0.32, 0.32)))
+            strings = [split_title.track_and_mixname, split_title.game_name]
+            cell_rows[row_index] = cell_bulk_create(strings, Cell(is_bold=True, background_color=ColorRGBFloat(1, 0.32, 0.32)))
             row_index += 1
 
         row_index = 1
 
-        for i, playlist_video in enumerate(resulting_order):
+        for i, matched_video in enumerate(matched_sorted):
             if row_index >= len(cell_rows):
-                cell_rows.insert(row_index, [default_cell])
+                cell_rows.insert(row_index, [default_cell, default_cell])
 
             cell_format = Cell(background_color=ColorRGBFloat(0.713, 0.843, 0.658)) 
-            if i >= private_index_start: 
-                cell_format = Cell(background_color=ColorRGBFloat(0.7, 0.7, 0.7))
-            elif i >= unmatched_index_start:
-                cell_format = Cell(background_color=ColorRGBFloat(1, 0.52, 0.52))
-
             cell_format_position = cell_format
             if (
-                (i == 0 and (playlist_video.playlist_position != 0))
-                or (i > 0 and resulting_order[i - 1].playlist_position != playlist_video.playlist_position - 1)
+                (i == 0 and (matched_video.playlist_video.playlist_position != 0))
+                or (i > 0 and matched_sorted[i - 1].playlist_video.playlist_position != matched_video.playlist_video.playlist_position - 1)
             ):
                 cell_format_position = Cell(background_color=ColorRGBFloat(1, 0.850, 0.4))
+            cell_rows[row_index].extend(cell_bulk_create([f'{(matched_video.playlist_video.playlist_position + 1):03}'], cell_format_position))
 
-            cell_rows[row_index].extend(cell_bulk_create([f'{(playlist_video.playlist_position + 1):03}'], cell_format_position))
-
-            video_track_name = playlist_video.title.replace(f" - {sheet_name}", "")
-            video_url = f'https://www.youtube.com/watch?v={playlist_video.video_id}'
-            cell_rows[row_index].extend(cell_bulk_create([video_track_name, video_url], cell_format))
+            # TODO: (Ahmayk) hyperlink into api
+            # video_url = f'https://www.youtube.com/watch?v={playlist_video.video_id}'
+            strings = [f'{matched_video.track_name} {matched_video.mixname}', matched_video.game_name]
+            cell_rows[row_index].extend(cell_bulk_create(strings, cell_format))
 
             row_index += 1
 
-        requests = parse_update_cells_requests(spreadsheet_tab_id, cell_rows, 3, 2)
+        unmatched_index_start = row_index - 1
+        unmatched_and_private = []
+        unmatched_and_private.extend(unmatched)
+        private_index_start = len(unmatched) + unmatched_index_start
+        unmatched_and_private.extend(private)
+        for i, playlist_video in enumerate(unmatched):
+            if row_index >= len(cell_rows):
+                cell_rows.insert(row_index, [default_cell, default_cell])
+
+            cell_format = Cell(background_color=ColorRGBFloat(1, 0.52, 0.52))
+            if i + unmatched_index_start >= private_index_start: 
+                cell_format = Cell(background_color=ColorRGBFloat(0.7, 0.7, 0.7))
+
+            cell_format_position = cell_format
+            if (
+                (i == 0 and (playlist_video.playlist_position != unmatched_index_start))
+                or (i > 0 and unmatched[i - 1].playlist_position != playlist_video.playlist_position - 1)
+            ):
+                cell_format_position = Cell(background_color=ColorRGBFloat(1, 0.850, 0.4))
+            cell_rows[row_index].extend(cell_bulk_create([f'{(playlist_video.playlist_position + 1):03}'], cell_format_position))
+
+            # TODO: (Ahmayk) hyperlink into api
+            split_title = split_video_title_guess(playlist_video.title, sheet_name)
+            strings = [split_title.track_and_mixname, split_title.game_name]
+            cell_rows[row_index].extend(cell_bulk_create(strings, cell_format))
+
+            row_index += 1
+
+        requests = parse_update_cells_requests(spreadsheet_tab_id, cell_rows, 3, 3)
 
     return SortPlaylistVideosResult(matched_sorted, unmatched, private, requests, error_strings) 
 
@@ -2798,7 +2880,8 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
         async def scriptButton(self, interaction: discord.Interaction, button: discord.ui.Button):
             try:
                 resulting_order: list[PlaylistVideo] = []
-                resulting_order.extend(self.last_sort_playlist_videos_result.matched_sorted) 
+                for matched_video in self.last_sort_playlist_videos_result.matched_sorted:
+                    resulting_order.append(matched_video.playlist_video) 
                 resulting_order.extend(self.last_sort_playlist_videos_result.unmatched) 
                 resulting_order.extend(self.last_sort_playlist_videos_result.private) 
 
@@ -2838,7 +2921,7 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
                 await interaction.response.edit_message(content=waiting_message, view=None)
 
                 async with command_context.channel.typing():
-                    return_message = ""
+                    return_message = "Oops! Error?"
                     error_strings = [] 
 
                     ##TODO: (Ahmayk) cache purposefully and repull if outdated (prevent spamming same playlist wasting credits)
@@ -2869,36 +2952,47 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
 
                                 cell_rows: list[list[Cell]] = [[], [], []]
                                 cell_rows[0].append(Cell(text=youtube_playlist.title, font_size=32))
+                                cell_rows[0].append(Cell())
+                                cell_rows[0].append(Cell())
+                                cell_rows[0].append(Cell())
+                                cell_rows[0].append(Cell(text=f'https://www.youtube.com/playlist?list={playlist_id}'))
+                                cell_rows[0].append(Cell())
                                 texts = [
                                     "Track Name Order",
+                                    "Alternate Game Name",
                                     "Alternate Track Name"
                                 ]
                                 cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(0.811, 0.886, 0.952), wrap_strategy=WRAP_STRATEGY.WRAP)))
                                 texts = [
-                                    "Unmatched",
+                                    "Ouput: Unmatched Track Name",
+                                    "Ouput: Unmatched Game Name",
                                     "# Now",
-                                    "Resulting Order",
-                                    ""
+                                    "Output: Resulting Order, Track Name",
+                                    "Output: Resulting Order, Game name",
                                 ]
                                 cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(0.866, 0.494, 0.419), wrap_strategy=WRAP_STRATEGY.WRAP)))
                                 texts = [
                                     "List track names HERE without their mixnames to define the ordering of the OST. Capitalization matters! Color does not.",
-                                    "If a track has an alternate spelling, list it here. It will be sorted alongside the primary track name on the left."
+                                    "If a track belongs to an alterate game release (Ex: Sonic Mania Plus, Mario Kart 8 Deluxe) list the game name here.",
+                                    "If a track has an alternate spelling, list it here. A video with this track name will be sorted alongside the primary track name (the first column)."
                                 ]
                                 cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.952, 0.952, 0.952), wrap_strategy=WRAP_STRATEGY.WRAP)))
                                 texts = [
-                                    "AUTO POPULATED COLUMN.\nVideo titles that were not matched to a track in the \"Track Name Order\" row. When this column is empty, all videos are properly sorted!",
+                                    "AUTO POPULATED COLUMN.\nVideo track names that were not matched to a track in the \"Track Name Order\" row. When this column is empty, all videos are properly sorted!",
+                                    "AUTO POPULATED COLUMN.\nVideo game names with the previous column.",
                                     "Current order",
-                                    "AUTO POPULATED COLUMN.\nThe resulting sorted order. Ordered as: \n(1) (Green) Matched tracks sorted\n(2) (Red) Unmatched tracks unsorted\n(3) (Gray) Private videos",
-                                    "AUTO POPULATED COLUMN."
+                                    "AUTO POPULATED COLUMN.\nThe resulting sorted order, track name. Ordered as: \n(1) (Green) Matched videos, sorted\n(2) (Red) Unmatched videos, unsorted\n(3) (Gray) Private videos",
+                                    "AUTO POPULATED COLUMN.\nThe resulting sorted order. Game name is shown here is track is matched. If unmatched, full video title is kept in previous column.",
                                 ]
                                 cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.917, 0.6, 0.6), wrap_strategy=WRAP_STRATEGY.WRAP)))
 
                                 requests = parse_update_cells_requests(sorting_sheet_id, cell_rows, 0, 0)
 
-                                requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 300, SHEET_DIMENSION.COLUMNS, 0, 1))
-                                requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 325, SHEET_DIMENSION.COLUMNS, 2, 5))
-                                requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 55,  SHEET_DIMENSION.COLUMNS, 3, 3))
+                                requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 300, SHEET_DIMENSION.COLUMNS, 0, 0))
+                                requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 225, SHEET_DIMENSION.COLUMNS, 1, 2))
+                                requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 325, SHEET_DIMENSION.COLUMNS, 3, 7))
+                                requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 225, SHEET_DIMENSION.COLUMNS, 4, 4))
+                                requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 55,  SHEET_DIMENSION.COLUMNS, 5, 5))
 
                     sort_playlist_videos_result = SortPlaylistVideosResult([], [], [], [], []) 
                     if not len(error_strings):
@@ -2918,7 +3012,8 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
 
                 await send_if_errors("Errors occured", error_strings, interaction.channel)
 
-                await view.wait()
+                if view:
+                    await view.wait()
             except Exception as error:
                 await send_crash(f'ERROR on playlistsort button:', error, interaction.channel)
 
