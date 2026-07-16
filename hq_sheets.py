@@ -18,31 +18,35 @@ class SheetInfo(NamedTuple):
     sheet_exists: bool
     spreadsheet_tab_id: int
     spreadsheet_url: str
+    row_count: int
+    column_count: int
     error_strings: list[str]
+
 
 async def get_sheet_info(spreadsheet_id: str, sheet_name: str, credentials: Credentials) -> SheetInfo: 
     sheet_exists = False
     spreadsheet_tab_id = 0 
     spreadsheet_url = ""
+    row_count = 0
+    column_count = 0
     error_strings: list[str] = []
     try:
         service = build("sheets", "v4", credentials=credentials)
-        output = (
+        output = await run_blocking(
             service.spreadsheets()
-            .get(
-                spreadsheetId=spreadsheet_id,
-                ranges=sheet_name
-            )
-            .execute()
+            .get(spreadsheetId=spreadsheet_id, ranges=sheet_name)
+            .execute
         )
         sheet_exists = True
         spreadsheet_tab_id = int(output['sheets'][0]['properties']['sheetId'])
         spreadsheet_url = output['spreadsheetUrl']
+        row_count = output['sheets'][0]['properties']['gridProperties']['rowCount']
+        column_count = output['sheets'][0]['properties']['gridProperties']['columnCount']
     except Exception as error:
         if not isinstance(error, HttpError) or "Unable to parse range" not in error.reason:
             await log_exception(f"Google sheet API data call failed for {sheet_name}", error, error_strings, True)
 
-    return SheetInfo(sheet_exists, spreadsheet_tab_id, spreadsheet_url, error_strings)
+    return SheetInfo(sheet_exists, spreadsheet_tab_id, spreadsheet_url, row_count, column_count, error_strings)
 
 
 class RawSheetData(NamedTuple):
@@ -55,7 +59,7 @@ async def get_raw_sheet_data(spreadsheet_id: str, sheet_name: str, row_start: in
 
     try:
         service = build("sheets", "v4", credentials=credentials)
-        output = (
+        output = await run_blocking(
             service.spreadsheets()
             .get(
                 spreadsheetId=spreadsheet_id,
@@ -63,7 +67,7 @@ async def get_raw_sheet_data(spreadsheet_id: str, sheet_name: str, row_start: in
                 fields="sheets.data.rowData.values.formattedValue",
                 includeGridData=True,
             )
-            .execute()
+            .execute
         )
         if "rowData" in output["sheets"][0]["data"][0]:
             for rowJson in output["sheets"][0]["data"][0]["rowData"]:
@@ -144,7 +148,7 @@ def format_hyperlink_formula(url: str, text: str) -> str:
 
 
 def parse_update_cells_requests(spreadsheet_tab_id: int, cell_rows: list[list[Cell]], 
-                               starting_row_index: int, starting_column_index: int) -> list[dict[str, typing.Any]]:
+                                starting_row_index: int, starting_column_index: int) -> list[dict[str, typing.Any]]:
     requests = []
 
     for i, cell_row in enumerate(cell_rows):
@@ -217,6 +221,24 @@ def parse_update_cells_requests(spreadsheet_tab_id: int, cell_rows: list[list[Ce
     return requests 
 
 
+def parse_update_cells_clear_request(spreadsheet_tab_id: int, 
+                                     starting_row_index: int, ending_row_index: int,
+                                     starting_column_index: int, ending_column_index: int) -> dict[str, typing.Any]:
+    result = {
+        "updateCells": {
+            "fields": "*",
+            "range": {
+                "sheetId": spreadsheet_tab_id,
+                "startRowIndex": starting_row_index,
+                "endRowIndex": ending_row_index,
+                "startColumnIndex": starting_column_index,
+                "endColumnIndex": ending_column_index,
+            }
+        }
+    }
+    return result
+
+
 class SHEET_DIMENSION(Enum):
     ROWS = "ROWS"
     COLUMNS = "COLUMNS"
@@ -253,13 +275,13 @@ async def send_sheet_batch_update(spreadsheet_id: str, requests: list[dict[str, 
         
     try:
         service = build("sheets", "v4", credentials=credentials)
-        response = (
+        response = await run_blocking(
             service.spreadsheets()
             .batchUpdate(
                 spreadsheetId=spreadsheet_id,
                 body = {"requests": requests}
             )
-            .execute()
+            .execute
         )
     except Exception as error:
         await log_exception(f"Sending google sheets batch requests failed", error, error_strings, True)
@@ -272,14 +294,14 @@ async def clear_cells(spreadsheet_id: str, sheet_name: str,
     result = False
     try:
         service = build("sheets", "v4", credentials=credentials)
-        output = (
+        output = await run_blocking(
             service.spreadsheets()
             .values()
             .clear(
                 spreadsheetId=spreadsheet_id,
                 range=f"{sheet_name}!{range}"
             )
-            .execute()
+            .execute
         )
         print(f"Cells cleared: {output.get('clearedRange')}")
         result = True

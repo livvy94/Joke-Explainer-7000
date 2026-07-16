@@ -2595,7 +2595,7 @@ class SortPlaylistVideosResult(NamedTuple):
     error_strings: list[str]
 
 async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_videos: list[PlaylistVideo], 
-                               credentials: Credentials) -> SortPlaylistVideosResult:
+                               last_row_index: int, credentials: Credentials) -> SortPlaylistVideosResult:
 
     error_strings: list[str] = []
 
@@ -2829,7 +2829,8 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
 
             row_index += 1
 
-        requests = parse_update_cells_requests(spreadsheet_tab_id, cell_rows, 3, 3)
+        requests.append(parse_update_cells_clear_request(spreadsheet_tab_id, 3, last_row_index, 3, 8))
+        requests.extend(parse_update_cells_requests(spreadsheet_tab_id, cell_rows, 3, 3))
 
     return SortPlaylistVideosResult(matched_sorted, unmatched, private, requests, error_strings) 
 
@@ -2853,7 +2854,7 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
         return await send(f"Invalid playlist link: `{args[0]}`. {instructions}", command_context.channel)
 
     youtube_playlist = YouTubePlaylist() 
-    sheet_info = SheetInfo(False, 0, "", [])
+    sheet_info = SheetInfo(False, 0, "", 0, 0, [])
     async with command_context.channel.typing():
         youtube_playlist = await get_playlist_details(playlist_id, YOUTUBE_API_KEY)
         if len(youtube_playlist.error_strings):
@@ -2890,17 +2891,27 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
         @discord.ui.button(label='Sort track names in spreadsheet', style=discord.ButtonStyle.primary)
         async def sortButton(self, interaction: discord.Interaction, button: discord.ui.Button):
             try:
-                return_message = ""
+                return_message = "Ooops! Error!"
                 error_strings = []
-                sort_playlist_videos_result = await sort_playlist_videos(youtube_playlist.title, self.sorting_sheet_id, self.playlist_videos, credentials)
-                self.last_sort_playlist_videos_result = sort_playlist_videos_result
-                error_strings.extend(sort_playlist_videos_result.error_strings)
 
-                batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, sort_playlist_videos_result.requests, credentials)
-                error_strings.extend(batch_update_response.error_strings)
+                last_row_index = 0
+                sheet_info = await get_sheet_info(PLAYLISTS_SPREADSHEET_ID, youtube_playlist.title, credentials)
+                if not len(sheet_info.error_strings):
+                    last_row_index = sheet_info.row_count - 1
+                    error_strings.extend(sheet_info.error_strings)
+
+                if not len(sheet_info.error_strings):
+                    sort_playlist_videos_result = await sort_playlist_videos(youtube_playlist.title, self.sorting_sheet_id, self.playlist_videos, last_row_index, credentials)
+                    self.last_sort_playlist_videos_result = sort_playlist_videos_result
+                    error_strings.extend(sort_playlist_videos_result.error_strings)
+
+                    batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, sort_playlist_videos_result.requests, credentials)
+                    error_strings.extend(batch_update_response.error_strings)
+
                 if not len(error_strings):
                     return_message = f"Sorted! {self.sorting_sheet_url}"
-                    await interaction.response.edit_message(content=return_message, view=self)
+
+                await interaction.response.edit_message(content=return_message, view=self)
 
                 await send_if_errors("Errors occured during sorting", error_strings, interaction.channel)
             except Exception as error:
@@ -3021,9 +3032,15 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
                                 requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 225, SHEET_DIMENSION.COLUMNS, 4, 4))
                                 requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 55,  SHEET_DIMENSION.COLUMNS, 5, 5))
 
+                    last_row_index = 0
+                    sheet_info_new = await get_sheet_info(PLAYLISTS_SPREADSHEET_ID, youtube_playlist.title, credentials)
+                    if not len(sheet_info_new.error_strings):
+                        last_row_index = sheet_info_new.row_count - 1
+                        error_strings.extend(sheet_info_new.error_strings)
+
                     sort_playlist_videos_result = SortPlaylistVideosResult([], [], [], [], []) 
                     if not len(error_strings):
-                        sort_playlist_videos_result = await sort_playlist_videos(youtube_playlist.title, sorting_sheet_id, playlist_videos, credentials)
+                        sort_playlist_videos_result = await sort_playlist_videos(youtube_playlist.title, sorting_sheet_id, playlist_videos, last_row_index, credentials)
                         requests.extend(sort_playlist_videos_result.requests)
                         error_strings.extend(sort_playlist_videos_result.error_strings)
 
