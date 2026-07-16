@@ -1,16 +1,13 @@
 // ==UserScript==
-// @name         Playlist Sorter
+// @name         #META_NAME
 // @namespace    http://tampermonkey.net/
 // @version      2026-06-28
 // @description  sort shit 
 // @author       Joke-Explainer™ 7000
-// @match        https://*.youtube.com/playlist*
+// @match        #META_YOUTUBE_LINK
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=youtube.com
-// @grant        none
 // @run-at       document-idle
-// @grant        GM_log
-// @grant        GM_openInTab
-// @grant        window.close
+// @grant        none
 // ==/UserScript==
 
 function sleep(ms) {
@@ -245,7 +242,7 @@ async function sortPlaylist(videoIds) {
     console.log("All videos sorted! Hopefully...")
 }
 
-//videoIds defined via injection
+#META_VIDEO_IDS
 
 const runCallback = () => {
     const element = document.querySelector('ytd-item-section-renderer');

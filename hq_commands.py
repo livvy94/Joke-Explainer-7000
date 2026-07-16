@@ -2936,7 +2936,9 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
                 tampermonkey_script = ""
                 with open("./playlistSorting/tampermonkeySorting.js", 'r') as file:
                     tampermonkey_script = file.read()
-                tampermonkey_script += f"\n\n{video_ids_string}\n//Good Luck!"
+                tampermonkey_script = tampermonkey_script.replace("#META_NAME", f'Playlist Sort - {youtube_playlist.title}') 
+                tampermonkey_script = tampermonkey_script.replace("#META_YOUTUBE_LINK", f'https://*.youtube.com/playlist?list={playlist_id}') 
+                tampermonkey_script = tampermonkey_script.replace("#META_VIDEO_IDS", video_ids_string) 
 
                 filename = "tampermonkeyscript.js"
                 with open(filename, "w") as f:
@@ -3010,7 +3012,7 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
                                 ]
                                 cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(0.866, 0.494, 0.419), wrap_strategy=WRAP_STRATEGY.WRAP)))
                                 texts = [
-                                    "List track names HERE without their mixnames to define the ordering of the OST. Capitalization matters! Color does not.",
+                                    "List track names HERE without their mixnames to define the ordering of the OST. Capitalization matters! Color does not. Accepts track names OR a YouTube link.",
                                     "If a track belongs to an alterate game release (Ex: Sonic Mania Plus, Mario Kart 8 Deluxe) list the game name here.",
                                     "If a track has an alternate spelling, list it here. A video with this track name will be sorted alongside the primary track name (the first column)."
                                 ]
