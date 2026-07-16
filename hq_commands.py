@@ -2603,6 +2603,7 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
         track_name: str
         game_name_alt: str
         track_name_alt: str
+        youtube_link: str
 
     track_sheet_entries: list[TrackSheetEntry] = [] 
     sheet_data = RawSheetData([[]], []) 
@@ -2613,14 +2614,20 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
     if not len(error_strings):
         for row in sheet_data.rows:
             if len(row):
-                track_and_mixname = row[0]
+                track_and_mixname = "" 
                 game_name_alt = "" 
                 track_name_alt = ""
+                youtube_link = ""
+                first_column = row[0]
+                if first_column.startswith("https://"):
+                    youtube_link = first_column
+                else:
+                    track_and_mixname = first_column
                 if len(row) >= 2:
                     game_name_alt = row[1]
                 if len(row) >= 3:
                     track_name_alt = row[2]
-                track_sheet_entries.append(TrackSheetEntry(track_and_mixname, game_name_alt, track_name_alt))
+                track_sheet_entries.append(TrackSheetEntry(track_and_mixname, game_name_alt, track_name_alt, youtube_link))
     
     matched_sorted: list[MatchedVideo] = []
     unmatched: list[PlaylistVideo] = []
@@ -2649,11 +2656,16 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
             if playlist_video.isPrivate:
                 private.append(playlist_video)
             else:
-                matched_track_sheet_entry = TrackSheetEntry("", "", "") 
+                matched_track_sheet_entry = TrackSheetEntry("", "", "", "") 
                 matched_game_name = ""
                 is_matched_alt = False
+                is_matched_link = False
 
                 for track_sheet_entry in track_sheet_entries:
+                    if len(track_sheet_entry.youtube_link) and playlist_video.video_id in track_sheet_entry.youtube_link:
+                        matched_track_sheet_entry = track_sheet_entry
+                        is_matched_link = True 
+                        break
                     game_name = sheet_name
                     if len(track_sheet_entry.game_name_alt):
                         game_name = track_sheet_entry.game_name_alt
@@ -2685,22 +2697,29 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
                         matched_game_name = ""
                         is_matched_alt = True 
 
-                if len(matched_track_sheet_entry.track_name):
-                    track_and_mixname = matched_track_sheet_entry.track_name
-                    if is_matched_alt:
-                        track_and_mixname = matched_track_sheet_entry.track_name_alt
+                if is_matched_link or len(matched_track_sheet_entry.track_name):
+                    track_name = ""
+                    game_name = ""
+                    mixname = "" 
+                    if is_matched_link:
+                        track_name = playlist_video.title
+                    else:
+                        track_name = matched_track_sheet_entry.track_name
+                        track_and_mixname = matched_track_sheet_entry.track_name
+                        if is_matched_alt:
+                            track_and_mixname = matched_track_sheet_entry.track_name_alt
 
-                    game_name = sheet_name
-                    if len(matched_track_sheet_entry.game_name_alt):
-                        game_name = matched_track_sheet_entry.game_name_alt
+                        game_name = sheet_name 
+                        if len(matched_track_sheet_entry.game_name_alt):
+                            game_name = matched_track_sheet_entry.game_name_alt
 
-                    game_name_string_with_dash = f" - {game_name}"
-                    track_name_and_mixname = playlist_video.title[:-len(game_name_string_with_dash)]
-                    mixname = track_name_and_mixname[len(track_and_mixname) + 1:]
+                        game_name_string_with_dash = f" - {game_name}"
+                        track_name_and_mixname = playlist_video.title[:-len(game_name_string_with_dash)]
+                        mixname = track_name_and_mixname[len(track_and_mixname) + 1:]
                     
                     if matched_track_sheet_entry not in sort_dict:
                         sort_dict[matched_track_sheet_entry] = []
-                    sort_dict[matched_track_sheet_entry].append(MatchedVideo(matched_track_sheet_entry.track_name, mixname, matched_game_name, playlist_video))
+                    sort_dict[matched_track_sheet_entry].append(MatchedVideo(track_name, mixname, matched_game_name, playlist_video))
                 else:
                     unmatched.append(playlist_video)
 
@@ -2963,7 +2982,8 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
 
                                 cell_rows: list[list[Cell]] = [[], [], []]
                                 playlist_link = f'https://www.youtube.com/playlist?list={playlist_id}'
-                                cell_rows[0].append(Cell(formula_text=f"=HYPERLINK(\"{playlist_link}\", \"{youtube_playlist.title}\")", font_size=32))
+                                linked_trackname = format_hyperlink_formula(playlist_link, youtube_playlist.title)
+                                cell_rows[0].append(Cell(formula_text=linked_trackname, font_size=32))
                                 texts = [
                                     "Track Name Order",
                                     "Alternate Game Name",

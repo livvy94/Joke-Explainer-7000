@@ -180,14 +180,6 @@ def parse_update_cells_requests(spreadsheet_tab_id: int, cell_rows: list[list[Ce
                 if cell.is_bold:
                     cell_format["textFormat"]["bold"] = cell.is_bold
 
-            cell_format["backgroundColorStyle"] = {
-                "rgbColor": {
-                    "red": cell.background_color.r,
-                    "green": cell.background_color.g,
-                    "blue": cell.background_color.b
-                }
-            }
-
             if (cell.background_color.r
                 or cell.background_color.g
                 or cell.background_color.b
