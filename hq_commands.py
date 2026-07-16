@@ -2703,10 +2703,18 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
                     sort_dict[matched_track_sheet_entry].append(MatchedVideo(matched_track_sheet_entry.track_name, mixname, matched_game_name, playlist_video))
                 else:
                     unmatched.append(playlist_video)
+
+        def sort_mixnames(mixname: str) -> str:
+            if len(mixname):
+                if mixname[0] == "(":
+                    mixname = mixname[1:]
+                if mixname[-1] == ")":
+                    mixname = mixname[:-1]
+            return mixname.casefold()
         
         for track_sheet_entry in track_sheet_entries:
             if track_sheet_entry in sort_dict:
-                sort_dict[track_sheet_entry].sort(key=lambda t: t.mixname.casefold())
+                sort_dict[track_sheet_entry].sort(key=lambda m: sort_mixnames(m.mixname))
                 for matched_video in sort_dict[track_sheet_entry]:
                     matched_sorted.append(matched_video)
 
@@ -2756,7 +2764,8 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
             if row_index >= len(cell_rows):
                 cell_rows.insert(row_index, [default_cell, default_cell])
 
-            cell_format = Cell(background_color=ColorRGBFloat(0.713, 0.843, 0.658)) 
+            #NOTE: (Ahmayk) all zeros doesn't override default link color for some reason
+            cell_format = Cell(background_color=ColorRGBFloat(0.713, 0.843, 0.658), foreground_color=(ColorRGBFloat(0, 0, 0.001)))
             cell_format_position = cell_format
             if (
                 (i == 0 and (matched_video.playlist_video.playlist_position != 0))
@@ -2765,10 +2774,11 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
                 cell_format_position = Cell(background_color=ColorRGBFloat(1, 0.850, 0.4))
             cell_rows[row_index].extend(cell_bulk_create([f'{(matched_video.playlist_video.playlist_position + 1):03}'], cell_format_position))
 
-            # TODO: (Ahmayk) hyperlink into api
-            # video_url = f'https://www.youtube.com/watch?v={playlist_video.video_id}'
-            strings = [f'{matched_video.track_name} {matched_video.mixname}', matched_video.game_name]
-            cell_rows[row_index].extend(cell_bulk_create(strings, cell_format))
+            split_title = split_video_title_guess(playlist_video.title, sheet_name)
+            video_url = f'https://www.youtube.com/watch?v={playlist_video.video_id}'
+            linked_trackname = format_hyperlink_formula(video_url, f"{matched_video.track_name} {matched_video.mixname}")
+            cell_rows[row_index].extend(cell_bulk_create_formula([linked_trackname], cell_format))
+            cell_rows[row_index].extend(cell_bulk_create([matched_video.game_name], cell_format))
 
             row_index += 1
 
@@ -2781,9 +2791,9 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
             if row_index >= len(cell_rows):
                 cell_rows.insert(row_index, [default_cell, default_cell])
 
-            cell_format = Cell(background_color=ColorRGBFloat(1, 0.52, 0.52))
+            cell_format = Cell(background_color=ColorRGBFloat(1, 0.52, 0.52), foreground_color=(ColorRGBFloat(0, 0, 0.001)))
             if i + unmatched_index_start >= private_index_start: 
-                cell_format = Cell(background_color=ColorRGBFloat(0.7, 0.7, 0.7))
+                cell_format = Cell(background_color=ColorRGBFloat(0.7, 0.7, 0.7), foreground_color=(ColorRGBFloat(0, 0, 0.001)))
 
             cell_format_position = cell_format
             if (
@@ -2793,10 +2803,11 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
                 cell_format_position = Cell(background_color=ColorRGBFloat(1, 0.850, 0.4))
             cell_rows[row_index].extend(cell_bulk_create([f'{(playlist_video.playlist_position + 1):03}'], cell_format_position))
 
-            # TODO: (Ahmayk) hyperlink into api
             split_title = split_video_title_guess(playlist_video.title, sheet_name)
-            strings = [split_title.track_and_mixname, split_title.game_name]
-            cell_rows[row_index].extend(cell_bulk_create(strings, cell_format))
+            video_url = f'https://www.youtube.com/watch?v={playlist_video.video_id}'
+            linked_trackname = format_hyperlink_formula(video_url, split_title.track_and_mixname)
+            cell_rows[row_index].extend(cell_bulk_create_formula([linked_trackname], cell_format))
+            cell_rows[row_index].extend(cell_bulk_create([split_title.game_name], cell_format))
 
             row_index += 1
 
@@ -2856,6 +2867,7 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
             self.sorting_sheet_url: int = sorting_sheet_url
             self.playlist_videos: list[PlaylistVideo] = playlist_videos 
             self.last_sort_playlist_videos_result: SortPlaylistVideosResult = sort_playlist_videos_result
+            self.timeout = 60*60
 
         @discord.ui.button(label='Sort track names in spreadsheet', style=discord.ButtonStyle.primary)
         async def sortButton(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -2951,12 +2963,8 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
                                 sorting_sheet_url = f'https://docs.google.com/spreadsheets/d/{PLAYLISTS_SPREADSHEET_ID}?gid={sorting_sheet_id}'
 
                                 cell_rows: list[list[Cell]] = [[], [], []]
-                                cell_rows[0].append(Cell(text=youtube_playlist.title, font_size=32))
-                                cell_rows[0].append(Cell())
-                                cell_rows[0].append(Cell())
-                                cell_rows[0].append(Cell())
-                                cell_rows[0].append(Cell(text=f'https://www.youtube.com/playlist?list={playlist_id}'))
-                                cell_rows[0].append(Cell())
+                                playlist_link = f'https://www.youtube.com/playlist?list={playlist_id}'
+                                cell_rows[0].append(Cell(formula_text=f"=HYPERLINK(\"{playlist_link}\", \"{youtube_playlist.title}\")", font_size=32))
                                 texts = [
                                     "Track Name Order",
                                     "Alternate Game Name",

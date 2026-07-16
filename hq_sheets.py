@@ -100,8 +100,10 @@ class WRAP_STRATEGY(Enum):
 
 class Cell(NamedTuple):
     text: str = "" 
+    formula_text: str = ""
     font_size: int = 0
     is_bold: bool = False
+    foreground_color: ColorRGBFloat = ColorRGBFloat(0, 0, 0)
     background_color: ColorRGBFloat = ColorRGBFloat(0, 0, 0)
     wrap_strategy: WRAP_STRATEGY = WRAP_STRATEGY.NULL 
 
@@ -113,11 +115,32 @@ def cell_bulk_create(texts: list[str], format_cell: Cell) -> list[Cell]:
                 text=text,
                 font_size=format_cell.font_size,
                 is_bold=format_cell.is_bold,
+                foreground_color=format_cell.foreground_color,
                 background_color=format_cell.background_color,
                 wrap_strategy=format_cell.wrap_strategy,
             )
         )
     return result
+
+def cell_bulk_create_formula(formula_texts: list[str], format_cell: Cell) -> list[Cell]:
+    result = []
+    for formula_text in formula_texts:
+        result.append(
+            Cell(
+                formula_text=formula_text,
+                font_size=format_cell.font_size,
+                is_bold=format_cell.is_bold,
+                foreground_color=format_cell.foreground_color,
+                background_color=format_cell.background_color,
+                wrap_strategy=format_cell.wrap_strategy,
+            )
+        )
+    return result
+
+def format_hyperlink_formula(url: str, text: str) -> str:
+    url = url.replace('"', '""')
+    text = text.replace('"', '""')
+    return f'=HYPERLINK("{url}", "{text}")'
 
 
 def parse_update_cells_requests(spreadsheet_tab_id: int, cell_rows: list[list[Cell]], 
@@ -127,14 +150,43 @@ def parse_update_cells_requests(spreadsheet_tab_id: int, cell_rows: list[list[Ce
     for i, cell_row in enumerate(cell_rows):
         cell_data_row = []
         for cell in cell_row:
-            cell_data: dict[str, typing.Any] = {"userEnteredValue": {"stringValue": cell.text }}
+            cell_data: dict[str, typing.Any] = {}
+            
+            if len(cell.text):
+                cell_data["userEnteredValue"] = {}
+                cell_data["userEnteredValue"]["stringValue"] = cell.text
+
+            if len(cell.formula_text):
+                if "userEnteredValue" not in cell_data:
+                    cell_data["userEnteredValue"] = {}
+                cell_data['userEnteredValue']['formulaValue'] = cell.formula_text
+
             cell_format: dict[str, typing.Any] = {}
-            if cell.font_size or cell.is_bold:
+            has_forground_color = (
+                cell.foreground_color.r or cell.foreground_color.g or cell.foreground_color.b
+            )
+            if cell.font_size or cell.is_bold or has_forground_color:
                 cell_format["textFormat"] = {}
+                if has_forground_color:
+                    cell_format["textFormat"]["foregroundColorStyle"] = {
+                        "rgbColor": {
+                            "red": cell.foreground_color.r,
+                            "green": cell.foreground_color.g,
+                            "blue": cell.foreground_color.b
+                        }
+                    } 
                 if cell.font_size:
                     cell_format["textFormat"]["fontSize"] = cell.font_size
                 if cell.is_bold:
                     cell_format["textFormat"]["bold"] = cell.is_bold
+
+            cell_format["backgroundColorStyle"] = {
+                "rgbColor": {
+                    "red": cell.background_color.r,
+                    "green": cell.background_color.g,
+                    "blue": cell.background_color.b
+                }
+            }
 
             if (cell.background_color.r
                 or cell.background_color.g
