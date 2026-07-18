@@ -192,25 +192,30 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
         unmatched: list[PlaylistVideo] = []
         private : list[PlaylistVideo] = []
 
-        def video_matches(track_sheet_entry_name: str, video_title: str, game_name_string_with_dash: str):
-            if (
-                (video_title.startswith(track_sheet_entry_name))
-            ):
-                if (
-                    video_title[:len(track_sheet_entry_name)] == track_sheet_entry_name
-                    or (
-                        len(video_title[:len(game_name_string_with_dash)]) > len(track_sheet_entry_name) 
-                        and (video_title[len(track_sheet_entry_name):].startswith(" ("))
-                    )
-                ):
-                    return True
-            return False
-
         class MatchedVideo(NamedTuple):
             track_name: str
             mixname: str
             game_name: str
             playlist_video: PlaylistVideo
+
+        def video_matches(track_sheet_entry_name: str, playlist_video: PlaylistVideo, game_name_string_with_dash: str) -> MatchedVideo | None:
+            result = None
+            if (
+                (playlist_video.title.startswith(track_sheet_entry_name))
+                and (
+                    playlist_video.title[:len(track_sheet_entry_name)] == track_sheet_entry_name
+                    or (
+                        len(playlist_video.title[:len(game_name_string_with_dash)]) > len(track_sheet_entry_name) 
+                        and (playlist_video.title[len(track_sheet_entry_name):].startswith(" ("))
+                    )
+                ) 
+            ):
+                track_name_and_mixname = playlist_video.title[:-len(game_name_string_with_dash)]
+                mixname = track_name_and_mixname[len(track_sheet_entry_name) + 1:]
+                if not len(mixname) or (mixname.startswith('(') and mixname.endswith(')')):
+                    result = MatchedVideo(track_sheet_entry_name, mixname, game_name_string_with_dash[3:], playlist_video)
+
+            return result
 
         sort_dict: dict[TrackSheetEntry, list[MatchedVideo]] = {} 
 
@@ -218,9 +223,8 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
             if playlist_video.isPrivate:
                 private.append(playlist_video)
             else:
+                matched_video: MatchedVideo | None = None
                 matched_track_sheet_entry = TrackSheetEntry("", "", "") 
-                matched_game_name = ""
-                is_matched_alt = False
 
                 for track_sheet_entry in track_sheet_entries:
                     game_name = sheet_name
@@ -229,49 +233,30 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
                     game_name_string_with_dash = f" - {game_name}"
 
                     if playlist_video.title.endswith(game_name_string_with_dash):
-                        if (
-                            (len(track_sheet_entry.track_name) > len(matched_track_sheet_entry.track_name))
-                            and video_matches(track_sheet_entry.track_name, playlist_video.title, game_name_string_with_dash)
-                        ):
-                            matched_track_sheet_entry = track_sheet_entry
-                            matched_game_name = game_name
-                            is_matched_alt = False
+                        if (len(track_sheet_entry.track_name) > len(matched_track_sheet_entry.track_name)):
+                            new_matched_video = video_matches(track_sheet_entry.track_name, playlist_video, game_name_string_with_dash)
+                            if (new_matched_video):
+                                matched_video = new_matched_video
+                                matched_track_sheet_entry = track_sheet_entry
 
                         if ( 
                             len(track_sheet_entry.track_name_alt)
                             and (len(track_sheet_entry.track_name_alt) > len(matched_track_sheet_entry.track_name_alt)) 
-                            and video_matches(track_sheet_entry.track_name_alt, playlist_video.title, game_name_string_with_dash)
                         ):
-                            matched_track_sheet_entry = track_sheet_entry
-                            matched_game_name = game_name
-                            is_matched_alt = True
+                            new_matched_video = video_matches(track_sheet_entry.track_name_alt, playlist_video, game_name_string_with_dash)
+                            if (new_matched_video):
+                                matched_video = new_matched_video
+                                matched_track_sheet_entry = track_sheet_entry
 
                     elif track_sheet_entry.track_name == playlist_video.title: 
                         matched_track_sheet_entry = track_sheet_entry
-                        matched_game_name = ""
-                        is_matched_alt = False
                     elif len(track_sheet_entry.track_name_alt) and track_sheet_entry.track_name_alt == playlist_video.title: 
                         matched_track_sheet_entry = track_sheet_entry
-                        matched_game_name = ""
-                        is_matched_alt = True 
 
-                if len(matched_track_sheet_entry.track_name):
-                    track_name = matched_track_sheet_entry.track_name
-                    track_and_mixname = matched_track_sheet_entry.track_name
-                    if is_matched_alt:
-                        track_and_mixname = matched_track_sheet_entry.track_name_alt
-
-                    game_name = sheet_name 
-                    if len(matched_track_sheet_entry.game_name_alt):
-                        game_name = matched_track_sheet_entry.game_name_alt
-
-                    game_name_string_with_dash = f" - {game_name}"
-                    track_name_and_mixname = playlist_video.title[:-len(game_name_string_with_dash)]
-                    mixname = track_name_and_mixname[len(track_and_mixname) + 1:]
-                    
+                if len(matched_track_sheet_entry.track_name) and matched_video:
                     if matched_track_sheet_entry not in sort_dict:
                         sort_dict[matched_track_sheet_entry] = []
-                    sort_dict[matched_track_sheet_entry].append(MatchedVideo(track_name, mixname, matched_game_name, playlist_video))
+                    sort_dict[matched_track_sheet_entry].append(matched_video)
                 else:
                     unmatched.append(playlist_video)
 
