@@ -58,8 +58,12 @@ class OutputVideoEntry(NamedTuple):
     game_name: str
     playlist_video: PlaylistVideo 
 
+class SheetOptions(NamedTuple):
+    group_by_mixname: bool = False
+
 class SortPlaylistVideosResult(NamedTuple):
     ouput_video_entries: list[OutputVideoEntry]
+    sheet_options: SheetOptions
     requests: list[dict[str, typing.Any]]
     error_strings: list[str]
     user_errors: list[str]
@@ -78,7 +82,7 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
         if len(batch_values_get_result.batches) != 1:
             error_strings.append(f"Unexpected response from google drive API: {len(batch_values_get_result.batches)} batches. (Expected 1)")
 
-        read_sheet_result = await read_sheet(PLAYLISTS_SPREADSHEET_ID, sheet_name, "M4:O", credentials)
+        read_sheet_result = await read_sheet(PLAYLISTS_SPREADSHEET_ID, sheet_name, "K4:O", credentials)
         error_strings.extend(read_sheet_result.error_strings)
 
     class TrackSheetEntry(NamedTuple):
@@ -93,6 +97,7 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
 
     output_video_entries: list[OutputVideoEntry] = []
     requests: list[dict[str, typing.Any]] = []
+    sheet_options = SheetOptions()
 
     track_sheet_entries: list[TrackSheetEntry] = []
     place_at_beginning_videos: list[PlaylistVideo] = []
@@ -112,13 +117,17 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
         playlist_videos_to_sort: list[PlaylistVideo] = []
         playlist_videos_to_sort.extend(playlist_videos)
 
+        group_by_mixname = False
+
         for i, row_read_cell in enumerate(read_sheet_result.rows):
-            if len(row_read_cell):
-                urls = urls_from_read_cell(row_read_cell[0])
+
+            if  i == 0 and len(row_read_cell) and len(row_read_cell[0].text):
+                group_by_mixname = True
+
+            if len(row_read_cell) >= 3:
+                urls = urls_from_read_cell(row_read_cell[2])
                 for url in urls:
-                    user_errors_row = []
-                    if not url.startswith("https://"):
-                        user_errors_row.append(f"`{url}` is not a YouTube URL. (row {i + 4}).")
+                    user_errors_row: list[str] = []
                     playlist_video = find_youtube_video(url, i, playlist_videos, user_errors_row)
                     user_errors.extend(user_errors_row)
                     if not len(user_errors_row):
@@ -126,18 +135,19 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
                         if playlist_video in playlist_videos_to_sort:
                             playlist_videos_to_sort.remove(playlist_video)
                         
-            if len(row_read_cell) > 1:
-                url_list = urls_from_read_cell(row_read_cell[1]) 
+            if len(row_read_cell) >= 4:
+                url_list = urls_from_read_cell(row_read_cell[3]) 
                 url_place_before = "" 
-                if len(row_read_cell) >= 3:
-                    url_place_befores = urls_from_read_cell(row_read_cell[2])
+                user_errors_row = []
+                if len(row_read_cell) >= 5:
+                    url_place_befores = urls_from_read_cell(row_read_cell[4])
                     if len(url_place_befores) > 1:
                         user_errors_row.append(f"Only one link allowed in Place Before cell (row {i + 4}).")
                     if len(url_place_befores) == 1:
                         url_place_before = url_place_befores[0]
                 url_place_after = ""
-                if len(row_read_cell) == 4:
-                    url_place_afters = urls_from_read_cell(row_read_cell[3])
+                if len(row_read_cell) == 6:
+                    url_place_afters = urls_from_read_cell(row_read_cell[5])
                     if len(url_place_afters) > 1:
                         user_errors_row.append(f"Only one link allowed in Place After cell (row {i + 4}).")
                     if len(url_place_afters) == 1:
@@ -177,6 +187,8 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
                         if video in playlist_videos_to_sort:
                             playlist_videos_to_sort.remove(video)
 
+        sheet_options = SheetOptions(group_by_mixname)
+
         unmatched: list[PlaylistVideo] = []
         private : list[PlaylistVideo] = []
 
@@ -215,6 +227,7 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
                     if len(track_sheet_entry.game_name_alt):
                         game_name = track_sheet_entry.game_name_alt
                     game_name_string_with_dash = f" - {game_name}"
+
                     if playlist_video.title.endswith(game_name_string_with_dash):
                         if (
                             (len(track_sheet_entry.track_name) > len(matched_track_sheet_entry.track_name))
@@ -269,14 +282,6 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
                 if mixname[-1] == ")":
                     mixname = mixname[:-1]
             return mixname.casefold()
-        
-        for track_sheet_entry in track_sheet_entries:
-            if track_sheet_entry in sort_dict:
-                sort_dict[track_sheet_entry].sort(key=lambda m: sort_mixnames(m.mixname))
-                for matched_video in sort_dict[track_sheet_entry]:
-                    output_video_entry = OutputVideoEntry(SortedType.MATCHED, f"{matched_video.track_name} {matched_video.mixname}", 
-                                                          matched_video.game_name, matched_video.playlist_video)
-                    output_video_entries.append(output_video_entry)
 
         def playlist_video_to_split_guess(playlist_video: PlaylistVideo, sorted_type: SortedType) -> OutputVideoEntry:
             track_and_mixname = playlist_video.title 
@@ -293,8 +298,57 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
         for playlist_video in unmatched: 
             output_video_entry = playlist_video_to_split_guess(playlist_video, SortedType.UNMATCHED)
             unmatched_output_video_entries.append(output_video_entry)
+        
+        if sheet_options.group_by_mixname:
 
-        output_video_entries.extend(unmatched_output_video_entries)
+            class MixnameEntry(NamedTuple):
+                track_sheet_entry: TrackSheetEntry | None
+                output_video_entry: OutputVideoEntry
+
+            mixname_dict: dict[str, list[MixnameEntry]] = {} 
+
+            for track_sheet_entry in track_sheet_entries:
+                if track_sheet_entry in sort_dict:
+                    for matched_video in sort_dict[track_sheet_entry]:
+                        output_video_entry = OutputVideoEntry(SortedType.MATCHED, f"{matched_video.track_name} {matched_video.mixname}", 
+                                                            matched_video.game_name, matched_video.playlist_video)
+                        mixname_entry = MixnameEntry(track_sheet_entry, output_video_entry)
+                        if matched_video.mixname not in mixname_dict:
+                            mixname_dict[matched_video.mixname] = []
+                        mixname_dict[matched_video.mixname].append(mixname_entry)
+
+            for output_video_entry in unmatched_output_video_entries:
+                mixname_guess = ""
+                index_mixname_guess_start = output_video_entry.track_and_mixname.find(" (")
+                if index_mixname_guess_start > 0:
+                    index_mixname_guess_end = output_video_entry.track_and_mixname.rfind(")",  index_mixname_guess_start)
+                    if index_mixname_guess_end > 0:
+                        mixname_guess = output_video_entry.track_and_mixname[index_mixname_guess_start + 1:index_mixname_guess_end + 1]
+                if mixname_guess not in mixname_dict:
+                    mixname_dict[mixname_guess] = []
+                mixname_dict[mixname_guess].append(MixnameEntry(None, output_video_entry))
+
+            mixnames_sorted = list(sorted(mixname_dict.keys(), key=sort_mixnames))
+            for mixname in mixnames_sorted:
+                for track_sheet_entry in track_sheet_entries:
+                    for mixname_entry in mixname_dict[mixname]:
+                        if mixname_entry.track_sheet_entry == track_sheet_entry:
+                            output_video_entries.append(mixname_entry.output_video_entry)
+
+                for mixname_entry in mixname_dict[mixname]:
+                    if not mixname_entry.track_sheet_entry:
+                        output_video_entries.append(mixname_entry.output_video_entry)
+        else:
+            for track_sheet_entry in track_sheet_entries:
+                if track_sheet_entry in sort_dict:
+                    sort_dict[track_sheet_entry].sort(key=lambda m: sort_mixnames(m.mixname))
+                    for matched_video in sort_dict[track_sheet_entry]:
+                        output_video_entry = OutputVideoEntry(SortedType.MATCHED, f"{matched_video.track_name} {matched_video.mixname}", 
+                                                            matched_video.game_name, matched_video.playlist_video)
+                        output_video_entries.append(output_video_entry)
+
+            output_video_entries.extend(unmatched_output_video_entries)
+
         for playlist_video in private:
             output_video_entries.append(OutputVideoEntry(SortedType.PRIVATE, playlist_video.title, "", playlist_video))
 
@@ -380,6 +434,16 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
 
             row_index += 1
 
+        def push_options_on_off(option_bool: bool, row_index: int, cell_rows: list[list[Cell]]):
+            if len(cell_rows) < row_index + 1:
+                cell_rows.insert(row_index, [default_cell, default_cell, default_cell, default_cell, default_cell])
+            if option_bool:
+                cell_rows[row_index].append(Cell(text="ON", background_color=ColorRGBFloat(0, 1, 1), font_size=12, is_bold=True))
+            else:
+                cell_rows[row_index].append(Cell(text="OFF", background_color=ColorRGBFloat(0.717, 0.717, 0.717)))
+
+        push_options_on_off(sheet_options.group_by_mixname, 0, cell_rows)
+
         requests.append(parse_update_cells_clear_request(spreadsheet_tab_id, 3, last_row_index, 3, 8))
         requests.extend(parse_update_cells_requests(spreadsheet_tab_id, cell_rows, 3, 3))
 
@@ -387,7 +451,7 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
         time_cells = [Cell(text=text, is_bold=True, background_color=ColorRGBFloat(0.9, 0.9, 0.9))]
         requests.extend(parse_update_cells_requests(spreadsheet_tab_id, [time_cells], 0, 3))
 
-    return SortPlaylistVideosResult(output_video_entries, requests, error_strings, user_errors) 
+    return SortPlaylistVideosResult(output_video_entries, sheet_options, requests, error_strings, user_errors) 
 
 
 
@@ -542,7 +606,7 @@ async def start_interactive_playlist_gen(input_youtube_playlist_link: str, chann
                         FOO_DATABASE[playlist_id] = playlist_videos 
                         FOO_DATABASE.sync()
 
-                    reformat_sheet = False
+                    reformat_sheet = False 
                     
                     requests = []
                     sorting_sheet_id = 0 
@@ -584,8 +648,8 @@ async def start_interactive_playlist_gen(input_youtube_playlist_link: str, chann
                         cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(0.866, 0.494, 0.419), wrap_strategy=WRAP_STRATEGY.WRAP)))
                         texts = [
                             "Options",
-                            "",
-                            "",
+                            "On or Off",
+                            "Info",
                         ]
                         cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(0.705, 0.654, 0.839), wrap_strategy=WRAP_STRATEGY.WRAP)))
                         texts = [
@@ -616,22 +680,30 @@ async def start_interactive_playlist_gen(input_youtube_playlist_link: str, chann
                         cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.917, 0.6, 0.6), wrap_strategy=WRAP_STRATEGY.WRAP)))
                         texts = [
                             "Options to control sorting behavior",
-                            "",
-                            "",
+                            "Any text = On. Empty = Off\n(Checkboxes aren't readable the google sheets API so this is a workaround lol)",
+                            "Info about the option",
                         ]
                         cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.850, 0.823, 0.913), wrap_strategy=WRAP_STRATEGY.WRAP)))
                         texts = [
-                            "YouTube URLs in this column will be placed in this order at the beginning of the playlist.",
+                            "YouTube URLs in this column will be placed in this order at the beginning of the playlist. You can also enter text with a hyperlink (eg copy & paste from the red Output Track Name Column) or convert the link into a chip (the thing that comes up when you press tab after entering a URL)",
                         ]
                         cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.988, 0.898, 0.803), wrap_strategy=WRAP_STRATEGY.WRAP)))
                         texts = [
-                            "One or more Youtube URLs, seperated by newlines (press CTL-Enter to enter newline), will be placed either before or after a youtube URL to the right.",
+                            "One or more Youtube URLs. Will be placed either before or after a youtube URL to the right.",
                             "A single YouTube URL. The list of YouTube URLS in the previous column will be placed BEFORE the first occurance of this URL.",
-                            "A single YouTube URL. Same as previous column, but placed AFTER.",
+                            "A single YouTube URL. Same as previous column, but placed AFTER. You can't have a before and an after in the same row.",
                         ]
                         cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(1, 0.949, 0.8), wrap_strategy=WRAP_STRATEGY.WRAP)))
 
                         requests = parse_update_cells_requests(sorting_sheet_id, cell_rows, 0, 0)
+
+                        option_rows: list[list[Cell]] = [[]]
+                        format_cell_label = Cell(background_color=ColorRGBFloat(0.811, 0.886, 0.952), font_size=12, is_bold=True, wrap_strategy=WRAP_STRATEGY.WRAP)
+                        format_cell_desc = Cell(background_color=ColorRGBFloat(0.811, 0.886, 0.952), wrap_strategy=WRAP_STRATEGY.WRAP)
+                        option_rows[0].extend(cell_bulk_create(["Group by Mixname"], format_cell_label))
+                        option_rows[0].append(Cell())
+                        option_rows[0].extend(cell_bulk_create(["Tracks are grouped by mixname instead of grouping all track names, starting with mixless tracks."], format_cell_desc))
+                        requests.extend(parse_update_cells_requests(sorting_sheet_id, option_rows, 3, 9))
 
                         requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 300, SHEET_DIMENSION.COLUMNS, 0, 0))
                         requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 225, SHEET_DIMENSION.COLUMNS, 1, 2))
@@ -639,9 +711,9 @@ async def start_interactive_playlist_gen(input_youtube_playlist_link: str, chann
                         requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 225, SHEET_DIMENSION.COLUMNS, 4, 4))
                         requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 55,  SHEET_DIMENSION.COLUMNS, 5, 5))
                         requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 225, SHEET_DIMENSION.COLUMNS, 7, 7))
-                        requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 200, SHEET_DIMENSION.COLUMNS, 8, 8))
-                        requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 100, SHEET_DIMENSION.COLUMNS, 9, 10))
-                        requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 255, SHEET_DIMENSION.COLUMNS, 12, 15))
+                        requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 200, SHEET_DIMENSION.COLUMNS, 8, 10))
+                        requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 325, SHEET_DIMENSION.COLUMNS, 12, 12))
+                        requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 255, SHEET_DIMENSION.COLUMNS, 13, 15))
 
                     last_row_index = 0
                     sheet_info_new = await get_sheet_info(PLAYLISTS_SPREADSHEET_ID, youtube_playlist.title, credentials_and_errors.credentials)
@@ -649,7 +721,7 @@ async def start_interactive_playlist_gen(input_youtube_playlist_link: str, chann
                         last_row_index = sheet_info_new.row_count - 1
                         error_strings.extend(sheet_info_new.error_strings)
 
-                    sort_playlist_videos_result = SortPlaylistVideosResult([], [], [], []) 
+                    sort_playlist_videos_result = SortPlaylistVideosResult([], SheetOptions(), [], [], []) 
                     if not len(error_strings):
                         sort_playlist_videos_result = await sort_playlist_videos(youtube_playlist.title, sorting_sheet_id, playlist_videos, last_row_index, credentials_and_errors.credentials)
                         requests.extend(sort_playlist_videos_result.requests)

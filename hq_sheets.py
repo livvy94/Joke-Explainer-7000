@@ -131,7 +131,9 @@ async def read_sheet(spreadsheet_id: str, sheet_name: str, range: str, credentia
             for rowJson in output["sheets"][0]["data"][0]["rowData"]:
                 rowList = []
                 for cell in rowJson.get("values", []):
-                    text = cell["formattedValue"]
+                    text = ""
+                    if "formattedValue" in cell:
+                        text = cell["formattedValue"]
                     hyperlink = ""
                     if "hyperlink" in cell:
                         hyperlink = cell["hyperlink"]
