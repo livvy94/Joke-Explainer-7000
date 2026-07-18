@@ -39,6 +39,12 @@ def find_youtube_video(url: str, row_index: int, playlist_videos: list[PlaylistV
         user_errors_row.append(f"Invalid URL: `{url}`. (row {row_index + 4}).")
     return result
 
+def format_sheet_timecode(preface: str) -> str: 
+    date = datetime.now(tz=tz.UTC)
+    date = date.astimezone(tz.gettz('America/Los_Angeles'))
+    timestring = date.strftime("%a, %b %d %Y - %I:%M %p (%S sec) (PST)") 
+    return f'{preface}\n{timestring}'
+
 class SortedType(Enum):
     MATCHED = auto()
     UNMATCHED = auto()
@@ -377,10 +383,7 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
         requests.append(parse_update_cells_clear_request(spreadsheet_tab_id, 3, last_row_index, 3, 8))
         requests.extend(parse_update_cells_requests(spreadsheet_tab_id, cell_rows, 3, 3))
 
-        date = datetime.now(tz=tz.UTC)
-        date = date.astimezone(tz.gettz('America/Los_Angeles'))
-        timestring = date.strftime("%a, %b %d %Y - %I:%M %p (%S sec) (PST)") 
-        text = f'Sheet last sorted:\n{timestring}'
+        text = format_sheet_timecode('Sheet last sorted')
         time_cells = [Cell(text=text, is_bold=True, background_color=ColorRGBFloat(0.9, 0.9, 0.9))]
         requests.extend(parse_update_cells_requests(spreadsheet_tab_id, [time_cells], 0, 3))
 
@@ -474,6 +477,14 @@ async def start_interactive_playlist_gen(input_youtube_playlist_link: str, chann
         @discord.ui.button(label='Generate Tampermonkey Script', style=discord.ButtonStyle.red)
         async def scriptButton(self, interaction: discord.Interaction, button: discord.ui.Button):
             try:
+                error_strings = [] 
+
+                text = format_sheet_timecode('Tampermonkey Script Last Exported:')
+                time_cells = [Cell(text=text, is_bold=True, background_color=ColorRGBFloat(0.9, 0.9, 0.9))]
+                requests = parse_update_cells_requests(self.sorting_sheet_id, [time_cells], 0, 6)
+                batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, requests, credentials_and_errors.credentials)
+                error_strings.extend(batch_update_response.error_strings)
+
                 resulting_order: list[PlaylistVideo] = []
                 for ouput_video_entry in self.last_sort_playlist_videos_result.ouput_video_entries:
                     resulting_order.append(ouput_video_entry.playlist_video) 
@@ -500,6 +511,8 @@ async def start_interactive_playlist_gen(input_youtube_playlist_link: str, chann
                 with open(filename, "rb") as f:
                     await interaction.channel.send(file=discord.File(f, filename))
                     await interaction.response.edit_message(content='Script sent!', view=self)
+
+                await send_if_errors("Errors occured", error_strings, interaction.channel)
 
             except Exception as error:
                 await send_crash(f'ERROR on playlistsort button:', error, interaction.channel)
