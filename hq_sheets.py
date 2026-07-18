@@ -80,6 +80,39 @@ async def get_raw_sheet_data(spreadsheet_id: str, sheet_name: str, row_start: in
 
     return RawSheetData(cells, error_strings) 
 
+class BatchValuesGetResult(NamedTuple):
+    batches: list[list[list[str]]]
+    error_strings: list[str]
+
+async def batch_get_values_from_sheet(spreadsheet_id: str, sheet_name: str, ranges: list[str], credentials: Credentials) -> BatchValuesGetResult:
+
+    batches: list[list[list[str]]] = []
+    error_strings: list[str] = []
+
+    ranges_parsed: list[str] = []
+    for range in ranges:
+        ranges_parsed.append(f'{sheet_name}!{range}')
+
+    try:
+        service = build("sheets", "v4", credentials=credentials)
+        output = await run_blocking(
+            service.spreadsheets().values().batchGet(
+                spreadsheetId=spreadsheet_id,
+                ranges=ranges_parsed
+            ).execute
+        )
+
+        if "valueRanges" in output:
+            for value_range_data in output["valueRanges"]:
+                rowList = []
+                for cell in value_range_data.get("values", []):
+                    rowList.append(cell)
+                batches.append(rowList)
+    except Exception as error:
+        await log_exception(f"Failed get google sheet data from {sheet_name}", error, error_strings, True)
+
+    return BatchValuesGetResult(batches, error_strings) 
+
 
 def parse_create_sheet_request(name: str) -> dict[str, typing.Any]:
     result = {
