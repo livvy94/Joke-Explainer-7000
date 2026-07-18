@@ -329,7 +329,9 @@ def parse_update_cells_clear_request(spreadsheet_tab_id: int,
                 "startRowIndex": starting_row_index,
                 "endRowIndex": ending_row_index,
                 "startColumnIndex": starting_column_index,
-                "endColumnIndex": ending_column_index,
+                ##NOTE: (Ahmayk) endIndex is expecting expecting the row/column after the last one (exclusive) for some reason,
+                # but that's confusing so our API just does what is more intuitive and does inclusive.
+                "endColumnIndex": ending_column_index + 1,
             }
         }
     }

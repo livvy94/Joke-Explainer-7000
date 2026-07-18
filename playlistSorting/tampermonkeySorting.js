@@ -239,6 +239,14 @@ async function sortPlaylist(videoIds) {
             await reloadIfVideosUnloaded(totalVideos, playlistVideos);
         }
     }
+
+    if ((numMoved > 0) && totalVideos > 90) {
+        console.log("RESTARTING! (finished maybe?")
+        await sleep(1000);
+        location.reload();
+        await sleep(9999999999999);
+    }
+
     console.log("All videos sorted! Hopefully...")
 }
 
