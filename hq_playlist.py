@@ -175,12 +175,9 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
         total_length += len(unmatched)
         total_length += len(private)
 
-        date = datetime.now(tz=tz.UTC)
-        date = date.astimezone(tz.gettz('America/Los_Angeles'))
-        timestring = date.strftime("%H:%M:%S (PST) - %d/%m/%Y") 
-
-        count_header = [f'COUNT: {len(unmatched)}', "", "", f'COUNT: {total_length}', f'Sheet last sorted: {timestring}']
+        count_header = [f'COUNT: {len(unmatched)}', "", "", f'COUNT: {total_length}', "", ""]
         cell_rows[0] = cell_bulk_create(count_header, Cell(is_bold=True, background_color=ColorRGBFloat(0.95686, 0.8, 0.8)))
+
 
         class SplitTitle(NamedTuple):
             track_and_mixname: str
@@ -212,7 +209,7 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
                 cell_rows.insert(row_index, [default_cell, default_cell])
 
             #NOTE: (Ahmayk) all zeros doesn't override default link color for some reason
-            cell_format = Cell(background_color=ColorRGBFloat(0.713, 0.843, 0.658), foreground_color=(ColorRGBFloat(0, 0, 0.001)))
+            cell_format = Cell(background_color=ColorRGBFloat(0.713, 0.843, 0.658), foreground_color=(ColorRGBFloat(0, 0, 0.001)), wrap_strategy=WRAP_STRATEGY.CLIP)
             cell_format_position = cell_format
             if (
                 (i == 0 and (matched_video.playlist_video.playlist_position != 0))
@@ -224,7 +221,7 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
             video_url = f'https://www.youtube.com/watch?v={matched_video.playlist_video.video_id}'
             linked_trackname = format_hyperlink_formula(video_url, f"{matched_video.track_name} {matched_video.mixname}")
             cell_rows[row_index].extend(cell_bulk_create_formula([linked_trackname], cell_format))
-            cell_rows[row_index].extend(cell_bulk_create([matched_video.game_name], cell_format))
+            cell_rows[row_index].extend(cell_bulk_create([matched_video.game_name, video_url], cell_format))
 
             row_index += 1
 
@@ -237,9 +234,9 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
             if row_index >= len(cell_rows):
                 cell_rows.insert(row_index, [default_cell, default_cell])
 
-            cell_format = Cell(background_color=ColorRGBFloat(1, 0.52, 0.52), foreground_color=(ColorRGBFloat(0, 0, 0.001)))
+            cell_format = Cell(background_color=ColorRGBFloat(1, 0.52, 0.52), foreground_color=(ColorRGBFloat(0, 0, 0.001)), wrap_strategy=WRAP_STRATEGY.CLIP)
             if i + unmatched_index_start >= private_index_start: 
-                cell_format = Cell(background_color=ColorRGBFloat(0.7, 0.7, 0.7), foreground_color=(ColorRGBFloat(0, 0, 0.001)))
+                cell_format = Cell(background_color=ColorRGBFloat(0.7, 0.7, 0.7), foreground_color=(ColorRGBFloat(0, 0, 0.001)), wrap_strategy=WRAP_STRATEGY.CLIP)
 
             cell_format_position = cell_format
             if (
@@ -253,12 +250,19 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
             video_url = f'https://www.youtube.com/watch?v={playlist_video.video_id}'
             linked_trackname = format_hyperlink_formula(video_url, split_title.track_and_mixname)
             cell_rows[row_index].extend(cell_bulk_create_formula([linked_trackname], cell_format))
-            cell_rows[row_index].extend(cell_bulk_create([split_title.game_name], cell_format))
+            cell_rows[row_index].extend(cell_bulk_create([split_title.game_name, video_url], cell_format))
 
             row_index += 1
 
         requests.append(parse_update_cells_clear_request(spreadsheet_tab_id, 3, last_row_index, 3, 8))
         requests.extend(parse_update_cells_requests(spreadsheet_tab_id, cell_rows, 3, 3))
+
+        date = datetime.now(tz=tz.UTC)
+        date = date.astimezone(tz.gettz('America/Los_Angeles'))
+        timestring = date.strftime("%a, %b %d %Y - %I:%M %p (%S sec) (PST)") 
+        text = f'Sheet last sorted:\n{timestring}'
+        time_cells = [Cell(text=text, is_bold=True, background_color=ColorRGBFloat(0.9, 0.9, 0.9))]
+        requests.extend(parse_update_cells_requests(spreadsheet_tab_id, [time_cells], 0, 3))
 
     return SortPlaylistVideosResult(matched_sorted, unmatched, private, requests, error_strings) 
 
@@ -266,7 +270,7 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id, playlist_vid
 
 async def start_interactive_playlist_gen(input_youtube_playlist_link: str, channel: TextChannel | Thread):
 
-    instructions = "Send a playlist link an I'll get or generate a playlist you can use to define the order of the playlist for sorting." 
+    instructions = "Send a playlist link and I'll get or generate a playlist you can use to define the order of the playlist for sorting." 
     if not len(input_youtube_playlist_link):
         return await send(instructions, channel)
 
@@ -418,42 +422,79 @@ async def start_interactive_playlist_gen(input_youtube_playlist_link: str, chann
                                 playlist_link = f'https://www.youtube.com/playlist?list={playlist_id}'
                                 linked_trackname = format_hyperlink_formula(playlist_link, youtube_playlist.title)
                                 cell_rows[0].append(Cell(formula_text=linked_trackname, font_size=32))
+
                                 texts = [
                                     "Track Name Order",
                                     "Alternate Game Name",
                                     "Alternate Track Name"
                                 ]
                                 cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(0.811, 0.886, 0.952), wrap_strategy=WRAP_STRATEGY.WRAP)))
+
                                 texts = [
-                                    "Ouput: Unmatched Track Name",
-                                    "Ouput: Unmatched Game Name",
-                                    "# Now",
-                                    "Output: Resulting Order, Track Name",
-                                    "Output: Resulting Order, Game name",
+                                    "Ouput:\nUnmatched Track Name",
+                                    "Ouput:\nUnmatched Game Name",
+                                    "#",
+                                    "Output:\nResulting Order, Track Name",
+                                    "Output:\nResulting Order, Game name",
+                                    "Output:\nResulting Order, YouTube URL",
                                 ]
                                 cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(0.866, 0.494, 0.419), wrap_strategy=WRAP_STRATEGY.WRAP)))
+
                                 texts = [
-                                    "List track names HERE without their mixnames to define the ordering of the OST. Capitalization matters! Color does not. Accepts track names OR a YouTube link.",
-                                    "If a track belongs to an alterate game release (Ex: Sonic Mania Plus, Mario Kart 8 Deluxe) list the game name here.",
+                                    "Options",
+                                    "",
+                                    "",
+                                ]
+                                cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(0.705, 0.654, 0.839), wrap_strategy=WRAP_STRATEGY.WRAP)))
+
+                                texts = [
+                                    "List of YouTube URLs",
+                                    "Place List BEFORE",
+                                    "Place List AFTER",
+                                ]
+                                cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(1, 0.898, 0.6), wrap_strategy=WRAP_STRATEGY.WRAP)))
+
+                                texts = [
+                                    "List track names HERE without their mixnames to define the ordering of the OST. Capitalization matters! Color does not.",
+                                    "If a track belongs to an alternate game release (Ex: Sonic Mania Plus, Mario Kart 8 Deluxe) list the game name here.",
                                     "If a track has an alternate spelling, list it here. A video with this track name will be sorted alongside the primary track name (the first column)."
                                 ]
                                 cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.952, 0.952, 0.952), wrap_strategy=WRAP_STRATEGY.WRAP)))
+
                                 texts = [
-                                    "AUTO POPULATED COLUMN.\nVideo track names that were not matched to a track in the \"Track Name Order\" row. When this column is empty, all videos are properly sorted!",
-                                    "AUTO POPULATED COLUMN.\nVideo game names with the previous column.",
+                                    "Video track names that were not matched to a track in the \"Track Name Order\" row. When this column is empty, all videos are properly sorted!\nAUTO POPULATED COLUMN",
+                                    "AUTO POPULATED COLUMN",
                                     "Current order",
-                                    "AUTO POPULATED COLUMN.\nThe resulting sorted order, track name. Ordered as: \n(1) (Green) Matched videos, sorted\n(2) (Red) Unmatched videos, unsorted\n(3) (Gray) Private videos",
-                                    "AUTO POPULATED COLUMN.\nThe resulting sorted order. Game name is shown here is track is matched. If unmatched, full video title is kept in previous column.",
+                                    "The resulting sorted order, track name. Ordered as: \n(1) (Green) Matched videos, sorted\n(2) (Red) Unmatched videos, unsorted\n(3) (Gray) Private videos.\nAUTO POPULATED COLUMN",
+                                    "AUTO POPULATED COLUMN",
+                                    "AUTO POPULATED COLUMN",
                                 ]
                                 cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.917, 0.6, 0.6), wrap_strategy=WRAP_STRATEGY.WRAP)))
+
+                                texts = [
+                                    "Options to control sorting behavior",
+                                    "",
+                                    "",
+                                ]
+                                cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.850, 0.823, 0.913), wrap_strategy=WRAP_STRATEGY.WRAP)))
+
+                                texts = [
+                                    "One or more Youtube URLs, seperated by newlines. (press CTL-Enter to enter newline)",
+                                    "A single YouTube URL. The list of YouTube URLS in the previous column will be placed BEFORE the first occurance of this URL.",
+                                    "A single YouTube URL. Same as previous column, but placed AFTER.",
+                                ]
+                                cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(1, 0.949, 0.8), wrap_strategy=WRAP_STRATEGY.WRAP)))
 
                                 requests = parse_update_cells_requests(sorting_sheet_id, cell_rows, 0, 0)
 
                                 requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 300, SHEET_DIMENSION.COLUMNS, 0, 0))
                                 requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 225, SHEET_DIMENSION.COLUMNS, 1, 2))
-                                requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 325, SHEET_DIMENSION.COLUMNS, 3, 7))
+                                requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 325, SHEET_DIMENSION.COLUMNS, 3, 13))
                                 requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 225, SHEET_DIMENSION.COLUMNS, 4, 4))
                                 requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 55,  SHEET_DIMENSION.COLUMNS, 5, 5))
+                                requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 225, SHEET_DIMENSION.COLUMNS, 8, 8))
+                                requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 100, SHEET_DIMENSION.COLUMNS, 9, 10))
+                                requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 255, SHEET_DIMENSION.COLUMNS, 12, 14))
 
                     last_row_index = 0
                     sheet_info_new = await get_sheet_info(PLAYLISTS_SPREADSHEET_ID, youtube_playlist.title, credentials)
