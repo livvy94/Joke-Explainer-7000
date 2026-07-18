@@ -19,6 +19,7 @@ from hq_vet import *
 from hq_sheets import * 
 from hq_database import * 
 from hq_playlist import * 
+from hq_specialist import * 
 
 import re
 import typing

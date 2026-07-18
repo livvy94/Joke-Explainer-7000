@@ -5,14 +5,15 @@ from hq_types import *
 
 #NOTE: (Ahmayk) define functionality, dependent on higher files
 from hq_discord import *
+from hq_sheets import *
 from hq_youtube import *
+from hq_playlist import *
 from hq_react import *
 from hq_qoc import *
 from hq_database import *
 from hq_embed import *
 from hq_metadata import *
-from hq_sheets import *
-from hq_playlist import *
+from hq_specialist import *
 from hq_source import *
 from hq_rip import *
 from hq_vet import *

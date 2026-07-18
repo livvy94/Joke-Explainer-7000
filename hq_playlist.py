@@ -1,9 +1,11 @@
 
+from hq_discord import *
 from hq_youtube import *
 from hq_sheets import *
 from dateutil import tz
 
 from bot_secrets import YOUTUBE_API_KEY, PLAYLISTS_SPREADSHEET_ID
+from enum import auto
 
 import shelve 
 FOO_DATABASE = shelve.open("foo", writeback=True)
@@ -397,7 +399,10 @@ async def start_interactive_playlist_gen(input_youtube_playlist_link: str, chann
         start_button_label = "Get videos and create spreadsheet"
         start_buttn_style = discord.ButtonStyle.green
 
-
+    ##NOTE: (Ahmayk) There's probably a better way to use buttons without dealing with
+    # this inheritance bullshit, but the library only intends for you to use them this way I think,
+    # and it would have taken more time to understand this library's nonsense than to implement 
+    # a better solution so inheritance bullshit it is
     class SortView(discord.ui.View):
         def __init__(self, sorting_sheet_id: int, sorting_sheet_url: str, 
                      playlist_videos: list[PlaylistVideo], sort_playlist_videos_result: SortPlaylistVideosResult):
