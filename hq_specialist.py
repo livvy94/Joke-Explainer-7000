@@ -70,27 +70,34 @@ async def get_qoc_sheet_data(desc: GetQoCSheetDataDesc, credentials: Credentials
     if call_sheet_api or not QOC_SHEET_DATA:
 
         specialist_entries: list[SpecialistEntry] = []
-
-        game_sheet_data = await get_raw_sheet_data(SPECIALISTS_SPREADSHEET_ID, "Game Strict Rules", 3, 'D', credentials)
-        error_strings.extend(game_sheet_data.error_strings)
-        for row in game_sheet_data.rows:
-            if len(row) > 1:
-                game_title = row[0] 
-                specialists = row[1]
-                alternate_game_titles: list[str] = [] 
-                if len(row) > 2:
-                    names = row[2].split("/")
-                    for name in names:
-                        alternate_game_titles.append(name.strip())
-                notes = "" 
-                if len(row) > 3:
-                    notes = row[3]
-                specialist_entries.append(SpecialistEntry(specialists, notes, game_title, alternate_game_titles, "", [], "", []))
+        ranges = [
+            f"Game Strict Rules!A3:D",
+            f"Composer Strict Rules!A3:D",
+            f"Source Strict Rules!A3:D",
+            f"Source Exclusions!A3:F",
+        ]
+        batch_values_get_result = await batch_get_values_from_sheet(SPECIALISTS_SPREADSHEET_ID, ranges, credentials)
+        error_strings.extend(batch_values_get_result.error_strings)
+        if len(batch_values_get_result.batches) != 4:
+            error_strings.append(f"Unexpected response from google drive API: {len(batch_values_get_result.batches)} batches. (Expected 4)")
 
         if not len(error_strings):
-            composer_sheet_data = await get_raw_sheet_data(SPECIALISTS_SPREADSHEET_ID, "Composer Strict Rules", 3, 'D', credentials)
-            error_strings.extend(composer_sheet_data.error_strings)
-            for row in composer_sheet_data.rows:
+            for row in batch_values_get_result.batches[0]:
+                if len(row) > 1:
+                    game_title = row[0] 
+                    specialists = row[1]
+                    alternate_game_titles: list[str] = [] 
+                    if len(row) > 2:
+                        names = row[2].split("/")
+                        for name in names:
+                            alternate_game_titles.append(name.strip())
+                    notes = "" 
+                    if len(row) > 3:
+                        notes = row[3]
+                    specialist_entries.append(SpecialistEntry(specialists, notes, game_title, alternate_game_titles, "", [], "", []))
+
+        if not len(error_strings):
+            for row in batch_values_get_result.batches[1]:
                 if len(row) > 1:
                     composer_string = row[0]
                     specialists = row[1]
@@ -105,9 +112,7 @@ async def get_qoc_sheet_data(desc: GetQoCSheetDataDesc, credentials: Credentials
                     specialist_entries.append(SpecialistEntry(specialists, notes, "", [], composer_string, alternate_composer_names, "", []))
 
         if not len(error_strings):
-            source_sheet_data = await get_raw_sheet_data(SPECIALISTS_SPREADSHEET_ID, "Source Strict Rules", 3, 'D', credentials)
-            error_strings.extend(source_sheet_data.error_strings)
-            for row in source_sheet_data.rows:
+            for row in batch_values_get_result.batches[2]:
                 if len(row) > 1:
                     source_string = row[0]
                     specialists = row[1]
@@ -123,9 +128,7 @@ async def get_qoc_sheet_data(desc: GetQoCSheetDataDesc, credentials: Credentials
 
         source_exclusions: list[SourceExclusion] = []
         if not len(error_strings):
-            source_exclusion_sheet_data = await get_raw_sheet_data(SPECIALISTS_SPREADSHEET_ID, "Source Exclusions", 3, 'F', credentials)
-            error_strings.extend(source_exclusion_sheet_data.error_strings)
-            for row in source_exclusion_sheet_data.rows:
+            for row in batch_values_get_result.batches[3]:
                 if len(row) > 1 and len(row[1]):
                     track_title = row[0] 
                     game_title = row[1]

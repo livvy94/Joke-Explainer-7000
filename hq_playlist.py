@@ -38,7 +38,12 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
 
     batch_values_get_result: BatchValuesGetResult = BatchValuesGetResult([], []) 
     if credentials and credentials.valid:
-        batch_values_get_result = await batch_get_values_from_sheet(PLAYLISTS_SPREADSHEET_ID, sheet_name, ["A4:C", "M4:M", "N4:O"], credentials)
+        ranges = [
+            f"{sheet_name}!A4:C",
+            f"{sheet_name}!M4:M",
+            f"{sheet_name}!N4:O"
+        ]
+        batch_values_get_result = await batch_get_values_from_sheet(PLAYLISTS_SPREADSHEET_ID, ranges, credentials)
         error_strings.extend(batch_values_get_result.error_strings)
         if len(batch_values_get_result.batches) != 3:
             error_strings.append(f"Unexpected response from google drive API: {len(batch_values_get_result.batches)} batches. (Expected 3)")
