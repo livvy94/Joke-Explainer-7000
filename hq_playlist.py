@@ -37,16 +37,15 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
     user_errors: list[str] = []
 
     batch_values_get_result: BatchValuesGetResult = BatchValuesGetResult([], []) 
+    read_sheet_result: ReadSheetResult = ReadSheetResult([], [])
     if credentials and credentials.valid:
-        ranges = [
-            f"{sheet_name}!A4:C",
-            f"{sheet_name}!M4:M",
-            f"{sheet_name}!N4:O"
-        ]
-        batch_values_get_result = await batch_get_values_from_sheet(PLAYLISTS_SPREADSHEET_ID, ranges, credentials)
+        batch_values_get_result = await batch_get_values_from_sheet(PLAYLISTS_SPREADSHEET_ID, [f"{sheet_name}!A4:C"], credentials)
         error_strings.extend(batch_values_get_result.error_strings)
-        if len(batch_values_get_result.batches) != 3:
-            error_strings.append(f"Unexpected response from google drive API: {len(batch_values_get_result.batches)} batches. (Expected 3)")
+        if len(batch_values_get_result.batches) != 1:
+            error_strings.append(f"Unexpected response from google drive API: {len(batch_values_get_result.batches)} batches. (Expected 1)")
+
+        read_sheet_result = await read_sheet(PLAYLISTS_SPREADSHEET_ID, sheet_name, "M4:O", credentials)
+        error_strings.extend(read_sheet_result.error_strings)
 
     class TrackSheetEntry(NamedTuple):
         track_name: str
@@ -57,6 +56,9 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
         videos: list[PlaylistVideo]
         video_before: PlaylistVideo
         video_after: PlaylistVideo
+
+    output_video_entries: list[OutputVideoEntry] = []
+    requests: list[dict[str, typing.Any]] = []
 
     track_sheet_entries: list[TrackSheetEntry] = []
     place_at_beginning_videos: list[PlaylistVideo] = []
@@ -76,6 +78,16 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
         playlist_videos_to_sort: list[PlaylistVideo] = []
         playlist_videos_to_sort.extend(playlist_videos)
 
+        def urls_from_read_cell(read_cell: ReadCell) -> list[str]:
+            result: list[str] = []
+            if len(read_cell.chip_urls):
+                result = read_cell.chip_urls
+            if len(read_cell.hyperlink):
+                result.append(read_cell.hyperlink)
+            if not len(result):
+                result = read_cell.text.split('\n')
+            return result
+
         def find_youtube_video(url: str) -> PlaylistVideo:
             result = PlaylistVideo("", datetime.min, "", "", 0, False)
             split = url.split('watch?v=')
@@ -93,10 +105,10 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
                 user_errors_row.append(f"Invalid URL: `{url}`. (row {i + 4}).")
             return result
 
-        for i, row in enumerate(batch_values_get_result.batches[1]):
-            if len(row):
-                url = row[0]
-                if len(url):
+        for i, row_read_cell in enumerate(read_sheet_result.rows):
+            if len(row_read_cell):
+                urls = urls_from_read_cell(row_read_cell[0])
+                for url in urls:
                     user_errors_row = []
                     if not url.startswith("https://"):
                         user_errors_row.append(f"`{url}` is not a YouTube URL. (row {i + 4}).")
@@ -106,16 +118,23 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
                         place_at_beginning_videos.append(playlist_video)
                         if playlist_video in playlist_videos_to_sort:
                             playlist_videos_to_sort.remove(playlist_video)
-
-        for i, row in enumerate(batch_values_get_result.batches[2]):
-            if len(row):
-                url_list = row[0].split('\n') 
+                        
+            if len(row_read_cell) > 1:
+                url_list = urls_from_read_cell(row_read_cell[1]) 
                 url_place_before = "" 
-                if len(row) >= 2:
-                    url_place_before = row[1]
+                if len(row_read_cell) >= 3:
+                    url_place_befores = urls_from_read_cell(row_read_cell[2])
+                    if len(url_place_befores) > 1:
+                        user_errors_row.append(f"Only one link allowed in Place Before cell (row {i + 4}).")
+                    if len(url_place_befores) == 1:
+                        url_place_before = url_place_befores[0]
                 url_place_after = ""
-                if len(row) >= 3:
-                    url_place_after = row[2]
+                if len(row_read_cell) == 4:
+                    url_place_afters = urls_from_read_cell(row_read_cell[3])
+                    if len(url_place_afters) > 1:
+                        user_errors_row.append(f"Only one link allowed in Place After cell (row {i + 4}).")
+                    if len(url_place_afters) == 1:
+                        url_place_before = url_place_afters[0]
 
                 user_errors_row = []
                 if not len(url_place_before) and not len(url_place_after):
@@ -151,10 +170,8 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
                         if video in playlist_videos_to_sort:
                             playlist_videos_to_sort.remove(video)
 
-        output_video_entries: list[OutputVideoEntry] = []
         unmatched: list[PlaylistVideo] = []
         private : list[PlaylistVideo] = []
-        requests: list[dict[str, typing.Any]] = []
 
         def video_matches(track_sheet_entry_name: str, video_title: str, game_name_string_with_dash: str):
             if (
@@ -387,8 +404,11 @@ async def start_interactive_playlist_gen(input_youtube_playlist_link: str, chann
         if len(youtube_playlist.error_strings):
             return await send_if_errors(f"Failed to get info from YouTube about `{input_youtube_playlist_link}`", youtube_playlist.error_strings, channel)
 
-        credentials = await refresh_credentials()
-        sheet_info = await get_sheet_info(PLAYLISTS_SPREADSHEET_ID, youtube_playlist.title, credentials)
+        credentials_and_errors = await refresh_credentials()
+        if len(sheet_info.error_strings):
+            return await send_if_errors(f"Failed to connect to google sheets API", credentials_and_errors.error_strings, channel)
+
+        sheet_info = await get_sheet_info(PLAYLISTS_SPREADSHEET_ID, youtube_playlist.title, credentials_and_errors.credentials)
         if len(sheet_info.error_strings):
             return await send_if_errors(f"Failed to get sheet info for `{youtube_playlist.title}`", sheet_info.error_strings, channel)
 
@@ -425,17 +445,17 @@ async def start_interactive_playlist_gen(input_youtube_playlist_link: str, chann
                 error_strings = []
 
                 last_row_index = 0
-                sheet_info = await get_sheet_info(PLAYLISTS_SPREADSHEET_ID, youtube_playlist.title, credentials)
+                sheet_info = await get_sheet_info(PLAYLISTS_SPREADSHEET_ID, youtube_playlist.title, credentials_and_errors.credentials)
                 if not len(sheet_info.error_strings):
                     last_row_index = sheet_info.row_count - 1
                     error_strings.extend(sheet_info.error_strings)
 
                 if not len(sheet_info.error_strings):
-                    sort_playlist_videos_result = await sort_playlist_videos(youtube_playlist.title, self.sorting_sheet_id, self.playlist_videos, last_row_index, credentials)
+                    sort_playlist_videos_result = await sort_playlist_videos(youtube_playlist.title, self.sorting_sheet_id, self.playlist_videos, last_row_index, credentials_and_errors.credentials)
                     self.last_sort_playlist_videos_result = sort_playlist_videos_result
                     error_strings.extend(sort_playlist_videos_result.error_strings)
 
-                    batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, sort_playlist_videos_result.requests, credentials)
+                    batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, sort_playlist_videos_result.requests, credentials_and_errors.credentials)
                     error_strings.extend(batch_update_response.error_strings)
 
                 if not len(error_strings):
@@ -514,7 +534,7 @@ async def start_interactive_playlist_gen(input_youtube_playlist_link: str, chann
                             sorting_sheet_url = f'https://docs.google.com/spreadsheets/d/{PLAYLISTS_SPREADSHEET_ID}?gid={sheet_info.spreadsheet_tab_id}'
                         else:
                             create_sheet_request = parse_create_sheet_request(youtube_playlist.title)
-                            batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, [create_sheet_request], credentials)
+                            batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, [create_sheet_request], credentials_and_errors.credentials)
                             error_strings.extend(batch_update_response.error_strings)
                             if not len(error_strings) and batch_update_response.response:
                                 properties = batch_update_response.response['replies'][0]['addSheet']['properties']
@@ -611,18 +631,19 @@ async def start_interactive_playlist_gen(input_youtube_playlist_link: str, chann
                                 requests.append(parse_update_dimension_properties_request(sorting_sheet_id, 255, SHEET_DIMENSION.COLUMNS, 12, 15))
 
                     last_row_index = 0
-                    sheet_info_new = await get_sheet_info(PLAYLISTS_SPREADSHEET_ID, youtube_playlist.title, credentials)
+                    sheet_info_new = await get_sheet_info(PLAYLISTS_SPREADSHEET_ID, youtube_playlist.title, credentials_and_errors.credentials)
                     if not len(sheet_info_new.error_strings):
                         last_row_index = sheet_info_new.row_count - 1
                         error_strings.extend(sheet_info_new.error_strings)
 
                     sort_playlist_videos_result = SortPlaylistVideosResult([], [], [], []) 
                     if not len(error_strings):
-                        sort_playlist_videos_result = await sort_playlist_videos(youtube_playlist.title, sorting_sheet_id, playlist_videos, last_row_index, credentials)
+                        sort_playlist_videos_result = await sort_playlist_videos(youtube_playlist.title, sorting_sheet_id, playlist_videos, last_row_index, credentials_and_errors.credentials)
                         requests.extend(sort_playlist_videos_result.requests)
                         error_strings.extend(sort_playlist_videos_result.error_strings)
 
-                        batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, requests, credentials)
+                    if not len(error_strings):
+                        batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, requests, credentials_and_errors.credentials)
                         error_strings.extend(batch_update_response.error_strings)
                         if not len(error_strings):
                             return_message = f"Here are buttons! {sorting_sheet_url}"

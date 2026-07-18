@@ -100,12 +100,17 @@ async def get_sheet_info(spreadsheet_id: str, sheet_name: str, credentials: Cred
     return SheetInfo(sheet_exists, spreadsheet_tab_id, spreadsheet_url, row_count, column_count, error_strings)
 
 
-class RawSheetData(NamedTuple):
-    rows: list[list[str]]
+class ReadCell(NamedTuple):
+    text: str
+    hyperlink: str
+    chip_urls: list[str]
+
+class ReadSheetResult(NamedTuple):
+    rows: list[list[ReadCell]]
     error_strings: list[str]
 
-async def get_raw_sheet_data(spreadsheet_id: str, sheet_name: str, row_start: int, last_column: str, credentials: Credentials) -> RawSheetData: 
-    cells: list[list[str]] = []
+async def read_sheet(spreadsheet_id: str, sheet_name: str, range: str, credentials: Credentials) -> ReadSheetResult:
+    read_cells: list[list[ReadCell]] = []
     error_strings: list[str] = []
 
     try:
@@ -114,8 +119,10 @@ async def get_raw_sheet_data(spreadsheet_id: str, sheet_name: str, row_start: in
             service.spreadsheets()
             .get(
                 spreadsheetId=spreadsheet_id,
-                ranges=f"{sheet_name}!A{row_start}:{last_column}",
-                fields="sheets.data.rowData.values.formattedValue",
+                ranges=f"{sheet_name}!{range}",
+                fields="sheets.data.rowData.values.formattedValue," \
+                        "sheets.data.rowData.values.hyperlink," \
+                        "sheets.data.rowData.values.chipRuns",
                 includeGridData=True,
             )
             .execute
@@ -124,12 +131,22 @@ async def get_raw_sheet_data(spreadsheet_id: str, sheet_name: str, row_start: in
             for rowJson in output["sheets"][0]["data"][0]["rowData"]:
                 rowList = []
                 for cell in rowJson.get("values", []):
-                    rowList.append(cell.get("formattedValue", "").strip())
-                cells.append(rowList)
+                    text = cell["formattedValue"]
+                    hyperlink = ""
+                    if "hyperlink" in cell:
+                        hyperlink = cell["hyperlink"]
+                    chip_urls = []
+                    if "chipRuns" in cell:
+                        for chip_run in cell["chipRuns"]:
+                            if 'chip' in chip_run:
+                                chip_urls.append(chip_run['chip']['richLinkProperties']['uri'])
+                    rowList.append(ReadCell(text, hyperlink, chip_urls))
+                read_cells.append(rowList)
     except Exception as error:
         await log_exception(f"Failed get google sheet data from {sheet_name}", error, error_strings, True)
 
-    return RawSheetData(cells, error_strings) 
+    return ReadSheetResult(read_cells, error_strings) 
+
 
 class BatchValuesGetResult(NamedTuple):
     batches: list[list[list[str]]]
