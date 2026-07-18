@@ -13,8 +13,13 @@ from hq_discord import run_blocking, log_exception, write_log
 
 CREDENTIALS = None
 
-async def refresh_credentials() -> Credentials:
+class CredentialsAndErrors(NamedTuple):
+    credentials: Credentials | None
+    error_strings: list[str]
+
+async def refresh_credentials() -> CredentialsAndErrors:
     global CREDENTIALS
+    error_strings: list[str] = []
 
     # NOTE: (Ahmayk) login required in web browser to access google sheets doc
     # then token.json is created and saves login info
@@ -48,9 +53,16 @@ async def refresh_credentials() -> Credentials:
                 await write_log("Google API credentials set up successfully.")
 
     except Exception as error:
-        await log_exception("Failed to set up google sheets credentials", error, [], True)
+        await log_exception("Failed to set up google sheets credentials", error, error_strings, True)
 
-    return CREDENTIALS
+    credentials = None
+    if CREDENTIALS and CREDENTIALS.valid:
+        credentials = CREDENTIALS
+    else:
+        await write_log("**Google sheet credentials not valid.**")
+        error_strings.append("Google sheet credentials not valid. (Contact bot maintainer)")
+
+    return CredentialsAndErrors(credentials, error_strings)
 
 
 class SheetInfo(NamedTuple):

@@ -2276,9 +2276,13 @@ async def source(args: list[str], command_context: CommandContext):
     async with command_context.channel.typing():
         string_and_errors = await parse_source_input(command_context.message_reference, args)
         if len(string_and_errors.error_strings):
-            return await send_if_errors("Errors during grabbing message", string_and_errors.error_strings, command_context.channel)
+            return await send_if_errors("Errors during !source", string_and_errors.error_strings, command_context.channel)
 
-        qoc_sheet_data = await get_qoc_sheet_data(GetQoCSheetDataDesc())
+        credentials_and_errors = await refresh_credentials()
+        if len(credentials_and_errors.error_strings) or not credentials_and_errors.credentials:
+            return await send_if_errors("Failed to connect to Google API", string_and_errors.error_strings, command_context.channel)
+
+        qoc_sheet_data = await get_qoc_sheet_data(GetQoCSheetDataDesc(), credentials_and_errors.credentials)
         text = search_rip_sources(string_and_errors.string, qoc_sheet_data)
         await send_embed(text, command_context.channel, EmbedDesc(title="Sources"))
 
@@ -2300,8 +2304,12 @@ async def specialists(args: list[str], command_context: CommandContext):
         if len(string_and_errors.error_strings):
             return await send_if_errors("Errors during grabbing message", string_and_errors.error_strings, command_context.channel)
 
+        credentials_and_errors = await refresh_credentials()
+        if len(credentials_and_errors.error_strings) or not credentials_and_errors.credentials:
+            return await send_if_errors("Failed to connect to Google API", string_and_errors.error_strings, command_context.channel)
+
         #NOTE: (Ahmayk) bypass cache so that we are guarenteed to get what is on the sheet right now
-        qoc_sheet_data = await get_qoc_sheet_data(GetQoCSheetDataDesc(bypass_cache=True))
+        qoc_sheet_data = await get_qoc_sheet_data(GetQoCSheetDataDesc(bypass_cache=True), credentials_and_errors.credentials)
         text = search_specialists(string_and_errors.string, qoc_sheet_data, command_context.channel.guild)
         if len(text):
             await send_embed(text, command_context.channel, EmbedDesc(title="Specialists"))
@@ -2696,7 +2704,11 @@ async def testsource(args: list[str], command_context: CommandContext):
     for i in range(clamped_count):
         selected_rip_message_ids.append(temp_rips_all[i].message_id)
 
-    qoc_sheet_data = await get_qoc_sheet_data(GetQoCSheetDataDesc())
+    credentials_and_errors = await refresh_credentials()
+    if len(credentials_and_errors.error_strings) or not credentials_and_errors.credentials:
+        return await send_if_errors("Failed to connect to Google API", string_and_errors.error_strings, command_context.channel)
+
+    qoc_sheet_data = await get_qoc_sheet_data(GetQoCSheetDataDesc(), credentials_and_errors.credencials)
 
     for rip in temp_rips_all:
         if rip.message_id in selected_rip_message_ids:

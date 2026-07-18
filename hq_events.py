@@ -78,7 +78,9 @@ async def on_ready():
     cleanup_embeds_regularly.start()
 
     #NOTE: (Ahmayk) fetch sheet data on init to initialize credentials info and make sure that works
-    await get_qoc_sheet_data(GetQoCSheetDataDesc())
+    credentials_and_errors = await refresh_credentials()
+    if credentials_and_errors.credentials:
+        await get_qoc_sheet_data(GetQoCSheetDataDesc(), credentials_and_errors.credentials)
 
     await write_log("Caching rips...")
 
@@ -230,11 +232,14 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
                                 message = message_and_errors.message
                             rip = cache_rip_in_message(message)
 
+                        credentials_and_errors = await refresh_credentials()
+                        error_strings.extend(credentials_and_errors.error_strings)
+
                         #NOTE (Ahmayk) only lookup source info if rip has been posted recently
                         #this is unwanted if repinning an old rip
                         auto_source_on_pin = get_config('auto_source_on_pin')
-                        if auto_source_on_pin and datetime.now(timezone.utc) - message.created_at < timedelta(minutes=30):
-                            qoc_sheet_data = await get_qoc_sheet_data(GetQoCSheetDataDesc())
+                        if auto_source_on_pin and datetime.now(timezone.utc) - message.created_at < timedelta(minutes=30) and credentials_and_errors.credentials:
+                            qoc_sheet_data = await get_qoc_sheet_data(GetQoCSheetDataDesc(), credentials_and_errors.credentials)
                             source_text = search_rip_sources(message.content, qoc_sheet_data)
                             specialists_text = search_specialists(message.content, qoc_sheet_data, message.channel.guild)
                             await send_embed(f'{source_text}\n\n{specialists_text}', channel, EmbedDesc(title="Sources"))

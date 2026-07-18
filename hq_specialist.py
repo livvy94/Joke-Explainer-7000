@@ -35,130 +35,117 @@ class QoCSheetData(NamedTuple):
 SHEET_LAST_UPDATED: datetime = datetime.now(timezone.utc)
 QOC_SHEET_DATA: QoCSheetData = QoCSheetData([], [], []) 
 
-async def should_call_sheet_api(bypass_cache: bool) -> bool:
-    try:
-        result =True 
-        ##NOTE: (Ahmayk) We check to see the last modified time and only fetch new info if the sheet appears to be updated.
-        # Google drive doesn't seem to update this very quickly, in testing it can take up to around 5 minutes,
-        # but this is 100% worth it for the speed boost since changes to the sheet don't really need to take effect immediatley
-        service_drive = build("drive", "v3", credentials=CREDENTIALS)
-        file = (
-            service_drive.files()
-            .get(fileId=SPECIALISTS_SPREADSHEET_ID, fields="id, name, modifiedTime")
-            .execute()
-        )
-        modified_time = datetime.fromisoformat(file["modifiedTime"].replace("Z", "+00:00"))
-        global SHEET_LAST_UPDATED 
-        # print(f"SHEET_LAST_UPDATED: {str(SHEET_LAST_UPDATED)} modified time: {str(modified_time)}")
-        ##NOTE: (Ahmayk) If we do want changes to take effect immedatley (calling !specialist directly for instance) 
-        #then bypassing the skip will guarentee that we are showing updated data 
-        if modified_time == SHEET_LAST_UPDATED and not bypass_cache:
-            result = False 
-        SHEET_LAST_UPDATED = modified_time
-    except Exception as error:
-        await log_exception("Failed to get modified time from google sheet", error, [], True)
-    return result
-
-
 class GetQoCSheetDataDesc(NamedTuple):
     bypass_cache: bool = False
 
-async def get_qoc_sheet_data(desc: GetQoCSheetDataDesc) -> QoCSheetData: 
+async def get_qoc_sheet_data(desc: GetQoCSheetDataDesc, credentials: Credentials) -> QoCSheetData: 
 
     global QOC_SHEET_DATA 
 
     qoc_sheet_data = QOC_SHEET_DATA 
     error_strings: list[str] = []
 
-    if not CREDENTIALS or not CREDENTIALS.valid or CREDENTIALS.expired:
-        await refresh_credentials()
+    try:
+        call_sheet_api =True 
+        ##NOTE: (Ahmayk) We check to see the last modified time and only fetch new info if the sheet appears to be updated.
+        # Google drive doesn't seem to update this very quickly, in testing it can take up to around 5 minutes,
+        # but this is 100% worth it for the speed boost since changes to the sheet don't really need to take effect immediatley
+        service_drive = build("drive", "v3", credentials=credentials)
+        file = await run_blocking(
+            service_drive.files()
+            .get(fileId=SPECIALISTS_SPREADSHEET_ID, fields="id, name, modifiedTime")
+            .execute
+        )
+        modified_time = datetime.fromisoformat(file["modifiedTime"].replace("Z", "+00:00"))
+        global SHEET_LAST_UPDATED 
+        # print(f"SHEET_LAST_UPDATED: {str(SHEET_LAST_UPDATED)} modified time: {str(modified_time)}")
+        ##NOTE: (Ahmayk) If we do want changes to take effect immedatley (calling !specialist directly for instance) 
+        #then bypassing the skip will guarentee that we are showing updated data 
+        if modified_time == SHEET_LAST_UPDATED and not desc.bypass_cache:
+            call_sheet_api = False 
+        SHEET_LAST_UPDATED = modified_time
+    except Exception as error:
+        await log_exception("Failed to get modified time from google sheet", error, [], True)
 
-    if not CREDENTIALS or not CREDENTIALS.valid:
-        error_strings.append("**Google sheet credentials not valid.**")
+    if call_sheet_api or not QOC_SHEET_DATA:
 
-    if CREDENTIALS and CREDENTIALS.valid:
+        specialist_entries: list[SpecialistEntry] = []
 
-        call_sheet_api = await should_call_sheet_api(desc.bypass_cache)
+        game_sheet_data = await get_raw_sheet_data(SPECIALISTS_SPREADSHEET_ID, "Game Strict Rules", 3, 'D', credentials)
+        error_strings.extend(game_sheet_data.error_strings)
+        for row in game_sheet_data.rows:
+            if len(row) > 1:
+                game_title = row[0] 
+                specialists = row[1]
+                alternate_game_titles: list[str] = [] 
+                if len(row) > 2:
+                    names = row[2].split("/")
+                    for name in names:
+                        alternate_game_titles.append(name.strip())
+                notes = "" 
+                if len(row) > 3:
+                    notes = row[3]
+                specialist_entries.append(SpecialistEntry(specialists, notes, game_title, alternate_game_titles, "", [], "", []))
 
-        if call_sheet_api or not QOC_SHEET_DATA:
-
-            specialist_entries: list[SpecialistEntry] = []
-
-            game_sheet_data = await get_raw_sheet_data(SPECIALISTS_SPREADSHEET_ID, "Game Strict Rules", 3, 'D', CREDENTIALS)
-            error_strings.extend(game_sheet_data.error_strings)
-            for row in game_sheet_data.rows:
+        if not len(error_strings):
+            composer_sheet_data = await get_raw_sheet_data(SPECIALISTS_SPREADSHEET_ID, "Composer Strict Rules", 3, 'D', credentials)
+            error_strings.extend(composer_sheet_data.error_strings)
+            for row in composer_sheet_data.rows:
                 if len(row) > 1:
-                    game_title = row[0] 
+                    composer_string = row[0]
                     specialists = row[1]
-                    alternate_game_titles: list[str] = [] 
+                    alternate_composer_names = []
                     if len(row) > 2:
-                        names = row[2].split("/")
+                        names = row[2].split("/") 
                         for name in names:
-                            alternate_game_titles.append(name.strip())
+                            alternate_composer_names.append(name.strip())
                     notes = "" 
                     if len(row) > 3:
                         notes = row[3]
-                    specialist_entries.append(SpecialistEntry(specialists, notes, game_title, alternate_game_titles, "", [], "", []))
+                    specialist_entries.append(SpecialistEntry(specialists, notes, "", [], composer_string, alternate_composer_names, "", []))
 
-            if not len(error_strings):
-                composer_sheet_data = await get_raw_sheet_data(SPECIALISTS_SPREADSHEET_ID, "Composer Strict Rules", 3, 'D', CREDENTIALS)
-                error_strings.extend(composer_sheet_data.error_strings)
-                for row in composer_sheet_data.rows:
-                    if len(row) > 1:
-                        composer_string = row[0]
-                        specialists = row[1]
-                        alternate_composer_names = []
-                        if len(row) > 2:
-                            names = row[2].split("/") 
-                            for name in names:
-                                alternate_composer_names.append(name.strip())
-                        notes = "" 
-                        if len(row) > 3:
-                            notes = row[3]
-                        specialist_entries.append(SpecialistEntry(specialists, notes, "", [], composer_string, alternate_composer_names, "", []))
+        if not len(error_strings):
+            source_sheet_data = await get_raw_sheet_data(SPECIALISTS_SPREADSHEET_ID, "Source Strict Rules", 3, 'D', credentials)
+            error_strings.extend(source_sheet_data.error_strings)
+            for row in source_sheet_data.rows:
+                if len(row) > 1:
+                    source_string = row[0]
+                    specialists = row[1]
+                    alternate_source_names = []
+                    if len(row) > 2:
+                        names = row[2].split("/") 
+                        for name in names:
+                            alternate_source_names.append(name.strip())
+                    notes = "" 
+                    if len(row) > 3:
+                        notes = row[3]
+                    specialist_entries.append(SpecialistEntry(specialists, notes, "", [], "", [], source_string, alternate_source_names))
 
-            if not len(error_strings):
-                source_sheet_data = await get_raw_sheet_data(SPECIALISTS_SPREADSHEET_ID, "Source Strict Rules", 3, 'D', CREDENTIALS)
-                error_strings.extend(source_sheet_data.error_strings)
-                for row in source_sheet_data.rows:
-                    if len(row) > 1:
-                        source_string = row[0]
-                        specialists = row[1]
-                        alternate_source_names = []
-                        if len(row) > 2:
-                            names = row[2].split("/") 
-                            for name in names:
-                                alternate_source_names.append(name.strip())
-                        notes = "" 
-                        if len(row) > 3:
-                            notes = row[3]
-                        specialist_entries.append(SpecialistEntry(specialists, notes, "", [], "", [], source_string, alternate_source_names))
+        source_exclusions: list[SourceExclusion] = []
+        if not len(error_strings):
+            source_exclusion_sheet_data = await get_raw_sheet_data(SPECIALISTS_SPREADSHEET_ID, "Source Exclusions", 3, 'F', credentials)
+            error_strings.extend(source_exclusion_sheet_data.error_strings)
+            for row in source_exclusion_sheet_data.rows:
+                if len(row) > 1 and len(row[1]):
+                    track_title = row[0] 
+                    game_title = row[1]
+                    skip_database_search = False
+                    if len(row) > 2:
+                        skip_database_search = (row[2] == 'TRUE')
+                    skip_youtube_search_link = False
+                    if len(row) > 3:
+                        skip_youtube_search_link = (row[3] == 'TRUE')
+                    no_results_message = ""
+                    if len(row) > 4:
+                        no_results_message = row[4]
+                    notes = ""
+                    if len(row) > 5:
+                        notes = row[5]
+                    source_exclusions.append(SourceExclusion(track_title, game_title, skip_database_search, skip_youtube_search_link, no_results_message, notes))
 
-            source_exclusions: list[SourceExclusion] = []
-            if not len(error_strings):
-                source_exclusion_sheet_data = await get_raw_sheet_data(SPECIALISTS_SPREADSHEET_ID, "Source Exclusions", 3, 'F', CREDENTIALS)
-                error_strings.extend(source_exclusion_sheet_data.error_strings)
-                for row in source_exclusion_sheet_data.rows:
-                    if len(row) > 1 and len(row[1]):
-                        track_title = row[0] 
-                        game_title = row[1]
-                        skip_database_search = False
-                        if len(row) > 2:
-                            skip_database_search = (row[2] == 'TRUE')
-                        skip_youtube_search_link = False
-                        if len(row) > 3:
-                            skip_youtube_search_link = (row[3] == 'TRUE')
-                        no_results_message = ""
-                        if len(row) > 4:
-                            no_results_message = row[4]
-                        notes = ""
-                        if len(row) > 5:
-                            notes = row[5]
-                        source_exclusions.append(SourceExclusion(track_title, game_title, skip_database_search, skip_youtube_search_link, no_results_message, notes))
-
-            if not len(error_strings):
-                qoc_sheet_data = QoCSheetData(specialist_entries, source_exclusions, error_strings)
-                QOC_SHEET_DATA = qoc_sheet_data 
+        if not len(error_strings):
+            qoc_sheet_data = QoCSheetData(specialist_entries, source_exclusions, error_strings)
+            QOC_SHEET_DATA = qoc_sheet_data 
 
     return qoc_sheet_data 
 
