@@ -437,3 +437,31 @@ async def run_blocking(blocking_func: typing.Callable, *args, **kwargs) -> typin
     """
     func = functools.partial(blocking_func, *args, **kwargs) # `run_in_executor` doesn't support kwargs, `functools.partial` does
     return await bot.loop.run_in_executor(None, func)
+
+
+##NOTE: (Ahmayk) custom button for simpler button usage 
+class JEButton(discord.ui.Button):
+    def __init__(
+            self,
+            label: str,
+            custom_id: str,
+            style: discord.ButtonStyle,
+            ##NOTE: (Ahmayk) 2nd parameter is button_state
+            # has anything you want in it to keep state across buttons
+            # method must be async
+            callback: Callable[[discord.Interaction, typing.Any], typing.Awaitable[typing.Any]],
+            button_state: typing.Any,
+        ):
+        self.custom_callback = callback
+        self.button_state = button_state
+        super().__init__(
+            label=label,
+            custom_id=custom_id,
+            style=style
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        try:
+            await self.custom_callback(interaction, self.button_state)
+        except Exception as error:
+            await send_crash(f'ERROR on button', error, interaction.channel)

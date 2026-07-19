@@ -14,7 +14,7 @@ from hq_discord import run_blocking, log_exception, write_log
 CREDENTIALS = None
 
 class CredentialsAndErrors(NamedTuple):
-    credentials: Credentials | None
+    credentials: Credentials
     error_strings: list[str]
 
 async def refresh_credentials() -> CredentialsAndErrors:
@@ -29,10 +29,11 @@ async def refresh_credentials() -> CredentialsAndErrors:
     ]
 
     try: 
-        if os.path.exists("token.json"):
-            CREDENTIALS = Credentials.from_authorized_user_file("token.json", scopes)
-
         if not CREDENTIALS or not CREDENTIALS.valid:
+
+            if os.path.exists("token.json"):
+                CREDENTIALS = Credentials.from_authorized_user_file("token.json", scopes)
+
             if CREDENTIALS and CREDENTIALS.expired and CREDENTIALS.refresh_token:
                 try:
                     CREDENTIALS.refresh(Request())
@@ -55,12 +56,13 @@ async def refresh_credentials() -> CredentialsAndErrors:
     except Exception as error:
         await log_exception("Failed to set up google sheets credentials", error, error_strings, True)
 
-    credentials = None
-    if CREDENTIALS and CREDENTIALS.valid:
-        credentials = CREDENTIALS
-    else:
+    credentials = CREDENTIALS
+    if not CREDENTIALS or not CREDENTIALS.valid:
         await write_log("**Google sheet credentials not valid.**")
         error_strings.append("Google sheet credentials not valid. (Contact bot maintainer)")
+
+    if not credentials:
+        credentials = Credentials(None)
 
     return CredentialsAndErrors(credentials, error_strings)
 
