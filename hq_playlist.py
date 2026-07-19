@@ -439,12 +439,12 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
 @dataclass
 class PlaylistButtonState:
     sheet_exists_on_start: bool
+    spreadsheet_url: str
     spreadsheet_tab_id: int
     playlist_id: str 
     youtube_playlist: YouTubePlaylist
     playlist_videos: list[PlaylistVideo]
     last_sort_playlist_videos_result: SortPlaylistVideosResult
-
 
 async def sort_button_callback(interaction: discord.Interaction, button_state: PlaylistButtonState, button: discord.ui.Button):
 
@@ -452,7 +452,7 @@ async def sort_button_callback(interaction: discord.Interaction, button_state: P
         for child in button.view.children:
             child.disabled = True
 
-    await interaction.response.edit_message(content="Sorting...", view=button.view)
+    await interaction.response.edit_message(content="Sorting using playlist cache...", view=button.view)
 
     error_strings = []
     async with interaction.channel.typing():
@@ -536,10 +536,145 @@ async def script_button_callback(interaction: discord.Interaction, button_state:
     await send_if_errors("Errors occured", error_strings, interaction.channel)
 
 
+def parse_format_sheet(playlist_id: str, youtube_playlist_title: str, spreadsheet_tab_id: int) -> list[dict[str, typing.Any]]:
+
+    cell_rows: list[list[Cell]] = [[], [], []]
+    playlist_link = f'https://www.youtube.com/playlist?list={playlist_id}'
+    linked_trackname = format_hyperlink_formula(playlist_link, youtube_playlist_title)
+    cell_rows[0].append(Cell(formula_text=linked_trackname, font_size=32))
+
+    texts = [
+        "Track Name Order",
+        "Alternate Game Name",
+        "Alternate Track Name"
+    ]
+    cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(0.811, 0.886, 0.952), wrap_strategy=WRAP_STRATEGY.WRAP)))
+    texts = [
+        "Ouput:\nUnmatched Track Name",
+        "Ouput:\nUnmatched Game Name",
+        "#",
+        "Output:\nResulting Order, Track Name",
+        "Output:\nResulting Order, Game name",
+        "Output:\nSettings used",
+    ]
+    cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(0.866, 0.494, 0.419), wrap_strategy=WRAP_STRATEGY.WRAP)))
+    texts = [
+        "Options",
+        "On or Off",
+        "Info",
+    ]
+    cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(0.705, 0.654, 0.839), wrap_strategy=WRAP_STRATEGY.WRAP)))
+    texts = [
+        "Place at Beginning",
+    ]
+    cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(1, 0.6, 0), wrap_strategy=WRAP_STRATEGY.WRAP)))
+    texts = [
+        "List of YouTube URLs",
+        "Place BEFORE",
+        "Place AFTER",
+    ]
+    cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(1, 0.898, 0.6), wrap_strategy=WRAP_STRATEGY.WRAP)))
+
+    texts = [
+        "List track names HERE without their mixnames to define the ordering of the OST. Capitalization matters! Color does not.",
+        "If a track belongs to an alternate game release (Ex: Sonic Mania Plus, Mario Kart 8 Deluxe) list the game name here.",
+        "If a track has an alternate spelling, list it here. A video with this track name will be sorted alongside the primary track name (the first column)."
+    ]
+    cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.952, 0.952, 0.952), wrap_strategy=WRAP_STRATEGY.WRAP)))
+    texts = [
+        "Video track names that were not matched to a track in the \"Track Name Order\" row. When this column is empty, all videos are properly sorted!\nAUTO POPULATED COLUMN",
+        "AUTO POPULATED COLUMN",
+        "Current order",
+        "The resulting sorted order, track name. Ordered as: \n(1) (Green) Matched videos, sorted\n(2) (Red) Unmatched videos, unsorted\n(3) (Gray) Private videos.\nAUTO POPULATED COLUMN",
+        "AUTO POPULATED COLUMN",
+        "Settings used in last sort, corresponding to right column.\nAUTO POPULATED COLUMN",
+    ]
+    cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.917, 0.6, 0.6), wrap_strategy=WRAP_STRATEGY.WRAP)))
+    texts = [
+        "Options to control sorting behavior",
+        "Any text = On. Empty = Off\n(Checkboxes aren't readable the google sheets API so this is a workaround lol)",
+        "Info about the option",
+    ]
+    cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.850, 0.823, 0.913), wrap_strategy=WRAP_STRATEGY.WRAP)))
+    texts = [
+        "YouTube URLs in this column will be placed in this order at the beginning of the playlist. You can also enter text with a hyperlink (eg copy & paste from the red Output Track Name Column) or convert the link into a chip (the thing that comes up when you press tab after entering a URL)",
+    ]
+    cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.988, 0.898, 0.803), wrap_strategy=WRAP_STRATEGY.WRAP)))
+    texts = [
+        "One or more Youtube URLs. Will be placed either before or after a youtube URL to the right.",
+        "A single YouTube URL. The list of YouTube URLS in the previous column will be placed BEFORE the first occurance of this URL.",
+        "A single YouTube URL. Same as previous column, but placed AFTER. You can't have a before and an after in the same row.",
+    ]
+    cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(1, 0.949, 0.8), wrap_strategy=WRAP_STRATEGY.WRAP)))
+
+    requests = parse_update_cells_requests(spreadsheet_tab_id, cell_rows, 0, 0)
+
+    option_rows: list[list[Cell]] = [[]]
+    format_cell_label = Cell(background_color=ColorRGBFloat(0.811, 0.886, 0.952), font_size=12, is_bold=True, wrap_strategy=WRAP_STRATEGY.WRAP)
+    format_cell_desc = Cell(background_color=ColorRGBFloat(0.811, 0.886, 0.952), wrap_strategy=WRAP_STRATEGY.WRAP)
+    option_rows[0].extend(cell_bulk_create(["Group by Mixname"], format_cell_label))
+    option_rows[0].append(Cell())
+    option_rows[0].extend(cell_bulk_create(["Tracks are grouped by mixname instead of grouping all track names, starting with mixless tracks."], format_cell_desc))
+    requests.extend(parse_update_cells_requests(spreadsheet_tab_id, option_rows, 3, 9))
+
+    requests.append(parse_update_dimension_properties_request(spreadsheet_tab_id, 300, SHEET_DIMENSION.COLUMNS, 0, 0))
+    requests.append(parse_update_dimension_properties_request(spreadsheet_tab_id, 225, SHEET_DIMENSION.COLUMNS, 1, 2))
+    requests.append(parse_update_dimension_properties_request(spreadsheet_tab_id, 325, SHEET_DIMENSION.COLUMNS, 3, 13))
+    requests.append(parse_update_dimension_properties_request(spreadsheet_tab_id, 225, SHEET_DIMENSION.COLUMNS, 4, 4))
+    requests.append(parse_update_dimension_properties_request(spreadsheet_tab_id, 55,  SHEET_DIMENSION.COLUMNS, 5, 5))
+    requests.append(parse_update_dimension_properties_request(spreadsheet_tab_id, 225, SHEET_DIMENSION.COLUMNS, 7, 7))
+    requests.append(parse_update_dimension_properties_request(spreadsheet_tab_id, 200, SHEET_DIMENSION.COLUMNS, 8, 10))
+    requests.append(parse_update_dimension_properties_request(spreadsheet_tab_id, 325, SHEET_DIMENSION.COLUMNS, 12, 12))
+    requests.append(parse_update_dimension_properties_request(spreadsheet_tab_id, 255, SHEET_DIMENSION.COLUMNS, 13, 15))
+
+    return requests
+
+
+async def reformat_button_callback(interaction: discord.Interaction, button_state: PlaylistButtonState, button: discord.ui.Button):
+    return_message = "Oops! Error?"
+    error_strings = [] 
+
+    if button.view:
+        for child in button.view.children:
+            child.disabled = True
+
+    await interaction.response.edit_message(content="Reformatting sheet...", view=button.view)
+
+    async with interaction.channel.typing():
+
+        credentials_and_errors = await refresh_credentials()
+        error_strings.extend(credentials_and_errors.error_strings)
+
+        if not len(error_strings):
+            requests = parse_format_sheet(button_state.playlist_id, button_state.youtube_playlist.title, button_state.spreadsheet_tab_id)
+            batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, requests, credentials_and_errors.credentials)
+            error_strings.extend(batch_update_response.error_strings)
+
+        if not len(error_strings):
+            return_message = f"\nThe **{button_state.youtube_playlist.title}** playlist has **{button_state.youtube_playlist.video_count} videos**."
+            return_message += f"Spreadsheet labels rebuilt and columns resized to default. {button_state.spreadsheet_url}.\nPress the button to sort the track names in the spreadsheet using videos currently on the channel!" 
+
+            view = JEView(timeout_in_seconds=60*15)
+            if button.view:
+                for child in button.view.children:
+                    child.disabled = False
+            message = await interaction.message.edit(content=return_message, view=button.view)
+
+    await send_if_errors("Errors occured", error_strings, interaction.channel)
+
+    if button.view and message:
+        await view.wait_then_disable(interaction.message)
+
+
 async def start_button_callback(interaction: discord.Interaction, button_state: PlaylistButtonState, button: discord.ui.Button):
+    using_cache = button.custom_id == 'start_button_cache'
+
     waiting_message = "Getting videos and creating sheet. This may take a moment..."
-    if button_state.sheet_exists_on_start:
+    if using_cache:
+        waiting_message = "Sorting sheet using playlist cache..."
+    elif button_state.sheet_exists_on_start:
         waiting_message = "Getting videos and sorting sheet. This may take a moment.."
+
     await interaction.response.edit_message(content=waiting_message, view=None)
 
     message = None
@@ -548,21 +683,21 @@ async def start_button_callback(interaction: discord.Interaction, button_state: 
         return_message = "Oops! Error?"
         error_strings = [] 
 
-        if button.custom_id == 'start_button_cache' and button_state.playlist_id in PLAYLIST_VIDEO_CACHE:
-            button_state.playlist_videos = PLAYLIST_VIDEO_CACHE[button_state.playlist_id].playlist_videos
-        else:
-            playlist_videos_and_errors = await get_playlist_videos(button_state.playlist_id, YOUTUBE_API_KEY)
-            button_state.playlist_videos = playlist_videos_and_errors.videos
-            error_strings.extend(playlist_videos_and_errors.error_strings)
-            if not len(playlist_videos_and_errors.error_strings):
-                await set_playlist_video_cache(button_state.playlist_id, button_state.playlist_videos)
-
-        reformat_sheet = False 
-
         credentials_and_errors = await refresh_credentials()
         error_strings.extend(credentials_and_errors.error_strings)
+
+        if not len(error_strings):
+            if using_cache and button_state.playlist_id in PLAYLIST_VIDEO_CACHE:
+                button_state.playlist_videos = PLAYLIST_VIDEO_CACHE[button_state.playlist_id].playlist_videos
+            else:
+                playlist_videos_and_errors = await get_playlist_videos(button_state.playlist_id, YOUTUBE_API_KEY)
+                button_state.playlist_videos = playlist_videos_and_errors.videos
+                error_strings.extend(playlist_videos_and_errors.error_strings)
+                if not len(playlist_videos_and_errors.error_strings):
+                    await set_playlist_video_cache(button_state.playlist_id, button_state.playlist_videos)
+
+        reformat_sheet = False 
         
-        requests = []
         if not len(error_strings) and not button_state.sheet_exists_on_start:
             create_sheet_request = parse_create_sheet_request(button_state.youtube_playlist.title)
             batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, [create_sheet_request], credentials_and_errors.credentials)
@@ -572,95 +707,9 @@ async def start_button_callback(interaction: discord.Interaction, button_state: 
                 button_state.spreadsheet_tab_id = properties['sheetId']
                 reformat_sheet = True
 
+        requests = []
         if not len(error_strings) and reformat_sheet:
-            cell_rows: list[list[Cell]] = [[], [], []]
-            playlist_link = f'https://www.youtube.com/playlist?list={button_state.playlist_id}'
-            linked_trackname = format_hyperlink_formula(playlist_link, button_state.youtube_playlist.title)
-            cell_rows[0].append(Cell(formula_text=linked_trackname, font_size=32))
-
-            texts = [
-                "Track Name Order",
-                "Alternate Game Name",
-                "Alternate Track Name"
-            ]
-            cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(0.811, 0.886, 0.952), wrap_strategy=WRAP_STRATEGY.WRAP)))
-            texts = [
-                "Ouput:\nUnmatched Track Name",
-                "Ouput:\nUnmatched Game Name",
-                "#",
-                "Output:\nResulting Order, Track Name",
-                "Output:\nResulting Order, Game name",
-                "Output:\nSettings used",
-            ]
-            cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(0.866, 0.494, 0.419), wrap_strategy=WRAP_STRATEGY.WRAP)))
-            texts = [
-                "Options",
-                "On or Off",
-                "Info",
-            ]
-            cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(0.705, 0.654, 0.839), wrap_strategy=WRAP_STRATEGY.WRAP)))
-            texts = [
-                "Place at Beginning",
-            ]
-            cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(1, 0.6, 0), wrap_strategy=WRAP_STRATEGY.WRAP)))
-            texts = [
-                "List of YouTube URLs",
-                "Place BEFORE",
-                "Place AFTER",
-            ]
-            cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(1, 0.898, 0.6), wrap_strategy=WRAP_STRATEGY.WRAP)))
-
-            texts = [
-                "List track names HERE without their mixnames to define the ordering of the OST. Capitalization matters! Color does not.",
-                "If a track belongs to an alternate game release (Ex: Sonic Mania Plus, Mario Kart 8 Deluxe) list the game name here.",
-                "If a track has an alternate spelling, list it here. A video with this track name will be sorted alongside the primary track name (the first column)."
-            ]
-            cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.952, 0.952, 0.952), wrap_strategy=WRAP_STRATEGY.WRAP)))
-            texts = [
-                "Video track names that were not matched to a track in the \"Track Name Order\" row. When this column is empty, all videos are properly sorted!\nAUTO POPULATED COLUMN",
-                "AUTO POPULATED COLUMN",
-                "Current order",
-                "The resulting sorted order, track name. Ordered as: \n(1) (Green) Matched videos, sorted\n(2) (Red) Unmatched videos, unsorted\n(3) (Gray) Private videos.\nAUTO POPULATED COLUMN",
-                "AUTO POPULATED COLUMN",
-                "Settings used in last sort, corresponding to right column.\nAUTO POPULATED COLUMN",
-            ]
-            cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.917, 0.6, 0.6), wrap_strategy=WRAP_STRATEGY.WRAP)))
-            texts = [
-                "Options to control sorting behavior",
-                "Any text = On. Empty = Off\n(Checkboxes aren't readable the google sheets API so this is a workaround lol)",
-                "Info about the option",
-            ]
-            cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.850, 0.823, 0.913), wrap_strategy=WRAP_STRATEGY.WRAP)))
-            texts = [
-                "YouTube URLs in this column will be placed in this order at the beginning of the playlist. You can also enter text with a hyperlink (eg copy & paste from the red Output Track Name Column) or convert the link into a chip (the thing that comes up when you press tab after entering a URL)",
-            ]
-            cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.988, 0.898, 0.803), wrap_strategy=WRAP_STRATEGY.WRAP)))
-            texts = [
-                "One or more Youtube URLs. Will be placed either before or after a youtube URL to the right.",
-                "A single YouTube URL. The list of YouTube URLS in the previous column will be placed BEFORE the first occurance of this URL.",
-                "A single YouTube URL. Same as previous column, but placed AFTER. You can't have a before and an after in the same row.",
-            ]
-            cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(1, 0.949, 0.8), wrap_strategy=WRAP_STRATEGY.WRAP)))
-
-            requests = parse_update_cells_requests(button_state.spreadsheet_tab_id, cell_rows, 0, 0)
-
-            option_rows: list[list[Cell]] = [[]]
-            format_cell_label = Cell(background_color=ColorRGBFloat(0.811, 0.886, 0.952), font_size=12, is_bold=True, wrap_strategy=WRAP_STRATEGY.WRAP)
-            format_cell_desc = Cell(background_color=ColorRGBFloat(0.811, 0.886, 0.952), wrap_strategy=WRAP_STRATEGY.WRAP)
-            option_rows[0].extend(cell_bulk_create(["Group by Mixname"], format_cell_label))
-            option_rows[0].append(Cell())
-            option_rows[0].extend(cell_bulk_create(["Tracks are grouped by mixname instead of grouping all track names, starting with mixless tracks."], format_cell_desc))
-            requests.extend(parse_update_cells_requests(button_state.spreadsheet_tab_id, option_rows, 3, 9))
-
-            requests.append(parse_update_dimension_properties_request(button_state.spreadsheet_tab_id, 300, SHEET_DIMENSION.COLUMNS, 0, 0))
-            requests.append(parse_update_dimension_properties_request(button_state.spreadsheet_tab_id, 225, SHEET_DIMENSION.COLUMNS, 1, 2))
-            requests.append(parse_update_dimension_properties_request(button_state.spreadsheet_tab_id, 325, SHEET_DIMENSION.COLUMNS, 3, 13))
-            requests.append(parse_update_dimension_properties_request(button_state.spreadsheet_tab_id, 225, SHEET_DIMENSION.COLUMNS, 4, 4))
-            requests.append(parse_update_dimension_properties_request(button_state.spreadsheet_tab_id, 55,  SHEET_DIMENSION.COLUMNS, 5, 5))
-            requests.append(parse_update_dimension_properties_request(button_state.spreadsheet_tab_id, 225, SHEET_DIMENSION.COLUMNS, 7, 7))
-            requests.append(parse_update_dimension_properties_request(button_state.spreadsheet_tab_id, 200, SHEET_DIMENSION.COLUMNS, 8, 10))
-            requests.append(parse_update_dimension_properties_request(button_state.spreadsheet_tab_id, 325, SHEET_DIMENSION.COLUMNS, 12, 12))
-            requests.append(parse_update_dimension_properties_request(button_state.spreadsheet_tab_id, 255, SHEET_DIMENSION.COLUMNS, 13, 15))
+            requests = parse_format_sheet(button_state.playlist_id, button_state.youtube_playlist.title, button_state.spreadsheet_tab_id)
 
         last_row_index = 0
         sheet_info_new = await get_sheet_info(PLAYLISTS_SPREADSHEET_ID, button_state.youtube_playlist.title, credentials_and_errors.credentials)
@@ -683,7 +732,7 @@ async def start_button_callback(interaction: discord.Interaction, button_state: 
 
         if not len(error_strings):
             sort_button = JEButton(
-                label = "Sort track names in spreadsheet",
+                label = "Resort tracks in spreadsheet",
                 style = discord.ButtonStyle.primary,
                 custom_id = 'sort_button',
                 callback = sort_button_callback,
@@ -735,6 +784,7 @@ async def start_interactive_playlist_gen(input_youtube_playlist_link: str, chann
 
     button_state = PlaylistButtonState(
         sheet_info.sheet_exists,
+        sheet_info.spreadsheet_url,
         sheet_info.spreadsheet_tab_id,
         playlist_id,
         youtube_playlist,
@@ -772,7 +822,13 @@ async def start_interactive_playlist_gen(input_youtube_playlist_link: str, chann
             button_state = button_state 
         ))
 
-        ##TODO: (Ahmayk) reset sheet formatting button
+        buttons.append(JEButton(
+            label="Reformat sheet and columns",
+            style=discord.ButtonStyle.gray,
+            custom_id='start_button_reformat',
+            callback = reformat_button_callback,
+            button_state = button_state 
+        ))
 
     else:
         return_message += f"\nNo spreadsheet found for **{youtube_playlist.title}**.\nPress the button to create one using videos currently on the channel!" 
