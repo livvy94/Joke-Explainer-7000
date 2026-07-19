@@ -56,6 +56,8 @@ async def regular_checkup():
     await remove_urls_from_database(stored_urls)
 
     await cleanup_sent_embeds_in_expire_database()
+
+    await cleanup_expired_playlist_video_cache()
     
 
 @tasks.loop(minutes=1)

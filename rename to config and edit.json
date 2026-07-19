@@ -15,6 +15,7 @@
     "soft_pin_limit": 50,
     "auto_source_on_pin": true,
     "jingle_length_in_seconds": 30,
+    "playlist_videos_cache_time": 86400,
     "channels": [
         {
             "name": "qoc",

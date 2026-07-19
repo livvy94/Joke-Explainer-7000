@@ -262,3 +262,20 @@ async def set_playlist_video_cache(playlist_id: str, playlist_videos: list[Playl
         PLAYLIST_VIDEO_CACHE.sync()
     finally:
         PLAYLIST_VIDEO_CACHE_LOCK.release()
+
+
+async def cleanup_expired_playlist_video_cache():
+    expire_time = get_config("playlist_videos_cache_time")
+    keys_to_delete = []
+    for playlist_id, entry in PLAYLIST_VIDEO_CACHE.items():
+        if (datetime.now(timezone.utc) - entry.time) > timedelta(seconds=expire_time):
+            keys_to_delete.append(playlist_id)
+
+    await PLAYLIST_VIDEO_CACHE_LOCK.acquire()
+    try:
+        for key in keys_to_delete:
+            PLAYLIST_VIDEO_CACHE.pop(key)
+        PLAYLIST_VIDEO_CACHE.sync()
+    finally:
+        PLAYLIST_VIDEO_CACHE_LOCK.release()
+    
