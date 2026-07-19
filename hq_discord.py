@@ -449,7 +449,7 @@ class JEButton(discord.ui.Button):
             ##NOTE: (Ahmayk) 2nd parameter is button_state
             # has anything you want in it to keep state across buttons
             # method must be async
-            callback: Callable[[discord.Interaction, typing.Any], typing.Awaitable[typing.Any]],
+            callback: Callable[[discord.Interaction, typing.Any, discord.ui.Button], typing.Awaitable[typing.Any]],
             button_state: typing.Any,
         ):
         self.custom_callback = callback
@@ -462,6 +462,29 @@ class JEButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         try:
-            await self.custom_callback(interaction, self.button_state)
+            await self.custom_callback(interaction, self.button_state, self)
         except Exception as error:
             await send_crash(f'ERROR on button', error, interaction.channel)
+
+
+#NOTE: (Ahmayk) Custom View (discord.py abstraction that holds components)
+# does some shennanigans to disable buttons on timeout
+# Wild that this isn't built into the library
+class JEView(discord.ui.View):
+    def __init__(self, timeout_in_seconds: float):
+        self.message: Message | None = None
+        super().__init__(timeout=timeout_in_seconds)
+
+    async def on_timeout(self):
+        try:
+            if self.message:
+                for child in self.children:
+                    child.disabled = True
+                await self.message.edit(view=self)
+        except Exception as error:
+            await log_exception(f'ERROR on button timeout', error, False)
+        
+
+    async def wait_then_disable(self, message: Message):
+        self.message = message
+        await super().wait()

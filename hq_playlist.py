@@ -450,12 +450,17 @@ class PlaylistButtonState:
     last_sort_playlist_videos_result: SortPlaylistVideosResult
 
 
-async def sort_button_callback(interaction: discord.Interaction, button_state: PlaylistButtonState):
-    await interaction.response.edit_message(content="Sorting...")
+async def sort_button_callback(interaction: discord.Interaction, button_state: PlaylistButtonState, button: discord.ui.Button):
 
+    if button.view:
+        for child in button.view.children:
+            child.disabled = True
+
+    await interaction.response.edit_message(content="Sorting...", view=button.view)
+
+    error_strings = []
     async with interaction.channel.typing():
         return_message = "Ooops! Error!"
-        error_strings = []
 
         credentials_and_errors = await refresh_credentials()
         error_strings.extend(credentials_and_errors.error_strings)
@@ -480,14 +485,18 @@ async def sort_button_callback(interaction: discord.Interaction, button_state: P
             error_strings.extend(batch_update_response.error_strings)
 
         if not len(error_strings):
+            if button.view:
+                for child in button.view.children:
+                    child.disabled = False
+
             return_message = f"Sorted!"
 
-        await interaction.message.edit(content=return_message)
+        await interaction.message.edit(content=return_message, view=button.view)
 
-        await send_if_errors("Errors occured during sorting", error_strings, interaction.channel)
+    await send_if_errors("Errors occured during sorting", error_strings, interaction.channel)
 
 
-async def script_button_callback(interaction: discord.Interaction, button_state: PlaylistButtonState):
+async def script_button_callback(interaction: discord.Interaction, button_state: PlaylistButtonState, button: discord.ui.Button):
     error_strings = [] 
 
     credentials_and_errors = await refresh_credentials()
@@ -531,12 +540,13 @@ async def script_button_callback(interaction: discord.Interaction, button_state:
     await send_if_errors("Errors occured", error_strings, interaction.channel)
 
 
-async def start_button_callback(interaction: discord.Interaction, button_state: PlaylistButtonState):
+async def start_button_callback(interaction: discord.Interaction, button_state: PlaylistButtonState, button: discord.ui.Button):
     waiting_message = "Getting videos and creating sheet. This may take a moment..."
     if button_state.sheet_exists_on_start:
         waiting_message = "Getting videos and sorting sheet. This may take a moment.."
     await interaction.response.edit_message(content=waiting_message, view=None)
 
+    message = None
     view = None
     async with interaction.channel.typing():
         return_message = "Oops! Error?"
@@ -692,15 +702,15 @@ async def start_button_callback(interaction: discord.Interaction, button_state: 
                 button_state = button_state 
             )
 
-            view = discord.ui.View(timeout=60*60)
+            view = JEView(timeout_in_seconds=60*60)
             view.add_item(sort_button)
             view.add_item(script_button)
-        await interaction.message.edit(content=return_message, view=view)
+        message = await interaction.message.edit(content=return_message, view=view)
 
     await send_if_errors("Errors occured", error_strings, interaction.channel)
 
-    if view:
-        await view.wait()
+    if view and message:
+        await view.wait_then_disable(message)
 
 
 async def start_interactive_playlist_gen(input_youtube_playlist_link: str, channel: TextChannel | Thread):
@@ -756,7 +766,7 @@ async def start_interactive_playlist_gen(input_youtube_playlist_link: str, chann
         callback = start_button_callback,
         button_state = button_state 
     )
-    view = discord.ui.View(timeout=60*5)
+    view = JEView(timeout_in_seconds=60*15)
     view.add_item(button)
-    await channel.send(return_message, view=view)
-    await view.wait()
+    message = await channel.send(return_message, view=view)
+    await view.wait_then_disable(message)
