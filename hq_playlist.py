@@ -2,16 +2,12 @@
 from hq_discord import *
 from hq_youtube import *
 from hq_sheets import *
-from dateutil import tz
+from hq_database import *
+from dateutil import tz, relativedelta
 
 from bot_secrets import YOUTUBE_API_KEY, PLAYLISTS_SPREADSHEET_ID
 from enum import auto
 from dataclasses import dataclass
-
-import shelve 
-FOO_DATABASE = shelve.open("foo", writeback=True)
-DELTARUNE_KEY = "DELTARUNE"
-
 
 def urls_from_read_cell(read_cell: ReadCell) -> list[str]:
     result: list[str] = []
@@ -476,8 +472,8 @@ async def sort_button_callback(interaction: discord.Interaction, button_state: P
             sort_playlist_videos_result = await sort_playlist_videos(button_state.youtube_playlist.title, button_state.spreadsheet_tab_id,
                                                                      button_state.playlist_videos, last_row_index,
                                                                      credentials_and_errors.credentials)
-            button_state.last_sort_playlist_videos_result = sort_playlist_videos_result
             error_strings.extend(sort_playlist_videos_result.error_strings)
+            button_state.last_sort_playlist_videos_result = sort_playlist_videos_result
 
         if not len(error_strings):
             batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, sort_playlist_videos_result.requests,
@@ -552,15 +548,14 @@ async def start_button_callback(interaction: discord.Interaction, button_state: 
         return_message = "Oops! Error?"
         error_strings = [] 
 
-        ##TODO: (Ahmayk) cache purposefully and repull if outdated (prevent spamming same playlist wasting credits)
-        if button_state.playlist_id in FOO_DATABASE:
-            playlist_videos = FOO_DATABASE[button_state.playlist_id]
+        if button.custom_id == 'start_button_cache' and button_state.playlist_id in PLAYLIST_VIDEO_CACHE:
+            button_state.playlist_videos = PLAYLIST_VIDEO_CACHE[button_state.playlist_id].playlist_videos
         else:
             playlist_videos_and_errors = await get_playlist_videos(button_state.playlist_id, YOUTUBE_API_KEY)
-            playlist_videos = playlist_videos_and_errors.videos
+            button_state.playlist_videos = playlist_videos_and_errors.videos
             error_strings.extend(playlist_videos_and_errors.error_strings)
-            FOO_DATABASE[button_state.playlist_id] = playlist_videos 
-            FOO_DATABASE.sync()
+            if not len(playlist_videos_and_errors.error_strings):
+                await set_playlist_video_cache(button_state.playlist_id, button_state.playlist_videos)
 
         reformat_sheet = False 
 
@@ -673,11 +668,11 @@ async def start_button_callback(interaction: discord.Interaction, button_state: 
             last_row_index = sheet_info_new.row_count - 1
             error_strings.extend(sheet_info_new.error_strings)
 
-        sort_playlist_videos_result = SortPlaylistVideosResult([], SheetOptions(), [], [], []) 
         if not len(error_strings):
-            sort_playlist_videos_result = await sort_playlist_videos(button_state.youtube_playlist.title, button_state.spreadsheet_tab_id, playlist_videos, last_row_index, credentials_and_errors.credentials)
+            sort_playlist_videos_result = await sort_playlist_videos(button_state.youtube_playlist.title, button_state.spreadsheet_tab_id, button_state.playlist_videos, last_row_index, credentials_and_errors.credentials)
             requests.extend(sort_playlist_videos_result.requests)
             error_strings.extend(sort_playlist_videos_result.error_strings)
+            button_state.last_sort_playlist_videos_result = sort_playlist_videos_result
 
         if not len(error_strings):
             batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, requests, credentials_and_errors.credentials)
@@ -738,18 +733,6 @@ async def start_interactive_playlist_gen(input_youtube_playlist_link: str, chann
         if len(sheet_info.error_strings):
             return await send_if_errors(f"Failed to get sheet info for `{youtube_playlist.title}`", sheet_info.error_strings, channel)
 
-    return_message = "" 
-    start_button_label = ""
-    return_message += f"\nThe **{youtube_playlist.title}** playlist has **{youtube_playlist.video_count} videos**."
-    if sheet_info.sheet_exists:
-        return_message += f"\nA spreadsheet exists for **{youtube_playlist.title}** {sheet_info.spreadsheet_url}.\nPress the button to sort the track names in the spreadsheet using videos currently on the channel!" 
-        start_button_label = "Get videos and sort track names"
-        start_button_style = discord.ButtonStyle.primary
-    else:
-        return_message += f"\nNo spreadsheet found for **{youtube_playlist.title}**.\nPress the button to create one using videos currently on the channel!" 
-        start_button_label = "Get videos and create spreadsheet"
-        start_button_style = discord.ButtonStyle.green
-
     button_state = PlaylistButtonState(
         sheet_info.sheet_exists,
         sheet_info.spreadsheet_tab_id,
@@ -759,14 +742,51 @@ async def start_interactive_playlist_gen(input_youtube_playlist_link: str, chann
         SortPlaylistVideosResult([], SheetOptions(), [], [], [])
     )
 
-    button = JEButton(
-        label=start_button_label,
-        style=start_button_style,
-        custom_id='start_button',
-        callback = start_button_callback,
-        button_state = button_state 
-    )
+    return_message = f"\nThe **{youtube_playlist.title}** playlist has **{youtube_playlist.video_count} videos**."
+    buttons: list[JEButton] = []
+    if sheet_info.sheet_exists:
+        return_message += f"\nA spreadsheet exists for **{youtube_playlist.title}** {sheet_info.spreadsheet_url}.\nPress the button to sort the track names in the spreadsheet using videos currently on the channel!" 
+
+        if playlist_id in PLAYLIST_VIDEO_CACHE:
+            playlist_video_cache_entry = PLAYLIST_VIDEO_CACHE[playlist_id]
+            expire_time = get_config("playlist_videos_cache_time")
+            datetime_now = datetime.now(timezone.utc)
+            if (datetime_now - playlist_video_cache_entry.time) < timedelta(seconds=expire_time):
+                rd = relativedelta.relativedelta(datetime_now, playlist_video_cache_entry.time)
+                cache_string = f'(from {rd.hours} hours ago)'
+                if rd.hours <= 1:
+                    cache_string = f'(from {rd.minutes} minutes ago)'
+                buttons.append(JEButton(
+                    label=f"Sort track names using playlist cache {cache_string}",
+                    style=discord.ButtonStyle.primary,
+                    custom_id='start_button_cache',
+                    callback = start_button_callback,
+                    button_state = button_state 
+                ))
+
+        buttons.append(JEButton(
+            label="Get video titles from YouTube and sort track names",
+            style=discord.ButtonStyle.primary,
+            custom_id='start_button_nocache',
+            callback = start_button_callback,
+            button_state = button_state 
+        ))
+
+        ##TODO: (Ahmayk) reset sheet formatting button
+
+    else:
+        return_message += f"\nNo spreadsheet found for **{youtube_playlist.title}**.\nPress the button to create one using videos currently on the channel!" 
+        buttons.append(JEButton(
+            label="Get video titles from YouTube and create spreadsheet",
+            style=discord.ButtonStyle.green,
+            custom_id='start_button',
+            callback = start_button_callback,
+            button_state = button_state 
+        ))
+
+
     view = JEView(timeout_in_seconds=60*15)
-    view.add_item(button)
+    for button in buttons:
+        view.add_item(button)
     message = await channel.send(return_message, view=view)
     await view.wait_then_disable(message)

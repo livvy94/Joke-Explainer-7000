@@ -10,16 +10,20 @@ from hq_strings import TitleType, score_title_similarity
 from hq_config import get_config, get_channel_ids_of_types 
 from hq_discord import FloatAndErrors, StringAndErrors, MessagesAndErrors, run_blocking, discord_find_channel, discord_delete_messages, discord_get_channel_messages, discord_fetch_message
 from hq_qoc import getAudioLengthInSecondsFFprobe 
+from hq_youtube import PlaylistVideo 
 
 JE_DATABASE = shelve.open("je_database", writeback=True)
 THUMBNAIL_DATABASE = shelve.open("thumbnail_database", writeback=True)
+PLAYLIST_VIDEO_CACHE = shelve.open("playlist_video_cache", writeback=True)
 
 class JEDatabaseKey(StrEnum):
     RIP_LENGTH = "RIP_LENGTH" 
     SENT_EMBED_TO_EXPIRE = "SENT_EMBED_TO_EXPIRE" 
+    PLAYLIST_VIDEOS = "PLAYLIST_VIDEOS"
 
 JE_DATABASE_LOCK = asyncio.Lock()
 THUMBNAIL_DATABASE_LOCK = asyncio.Lock()
+PLAYLIST_VIDEO_CACHE_LOCK = asyncio.Lock()
 
 class GetRipUrlLengthDesc(NamedTuple):
     force_download: bool = False
@@ -245,3 +249,16 @@ async def search_thumbnail_cache(input_title: str) -> MessagesAndErrors:
                     messages.append(message_and_errors.message)
 
     return MessagesAndErrors(messages, error_strings)
+
+class PlaylistVideosCacheEntry(NamedTuple):
+    playlist_videos: list[PlaylistVideo]
+    time: datetime
+
+async def set_playlist_video_cache(playlist_id: str, playlist_videos: list[PlaylistVideo]):
+    playlist_video_cache_entry = PlaylistVideosCacheEntry(playlist_videos, datetime.now(timezone.utc))
+    await PLAYLIST_VIDEO_CACHE_LOCK.acquire()
+    try:
+        PLAYLIST_VIDEO_CACHE[playlist_id] = playlist_video_cache_entry
+        PLAYLIST_VIDEO_CACHE.sync()
+    finally:
+        PLAYLIST_VIDEO_CACHE_LOCK.release()
