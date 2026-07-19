@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         #META_NAME
 // @namespace    http://tampermonkey.net/
-// @version      2026-06-28
+// @version      1960-09-30
 // @description  sort shit 
 // @author       Joke-Explainer™ 7000
 // @match        #META_YOUTUBE_LINK
@@ -9,6 +9,33 @@
 // @run-at       document-idle
 // @grant        none
 // ==/UserScript==
+
+/*
+
+----INSTRUCTIONS FOR USE-----
+1. Download the Tampermonkey extention for your browser.
+2. Copy and paste this text into a new script file within the extension
+3. Go to the playlist page and it will start doing it's thing! Keep your mouse away from the page.
+4. When it's done, check that it worked as expected, and disable the script 
+   so you won't accidentally run it again in the future. 
+
+Less than 100 videos: Will finish in a few minutes.
+More than 100 videos: Will take hours, perhaps all night if the playlist is very long (500+).
+
+If the playlist has +100 videos, the page will need to refresh after moving most videos 
+after it gets past 100 (it sorts from top to bottom).
+This is required because otherwise the page would quickly leak memory and become unusable.
+
+It's finished when it stops moving for a while and nothing is loading.
+You can open the web console to see it printing debug messages while it works if you want to see more information.
+
+TIPS:
+- Don't hover your mouse cursor over the page while it's working. This messes with the simulated mouse drag. 
+- Keep the tab open. If you're walking away from the computer, you'll probably need to turn off your screensaver, 
+  otherwise it may stop running.
+
+*/
+
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms))
@@ -241,13 +268,13 @@ async function sortPlaylist(videoIds) {
     }
 
     if ((numMoved > 0) && totalVideos > 90) {
-        console.log("RESTARTING! (finished maybe?")
+        console.log("RESTARTING! (finished maybe? Checking everything again)")
         await sleep(1000);
         location.reload();
         await sleep(9999999999999);
     }
 
-    console.log("All videos sorted! Hopefully...")
+    console.log("All videos confirmed to be sorted! Hopefully that worked...")
 }
 
 #META_VIDEO_IDS

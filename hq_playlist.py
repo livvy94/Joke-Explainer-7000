@@ -124,13 +124,14 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
             if len(row_read_cell) >= 3:
                 urls = urls_from_read_cell(row_read_cell[2])
                 for url in urls:
-                    user_errors_row: list[str] = []
-                    playlist_video = find_youtube_video(url, i, playlist_videos, user_errors_row)
-                    user_errors.extend(user_errors_row)
-                    if not len(user_errors_row):
-                        place_at_beginning_videos.append(playlist_video)
-                        if playlist_video in playlist_videos_to_sort:
-                            playlist_videos_to_sort.remove(playlist_video)
+                    if len(url):
+                        user_errors_row: list[str] = []
+                        playlist_video = find_youtube_video(url, i, playlist_videos, user_errors_row)
+                        user_errors.extend(user_errors_row)
+                        if not len(user_errors_row):
+                            place_at_beginning_videos.append(playlist_video)
+                            if playlist_video in playlist_videos_to_sort:
+                                playlist_videos_to_sort.remove(playlist_video)
                         
             if len(row_read_cell) >= 4:
                 url_list = urls_from_read_cell(row_read_cell[3]) 
@@ -436,6 +437,56 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
     return SortPlaylistVideosResult(output_video_entries, sheet_options, requests, error_strings, user_errors) 
 
 
+def format_sort_report(sort_playlist_videos_result: SortPlaylistVideosResult, spreadsheet_tab_id: int) -> str:
+
+    result = ""
+
+    unmatched_count = 0
+    matched_count = 0
+    manual_count = 0
+    private_count = 0
+    for output_video_entry in sort_playlist_videos_result.ouput_video_entries:
+        match output_video_entry.sorted_type:
+            case SortedType.MATCHED:
+                matched_count += 1
+            case SortedType.UNMATCHED:
+                unmatched_count += 1
+            case SortedType.PRIVATE:
+                private_count += 1
+            case SortedType.MANUAL_BEGINNING:
+                manual_count += 1
+            case SortedType.MANUAL_INSERT:
+                manual_count += 1
+
+    totalish = float(len(sort_playlist_videos_result.ouput_video_entries) - private_count)
+    completion_percent = (matched_count + manual_count) / totalish 
+
+    if completion_percent == 0:
+        result += '\n\n**No videos sorted yet**'
+    elif completion_percent == 1:
+        result += '\n\n:star: **All videos sorted!** :star:'
+    else:
+        result += f'\n\n**{int(completion_percent * 100)}% videos sorted**'
+
+    result += f'\n- {unmatched_count} unmatched videos ({int((unmatched_count / totalish) * 100)}%)'
+    result += f'\n- {matched_count} matched videos ({int((matched_count / totalish) * 100)}%)'
+    result += f'\n- {manual_count} manually placed videos'
+    result += f'\n- {len(sort_playlist_videos_result.ouput_video_entries)} total videos in playlist'
+
+    if sort_playlist_videos_result.sheet_options.group_by_mixname:
+        result += f'\n:white_check_mark: **Group by Mixname is ON**'
+
+    if len(sort_playlist_videos_result.user_errors):
+        result += f'\n\n:x: **You have something to fix:**'
+        for user_error in sort_playlist_videos_result.user_errors:
+            result += f'\n- *{user_error}*'
+
+    result += f'\nhttps://docs.google.com/spreadsheets/d/{PLAYLISTS_SPREADSHEET_ID}?gid={spreadsheet_tab_id}'
+
+    return result
+
+
+
 @dataclass
 class PlaylistButtonState:
     sheet_exists_on_start: bool
@@ -485,7 +536,7 @@ async def sort_button_callback(interaction: discord.Interaction, button_state: P
                 for child in button.view.children:
                     child.disabled = False
 
-            return_message = f"Sorted!"
+            return_message = format_sort_report(button_state.last_sort_playlist_videos_result, button_state.spreadsheet_tab_id)
 
         await interaction.message.edit(content=return_message, view=button.view)
 
@@ -531,7 +582,7 @@ async def script_button_callback(interaction: discord.Interaction, button_state:
 
         with open(filename, "rb") as f:
             await interaction.channel.send(file=discord.File(f, filename))
-            await interaction.response.edit_message(content='Script sent!')
+            await interaction.response.edit_message(content='Here you go! Look inside for instructions.')
 
     await send_if_errors("Errors occured", error_strings, interaction.channel)
 
@@ -651,8 +702,7 @@ async def reformat_button_callback(interaction: discord.Interaction, button_stat
             error_strings.extend(batch_update_response.error_strings)
 
         if not len(error_strings):
-            return_message = f"\nThe **{button_state.youtube_playlist.title}** playlist has **{button_state.youtube_playlist.video_count} videos**."
-            return_message += f"Spreadsheet labels rebuilt and columns resized to default. {button_state.spreadsheet_url}.\nPress the button to sort the track names in the spreadsheet using videos currently on the channel!" 
+            return_message = f"**Spreadsheet labels rebuilt and columns resized to default.** \n{button_state.spreadsheet_url}.\nPress the button to sort the track names in the spreadsheet using videos currently on the channel!" 
 
             view = JEView(timeout_in_seconds=60*15)
             if button.view:
@@ -669,11 +719,11 @@ async def reformat_button_callback(interaction: discord.Interaction, button_stat
 async def start_button_callback(interaction: discord.Interaction, button_state: PlaylistButtonState, button: discord.ui.Button):
     using_cache = button.custom_id == 'start_button_cache'
 
-    waiting_message = "Getting videos and creating sheet. This may take a moment..."
+    waiting_message = "Getting videos from YouTube and creating sheet. This may take a moment..."
     if using_cache:
         waiting_message = "Sorting sheet using playlist cache..."
     elif button_state.sheet_exists_on_start:
-        waiting_message = "Getting videos and sorting sheet. This may take a moment.."
+        waiting_message = "Getting videos from YouTube and sorting sheet. This may take a moment.."
 
     await interaction.response.edit_message(content=waiting_message, view=None)
 
@@ -727,8 +777,7 @@ async def start_button_callback(interaction: discord.Interaction, button_state: 
             batch_update_response = await send_sheet_batch_update(PLAYLISTS_SPREADSHEET_ID, requests, credentials_and_errors.credentials)
             error_strings.extend(batch_update_response.error_strings)
             if not len(error_strings):
-                sorting_sheet_url = f'https://docs.google.com/spreadsheets/d/{PLAYLISTS_SPREADSHEET_ID}?gid={button_state.spreadsheet_tab_id}'
-                return_message = f"Here are buttons! {sorting_sheet_url}"
+                return_message = format_sort_report(button_state.last_sort_playlist_videos_result, button_state.spreadsheet_tab_id)
 
         if not len(error_strings):
             sort_button = JEButton(
@@ -792,10 +841,13 @@ async def start_interactive_playlist_gen(input_youtube_playlist_link: str, chann
         SortPlaylistVideosResult([], SheetOptions(), [], [], [])
     )
 
-    return_message = f"\nThe **{youtube_playlist.title}** playlist has **{youtube_playlist.video_count} videos**."
+    length_message = f"The **{youtube_playlist.title}** playlist has **{youtube_playlist.video_count} videos**."
+    return_message = ""
     buttons: list[JEButton] = []
     if sheet_info.sheet_exists:
-        return_message += f"\nA spreadsheet exists for **{youtube_playlist.title}** {sheet_info.spreadsheet_url}.\nPress the button to sort the track names in the spreadsheet using videos currently on the channel!" 
+        return_message += f"\nA spreadsheet exists for **{youtube_playlist.title}**: {sheet_info.spreadsheet_url}."
+        return_message += f"\n{length_message}" 
+        return_message += "\n\nPress the button to sort the track names in the spreadsheet using videos currently on the channel!" 
 
         if playlist_id in PLAYLIST_VIDEO_CACHE:
             playlist_video_cache_entry = PLAYLIST_VIDEO_CACHE[playlist_id]
@@ -831,7 +883,10 @@ async def start_interactive_playlist_gen(input_youtube_playlist_link: str, chann
         ))
 
     else:
-        return_message += f"\nNo spreadsheet found for **{youtube_playlist.title}**.\nPress the button to create one using videos currently on the channel!" 
+        return_message += f"\nNo spreadsheet found for **{youtube_playlist.title}**." 
+        return_message += f"\n{length_message}" 
+        return_message += "\n\nPress the button to create a spreadsheet and fill it with videos currently on the channel!"
+
         buttons.append(JEButton(
             label="Get video titles from YouTube and create spreadsheet",
             style=discord.ButtonStyle.green,
@@ -840,6 +895,7 @@ async def start_interactive_playlist_gen(input_youtube_playlist_link: str, chann
             button_state = button_state 
         ))
 
+    return_message += " Once the sheet is sorted, I can generate a Tampermonkey script that a backroomer can use to automatically order the playlist in their browser."
 
     view = JEView(timeout_in_seconds=60*15)
     for button in buttons:
