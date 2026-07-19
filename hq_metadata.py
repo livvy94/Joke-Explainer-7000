@@ -9,7 +9,7 @@ from inspect import getsourcefile
 from hq_qoc import CheckResultType, QoCCheck
 from hq_youtube import * 
 
-PATTERNS_FILE = Path(os.path.abspath(getsourcefile(lambda:0))).parent / 'simpleQoc/patterns.json'
+PATTERNS_FILE = Path(os.path.abspath(getsourcefile(lambda:0))).parent / 'simpleQoC/patterns.json'
 
 def remove_links(text):
     # Regular expression pattern to match URLs
