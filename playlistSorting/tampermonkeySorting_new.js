@@ -268,6 +268,11 @@ async function chunk_and_sort(videoIds) {
         stop_execution = true
     }
 
+    if (totalVideos != videoIds.length) {
+        alert(`The number of expected videos in the playlist (${totalVideos}) does not match the number of videos in this script's sorted list (${videoIds.length}). Please generate a new script.`)
+        stop_execution = true
+    }
+
     let playlistVideos = document.querySelector('ytd-item-section-renderer');
     let videoList = [] 
     if (!stop_execution) {
@@ -373,16 +378,18 @@ async function chunk_and_sort(videoIds) {
                 stop_execution = true;
                 break;
             }
-            tempSortMap.set(sortIndex, videoElement)
-            tempSortIndexMin = Math.min(sortIndex, tempSortIndexMin);
+            if (sortIndex >= nextChunkSortIndexStart) {
+                tempSortMap.set(sortIndex, videoElement)
+                tempSortIndexMin = Math.min(sortIndex, tempSortIndexMin);
+            }
         }
     }
 
     if (!stop_execution) {
 
         let tempSortIndexMax = tempSortIndexMin;
-        for (let sortIndex = tempSortIndexMin + 1; sortIndex < Math.min(totalVideos, chunkSize); sortIndex++) {
-            if (!(sortIndex instanceof tempSortMap)) {
+        for (let sortIndex = tempSortIndexMin + 1; sortIndex < Math.min(videoIds.length, tempSortIndexMin + chunkSize); sortIndex++) {
+            if (!(tempSortMap.has(sortIndex))) {
                 break;
             }
             tempSortIndexMax = sortIndex;
@@ -390,9 +397,8 @@ async function chunk_and_sort(videoIds) {
         let lastTempSortAreaPlaylistIndex = tempSortMap.get(tempSortIndexMin, tempSortIndexMax);
 
         if (tempSortIndexMin == nextChunkSortIndexStart) {
-            let foo = 3
             await msfytoggle("none")
-            let videoIdsToSort = videoIds.slice(tempSortIndexMin, tempSortIndexMax) 
+            let videoIdsToSort = videoIds.slice(tempSortIndexMin, tempSortIndexMax + 1) 
             if (tempSortIndexMin == tempSortIndexMax) {
                 videoIdsToSort.push(videoIds[tempSortIndexMin])
             }
@@ -425,7 +431,7 @@ async function chunk_and_sort(videoIds) {
                 let videoElement = videoList[playlistIndex];
                 let videoID = getVideoId(videoElement);
                 let sortIndex = getSortIndexOfVideoIdInPlaylist(videoID, videoIds, videoElement)
-                if (sortIndex >= nextChunkSortIndexStart && sortIndex <= nextChunkSortIndexStart + chunkSize) {
+                if ((sortIndex >= nextChunkSortIndexStart) && (sortIndex <= nextChunkSortIndexStart + chunkSize)) {
                     videoElement.querySelector(".msfy-video-checkbox").dispatchEvent(new Event('click'));
                     await sleep(10);
                 }
@@ -450,13 +456,13 @@ async function chunk_and_sort(videoIds) {
     }
 }
 
-let videoIdsog = ["6oglz1oZP2o", "rm6c03N0HkM", "Jl-jP-qLlf0", "AsK4beTqFNE", "pCas579rdZI", "ggB0gzJ9Nqg", "Jf1VWwMfguQ", "qLbBQioG1_o", "rNm3MD8xCZk", "80IUAXznod0", "3cRm92AR2uc", "tPvHtl2HgPg", "vmZ5W3KDm7M", "pwzl8A2nUpo", "vWdRp6xgJGI", "DmaJd5SAeE8", "j38Nx5ADD-Q", "QFtWFPdF8YQ", "AThNViFCAAQ", "rEnb0ydVbIg", "282YHfUWKqs", "bAVX6LMrcyU", "dbbMbjOY0dM", "lAw00GvDKIs", "_sme63lfbqo", "GfPnnjH76MY", "-c7bzoFWhiY", "qUMn_0z6yNw", "B3wdz6agRFw", "YJTZUdPdvYk", "c7BQoZpOzo4", "pf6s7xkMHLA", "M_IxoOmwfbo", "Ibg4Jp3v6go", "Op1HwGdCwvo", "j-SepxDW9RE", "uw7sHwUAUAY", "xw1-IRlYWcw", "iRFC6JsPUrY", "mjxOQUBxylI", "KfYXsfCGv58", "3BDH2Z6HwAI", "QA1WVHymOQE", "XDFEjlatZg0", "5OLWJlEOcXw", "yeZ6B0XsmyM", "BqhYiL8VhHU", "q-D_su_mSFg", "7ZbvSeALptw", "yYHT5wldypQ", "WnkpzX6pDCw", "kHj00c4cgT8", "7daql0w6XWg", "3Bg1Bl1vni0", "-PLdnP33Yhc", "RAwtF1TZDAU", "AOVLkn1nH-c", "d4Bn-SJqldk", "q7ED0T24o-U", "QVfLS-BD_Q0", "bBk-P4te_t4", "3RLSsMJsE8U", "dTREBALZzLI", "HTOuYU3PFuI", "-jZVIKDwUHI", "YpldYlCjqMg", "9kXaZUPwCwg", "RBjCZpuLruY", "9s5Uf_KDVsQ", "ooHmcCoNJTU", "AjXCxzhol-0", "yEVMDBC2jBY", "qaz57HhKW54", "B8RPa4-NAGk", "GRvm059HqlA", "yQJF_bdfE3c", "5u7i0GayNqg", "VuAMhJAeEys", "afGa4pBDfhI", "zBPg69iDwbM", "3JDLcnhRDY8", "pcRPBKItkJc", "Z3GvlQXhNcA", "FoQqn3xOpZs", "HVtdeF2WCdg", "R7YvzGyEkOE", "kXHGpZ5ng6Y", "Ed8g8kIxBQU", "RlBASv6yHSw", "VlOzO31xm2w", "P-XniU0ElMA", "FY_MZHFH9vE", "EgXWnJKvRPQ", "uERAYQ_rQEw", "84ltHAqjN8g", "i-GZB5w6fAs", "J28NxCySimw", "vKYxtTz-Tu4", "1S8SHuR1574", "-mxQ7_BF4w4", "RUpm2Lw2nFA", "2ZdNdjSHMnc", "8eDPu8z8n28", "6uHEqAiDal8", "LyfRdrny2kY", "9Ne_cgHuvVs", "u9RkQH24W-U", "1AmkUytFX3E", "71XmZQr5RBw", "9vZlzks5wTs", "8d3KuETNh-c", "L21x9VKRHOU", "J8f5aW5UXdU", "ytb3-Sjb4jw", "xSGOAzD3bLc", "ko5WC0pA2ag", "4aajtc0KZTg", "ZEU8Aeo_T0Y", "tQjsp0_hh3Y", "g6RUEddyjQ8", "8v0NlldzfrI", "evcjlpCaBCc", "64gOmGfR7UM", "ZpkjAsQwxdw", "bxU138Yev4E", "ibp2eJm335o", "-TGG34nItI0", "61z5iPMxNzM", "uUHv59nKQgk", "7ASZc4ZeGR4", "JXu7PCKXTh8", "Uys7GnF-mhg", "DeTEGqsaD_I", "xlO622Ex8hQ", "dbDUqrixpyU", "wXe2OWSnKXI", "Wu9Tpw-vlNo", "ElPpB2Ie9dA", "1tm6MgkuhV8", "6rGrS2cFvc0", "CGyZOKr-dpA", "YEB7oZqkhI8", "j8n-B18IoXI", "iRj6Mo1A9_A", "Q0dwHrIAK0Y", "yNWhgnsuo8c", "dcxebiAEOEM", "eyR6eOGwvWo", "qzjYljC1qe8", "nwhx017twss", "vqQSzJeYFuI", "hRVBzmwdL48", "AxVBcWqjE9s", "-2mPqVs4CLI", "IbxM__X7MuM", "ttZi2WWzsJg", "KMsmhtiUY3c", "2ACNqqiBdiQ", "pvfAhoOWR2c", "nm-3jo9oFjU", "BzXNgh-4qlM", "h0ZCmX4U8YM", "JTFGl1_aiM0", "uDhiSSN6HIA", "FKFzaV2TOb0", "-qALH7IT0U0", "uGdCYeM6vmQ", "F_oj0lCXHnc", "6Aq64lNjfbw", "JMhZKXIFUik", "nb8CDiTc83g", "BPudobyHOHg", "KStHMeOoaGg", "cYEbTSbouKs", "Q2sjya-Wyc0", "uUzF1iSIHYk", "n-5NYqVfYtg", "TPhcwaXXvzQ", "XYuLNCxCwu8", "1veP8NzKpms", "7RNVK3JPwEA", "C09OyQ2CHSY", "0R_aEKjt7y0", "K4htnFhdHD8", "-FyZyQ08nHk", "fXSxcBMe60c", "r0YCSey604M", "-iuSTNdoBLw", "LltG3xiOmH4", "FljCKx4y3X0", "I3XzUKQ7Kpg", "HExQQ8rYxy8", "r1uzFdMB71Q", "YFhCvke7FJo", "Waexn86uksk", "IZJnKK1NbiA", "lWBov-FDJaI", "HTJqJHoeLn0", "m6IgprLFbfY", "moPuFJQxe54", "Vck0WTuwiLI", "-svgerGvk-M", "D8M2skkjkIo", "7xnAaaBO81U", "YapBLMYY6ks", "ZbFgBgZMA00", "oMago80OA9o", "_Q5F5-8UElE", "8kHD3FTsX5Q", "hJC9ca1hc84", "ZHHr7HX64i8", "YTFhNsb8ue8", "xBRhIsJZ2eU", "KRKLSAp8rh8", "Mn76Dz9C-Yo", "zQrjuLuFRvI", "VFMDtxxuMYc", "2mHbVdQGLd8", "-fDnj3p1d6o", "b1dfagrUdCo", "DgNop_NtDx4", "EW-Wp-AEa54", "RChUPyDwUTg", "ACjFffPPc78", "k2J_zHVTas0", "dksFnrGYCqw", "5xFnd1eFi1E", "JuY5kWzObdU", "m7vG4ho4B_k", "tvW0xoyOLvM", "ofiOQKXb1ko", "tKlYJDli5rQ", "LzhEt2EImBM", "4r2lXCe_R-I", "m7udS8qUMwk", "ERaUUBt6rIk", "CAbMEAmLCvY", "79Ey7pvO27w", "P64r0p0a63g", "599pjioNkLc", "5ldY2ChpK0M", "6949Wi2doGE", "_UKPnwISg2g", "92h8iACG2QQ", "JnYTFZRuojQ", "0RBUZyEZWeI", "HofLJL7uaB8", "zLW-0dwX8YQ", "vA7Xyh5YKwA", "9AkOPIg66pU", "WDTglkh9CGA", "5d-S2kKPlkc", "VOTimTXDjWo", "ZTb_lH1LEVA", "lPea6vvu0J0"]
+let videoIds = ["6oglz1oZP2o", "rm6c03N0HkM", "rm6c03N0HkM", "rm6c03N0HkM", "Jl-jP-qLlf0", "AsK4beTqFNE", "pCas579rdZI", "ggB0gzJ9Nqg", "Jf1VWwMfguQ", "qLbBQioG1_o", "rNm3MD8xCZk", "80IUAXznod0", "3cRm92AR2uc", "tPvHtl2HgPg", "vmZ5W3KDm7M", "pwzl8A2nUpo", "vWdRp6xgJGI", "DmaJd5SAeE8", "j38Nx5ADD-Q", "QFtWFPdF8YQ", "AThNViFCAAQ", "rEnb0ydVbIg", "282YHfUWKqs", "bAVX6LMrcyU", "dbbMbjOY0dM", "lAw00GvDKIs", "_sme63lfbqo", "GfPnnjH76MY", "-c7bzoFWhiY", "qUMn_0z6yNw", "B3wdz6agRFw", "YJTZUdPdvYk", "c7BQoZpOzo4", "pf6s7xkMHLA", "M_IxoOmwfbo", "Ibg4Jp3v6go", "Op1HwGdCwvo", "j-SepxDW9RE", "uw7sHwUAUAY", "xw1-IRlYWcw", "iRFC6JsPUrY", "mjxOQUBxylI", "KfYXsfCGv58", "3BDH2Z6HwAI", "QA1WVHymOQE", "XDFEjlatZg0", "5OLWJlEOcXw", "yeZ6B0XsmyM", "BqhYiL8VhHU", "q-D_su_mSFg", "7ZbvSeALptw", "yYHT5wldypQ", "WnkpzX6pDCw", "kHj00c4cgT8", "7daql0w6XWg", "3Bg1Bl1vni0", "-PLdnP33Yhc", "RAwtF1TZDAU", "AOVLkn1nH-c", "d4Bn-SJqldk", "q7ED0T24o-U", "QVfLS-BD_Q0", "bBk-P4te_t4", "3RLSsMJsE8U", "dTREBALZzLI", "HTOuYU3PFuI", "-jZVIKDwUHI", "YpldYlCjqMg", "9kXaZUPwCwg", "RBjCZpuLruY", "9s5Uf_KDVsQ", "ooHmcCoNJTU", "AjXCxzhol-0", "yEVMDBC2jBY", "qaz57HhKW54", "B8RPa4-NAGk", "GRvm059HqlA", "yQJF_bdfE3c", "5u7i0GayNqg", "VuAMhJAeEys", "afGa4pBDfhI", "zBPg69iDwbM", "3JDLcnhRDY8", "pcRPBKItkJc", "Z3GvlQXhNcA", "FoQqn3xOpZs", "HVtdeF2WCdg", "R7YvzGyEkOE", "kXHGpZ5ng6Y", "Ed8g8kIxBQU", "RlBASv6yHSw", "VlOzO31xm2w", "P-XniU0ElMA", "FY_MZHFH9vE", "EgXWnJKvRPQ", "uERAYQ_rQEw", "84ltHAqjN8g", "i-GZB5w6fAs", "J28NxCySimw", "vKYxtTz-Tu4", "1S8SHuR1574", "-mxQ7_BF4w4", "RUpm2Lw2nFA", "2ZdNdjSHMnc", "8eDPu8z8n28", "6uHEqAiDal8", "LyfRdrny2kY", "9Ne_cgHuvVs", "u9RkQH24W-U", "1AmkUytFX3E", "71XmZQr5RBw", "9vZlzks5wTs", "8d3KuETNh-c", "L21x9VKRHOU", "J8f5aW5UXdU", "ytb3-Sjb4jw", "xSGOAzD3bLc", "ko5WC0pA2ag", "4aajtc0KZTg", "ZEU8Aeo_T0Y", "tQjsp0_hh3Y", "g6RUEddyjQ8", "8v0NlldzfrI", "evcjlpCaBCc", "64gOmGfR7UM", "ZpkjAsQwxdw", "bxU138Yev4E", "ibp2eJm335o", "-TGG34nItI0", "61z5iPMxNzM", "uUHv59nKQgk", "7ASZc4ZeGR4", "JXu7PCKXTh8", "Uys7GnF-mhg", "DeTEGqsaD_I", "xlO622Ex8hQ", "dbDUqrixpyU", "wXe2OWSnKXI", "Wu9Tpw-vlNo", "ElPpB2Ie9dA", "1tm6MgkuhV8", "6rGrS2cFvc0", "CGyZOKr-dpA", "YEB7oZqkhI8", "j8n-B18IoXI", "iRj6Mo1A9_A", "Q0dwHrIAK0Y", "yNWhgnsuo8c", "dcxebiAEOEM", "eyR6eOGwvWo", "qzjYljC1qe8", "nwhx017twss", "vqQSzJeYFuI", "hRVBzmwdL48", "AxVBcWqjE9s", "-2mPqVs4CLI", "IbxM__X7MuM", "ttZi2WWzsJg", "KMsmhtiUY3c", "2ACNqqiBdiQ", "pvfAhoOWR2c", "nm-3jo9oFjU", "BzXNgh-4qlM", "h0ZCmX4U8YM", "JTFGl1_aiM0", "uDhiSSN6HIA", "FKFzaV2TOb0", "-qALH7IT0U0", "uGdCYeM6vmQ", "F_oj0lCXHnc", "6Aq64lNjfbw", "JMhZKXIFUik", "nb8CDiTc83g", "BPudobyHOHg", "KStHMeOoaGg", "cYEbTSbouKs", "Q2sjya-Wyc0", "uUzF1iSIHYk", "n-5NYqVfYtg", "TPhcwaXXvzQ", "XYuLNCxCwu8", "1veP8NzKpms", "7RNVK3JPwEA", "C09OyQ2CHSY", "0R_aEKjt7y0", "K4htnFhdHD8", "-FyZyQ08nHk", "fXSxcBMe60c", "r0YCSey604M", "-iuSTNdoBLw", "LltG3xiOmH4", "FljCKx4y3X0", "I3XzUKQ7Kpg", "HExQQ8rYxy8", "r1uzFdMB71Q", "YFhCvke7FJo", "Waexn86uksk", "IZJnKK1NbiA", "lWBov-FDJaI", "HTJqJHoeLn0", "m6IgprLFbfY", "moPuFJQxe54", "Vck0WTuwiLI", "-svgerGvk-M", "D8M2skkjkIo", "7xnAaaBO81U", "YapBLMYY6ks", "ZbFgBgZMA00", "oMago80OA9o", "_Q5F5-8UElE", "8kHD3FTsX5Q", "hJC9ca1hc84", "ZHHr7HX64i8", "YTFhNsb8ue8", "xBRhIsJZ2eU", "KRKLSAp8rh8", "Mn76Dz9C-Yo", "zQrjuLuFRvI", "VFMDtxxuMYc", "2mHbVdQGLd8", "-fDnj3p1d6o", "b1dfagrUdCo", "DgNop_NtDx4", "EW-Wp-AEa54", "RChUPyDwUTg", "ACjFffPPc78", "k2J_zHVTas0", "dksFnrGYCqw", "5xFnd1eFi1E", "JuY5kWzObdU", "m7vG4ho4B_k", "tvW0xoyOLvM", "ofiOQKXb1ko", "tKlYJDli5rQ", "LzhEt2EImBM", "4r2lXCe_R-I", "m7udS8qUMwk", "ERaUUBt6rIk", "CAbMEAmLCvY", "79Ey7pvO27w", "P64r0p0a63g", "599pjioNkLc", "5ldY2ChpK0M", "6949Wi2doGE", "_UKPnwISg2g", "92h8iACG2QQ", "JnYTFZRuojQ", "0RBUZyEZWeI", "HofLJL7uaB8", "zLW-0dwX8YQ", "vA7Xyh5YKwA", "9AkOPIg66pU", "WDTglkh9CGA", "5d-S2kKPlkc", "VOTimTXDjWo", "ZTb_lH1LEVA", "lPea6vvu0J0"]
  
 const runCallback = () => {
     const element = document.querySelector('ytd-item-section-renderer');
     const msfy = document.querySelector('[id^="msfy-toggle-bar-button-"]');
     if (element && msfy) {
-        chunk_and_sort(videoIdsog)
+        chunk_and_sort(videoIds)
         return true;
     }
     return false;
