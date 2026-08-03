@@ -98,17 +98,6 @@ function getVideoTitle(videoElement) {
     return result;
 }
 
-function getSortIndexOfVideoIdInPlaylist(videoId, videoIds, videoElement) {
-    let result = -1;
-    if (videoId.length > 0) {
-        result = Array.prototype.indexOf.call(videoIds, videoId);
-        if (result < 0) {
-            alert(`Unrecognized video in playlist: ${getVideoTitle(videoElement)}. Please generate a new script.`)
-        }
-    }
-    return result
-}
-
 
 async function sortPlaylist(videoIds) {
     let numMoved = 0;
@@ -120,12 +109,20 @@ async function sortPlaylist(videoIds) {
         let errorString = ""
 
         playlistVideos = document.querySelector('ytd-item-section-renderer');
-        let videoItem = playlistVideos.querySelector(`ytd-playlist-video-renderer:has([href*="/watch?v=${videoIds[playlistIndex]}"])`);
+        let videoList = playlistVideos.querySelectorAll('ytd-playlist-video-renderer');
+        let videoElement = null;
+        for (let i = playlistIndex; i < videoIds.length; i++) {
+            if (getVideoId(videoList[i]) == videoIds[playlistIndex]) {
+                videoElement = videoList[i];
+                break;
+            }
+        }
+
         if (playlistIndex > videoIds.length - 1) {
             break;
         }
 
-        if (!videoItem) {
+        if (!videoElement) {
             errorString = `Video not found: ${videoIds[playlistIndex]}`;
             alert(errorString)
         }
@@ -133,12 +130,11 @@ async function sortPlaylist(videoIds) {
         let numMovedPrev = numMoved;
         if (!errorString.length) {
 
-            let videoList = playlistVideos.querySelectorAll('ytd-playlist-video-renderer');
-            let videoItemPlaylistIndex = Array.prototype.indexOf.call(videoList, videoItem);
+            let videoItemPlaylistIndex = Array.prototype.indexOf.call(videoList, videoElement);
             if (videoItemPlaylistIndex != playlistIndex) {
 
                 if (playlistIndex == 0) {
-                    if (await clickMenuButton("Move to top", videoItem, videoIds[playlistIndex])) {
+                    if (await clickMenuButton("Move to top", videoElement, videoIds[playlistIndex])) {
                         numMoved++;
                     }
                 }
@@ -155,7 +151,7 @@ async function sortPlaylist(videoIds) {
                     let elemDrag = null; 
                     let elemDrop = null; 
                     if (!errorString.length) {
-                        elemDrag = videoItem.querySelector('yt-icon#reorder');
+                        elemDrag = videoElement.querySelector('yt-icon#reorder');
                         elemDrop = replaceVideoItem.querySelector('a#thumbnail');
                         if (!elemDrag) {
                             errorString += "Drag element not found";
@@ -166,7 +162,7 @@ async function sortPlaylist(videoIds) {
                         }
                     }
 
-                    let videoTitleDrag = getVideoTitle(videoItem); 
+                    let videoTitleDrag = getVideoTitle(videoElement); 
                     let videoTitleDrop = getVideoTitle(replaceVideoItem); 
 
                     if (!errorString.length) {
@@ -214,8 +210,8 @@ async function sortPlaylist(videoIds) {
 
                         playlistVideos = document.querySelector('ytd-item-section-renderer');
                         let videoList = playlistVideos.querySelectorAll('ytd-playlist-video-renderer');
-                        videoItem = playlistVideos.querySelector(`ytd-playlist-video-renderer:has([href*="/watch?v=${videoIds[playlistIndex]}"])`);
-                        videoItemPlaylistIndex = Array.prototype.indexOf.call(videoList, videoItem);
+                        videoElement = playlistVideos.querySelector(`ytd-playlist-video-renderer:has([href*="/watch?v=${videoIds[playlistIndex]}"])`);
+                        videoItemPlaylistIndex = Array.prototype.indexOf.call(videoList, videoElement);
                         if (videoItemPlaylistIndex != playlistIndex)
                         {
                             console.log(`Index doesn't match, video may have missed. Expected ${playlistIndex}, is ${videoItemPlaylistIndex}`);
@@ -241,10 +237,18 @@ function getVideoId(videoElement) {
     if (linkSplit.length > 1) {
         result = linkSplit[1].slice(0, 11) 
     }
-    else {
-        alert(`Failed to find videoID in videoElement: ${getVideoTitle(videoElement)}. YouTube may have changed the layout of this page..`)
-    }
     return result
+}
+
+function getSortIndexesOfVideoElement(videoElement, videoIds) {
+    let result = [];
+    let firstBottomChunkVideoID = getVideoId(videoElement);
+    for (let i = 0; i < videoIds.length; i++) {
+        if (videoIds[i] == firstBottomChunkVideoID) {
+            result.push(i);
+        }
+    }
+    return result;
 }
 
 function msfytoggle(openorclose) {
@@ -264,12 +268,12 @@ async function chunk_and_sort(videoIds) {
         totalVideos = Number(matchingElement.textContent.split(' ')[0]);
     }
     if (totalVideos == null)  {
-        alert("Failed to find Total number of Videos. YouTube may have changed it's layout. This code probably need to be updated!")
+        alert("ABORTING: Failed to find Total number of Videos. YouTube may have changed it's layout. This code probably need to be updated!")
         stop_execution = true
     }
 
     if (totalVideos != videoIds.length) {
-        alert(`The number of expected videos in the playlist (${totalVideos}) does not match the number of videos in this script's sorted list (${videoIds.length}). Please generate a new script.`)
+        alert(`ABORTING: The number of expected videos in the playlist (${totalVideos}) does not match the number of videos in this script's sorted list (${videoIds.length}). Please generate a new script.`)
         stop_execution = true
     }
 
@@ -285,122 +289,164 @@ async function chunk_and_sort(videoIds) {
 
         videoList = playlistVideos.querySelectorAll('ytd-playlist-video-renderer');
         if (!videoList.length) {
-            alert("No videos found in playlist! YouTube may have changed it's layout. This code probably needs to be updated!")
+            alert("ABORTING: No videos found in playlist! YouTube may have changed its layout. This code probably needs to be updated!")
             stop_execution = true
         }
     }
-
-    let topSortedFirstVideoElement = null;
-    let topSortedFirstPlaylistIndex = 0;
-
-    let topSortedLastVideoElement = null;
-    let topSortedLastPlaylistIndex = 0;
 
     if (!stop_execution) {
-        let firstVideoItem = playlistVideos.querySelector(`ytd-playlist-video-renderer:has([href*="/watch?v=${videoIds[0]}"])`);
-        if (firstVideoItem) {
-            topSortedFirstVideoElement = firstVideoItem;
-            topSortedLastVideoElement = firstVideoItem;
-            topSortedFirstPlaylistIndex = Array.prototype.indexOf.call(videoList, firstVideoItem);
-            topSortedLastPlaylistIndex = topSortedFirstPlaylistIndex
-            for (let playlistIndex = topSortedFirstPlaylistIndex + 1, sortIndex = 1;
-                (playlistIndex < totalVideos) && (sortIndex < videoIds.length);
-                playlistIndex++, sortIndex++) 
-            {
-                let videoItem = videoList[playlistIndex].querySelector(`[href*="/watch?v=${videoIds[sortIndex]}"]`);
-                if (!videoItem) {
+        let playlsitIndexMap = new Map();
+        for (let sortIndex = 0; sortIndex < videoIds.length; sortIndex++) {
+            let videoElement = null;
+            for (let playlistIndex = 0; playlistIndex < videoList.length; playlistIndex++) {
+                if (!playlsitIndexMap.has(playlistIndex) 
+                    && getVideoId(videoList[playlistIndex]) == videoIds[sortIndex]) 
+                {
+                    videoElement = videoList[playlistIndex];
+                    playlsitIndexMap.set(playlistIndex, true);
                     break;
                 }
-                topSortedLastPlaylistIndex = playlistIndex;
-                topSortedLastVideoElement = videoItem;
             }
-        } else {
-            alert(`First video in sort order not found in playlist: ${videoIds[0]}. Please generate a new script.`);
+            if (!videoElement) {
+                alert(`ABORTING: Failed to find video in playlist with id: ${videoIds[sortIndex]}. Please generate a new script.`);
+                stop_execution = true
+            }
+        }
+    }
+
+    if (!stop_execution) {
+        let unrecognizedVideos = [];
+        for (let videoElement of videoList) {
+            let videoId = getVideoId(videoElement);
+            if (!videoId.length) {
+                alert(`ABORTING: Failed to find videoID in video HTML: ${getVideoTitle(videoElement)}. YouTube may have changed the layout of this page. This code probably needs to be updated!`);
+                stop_execution = true;
+                break;
+            }
+            if (!videoIds.some(v => v == videoId)) {
+                unrecognizedVideos.push(videoElement)
+            }
+        }
+        if (unrecognizedVideos.length) {
+            let titles = unrecognizedVideos.map(v => getVideoTitle(v).join("\n- "))
+            alert(`ABORTING: Unrecognized video in playlist. \n- ${titles}\n\nPlease generate a new script.`)
             stop_execution = true
         }
     }
 
-    if (!stop_execution && topSortedFirstPlaylistIndex == 0 &&  topSortedLastPlaylistIndex == totalVideos - 1) {
+    let topSortedFirstPlaylistIndex = 0;
+    let topSortedLastPlaylistIndex = 0;
+    let topSortedLastSortIndex = 0;
+
+    if (!stop_execution) {
+        let firstVideoElements = playlistVideos.querySelectorAll(`ytd-playlist-video-renderer:has([href*="/watch?v=${videoIds[0]}"])`);
+        if (firstVideoElements.length) {
+            let firstPlaylistIndexes = [];
+            let lastPlaylistIndexes = [];
+            let lastSortIndexes = [];
+            for (let i = 0; i < firstVideoElements.length; i++) {
+                firstPlaylistIndexes[i] = Array.prototype.indexOf.call(videoList, firstVideoElements[i]);
+                lastPlaylistIndexes[i] = firstPlaylistIndexes[i];
+                lastSortIndexes[i] = 0;
+                for (let playlistIndex = firstPlaylistIndexes[i] + 1, sortIndex = 1;
+                    (playlistIndex < totalVideos) && (sortIndex < videoIds.length);
+                    playlistIndex++, sortIndex++) 
+                {
+                    let videoItem = videoList[playlistIndex].querySelector(`[href*="/watch?v=${videoIds[sortIndex]}"]`);
+                    if (!videoItem) {
+                        break;
+                    }
+                    lastPlaylistIndexes[i] = playlistIndex;
+                    lastSortIndexes[i] = sortIndex;
+                }
+            }
+            let longestSortIndex = lastSortIndexes.reduce((a, b) => Math.max(a, b));
+            let longestArrayIndex = lastSortIndexes.indexOf(longestSortIndex);
+            topSortedFirstPlaylistIndex = firstPlaylistIndexes[longestArrayIndex];
+            topSortedLastPlaylistIndex = lastPlaylistIndexes[longestArrayIndex];
+            topSortedLastSortIndex = lastSortIndexes[longestArrayIndex];
+        } else {
+            alert(`ABORTING: First video in sort order not found in playlist: ${videoIds[0]}. Please generate a new script.`);
+            stop_execution = true
+        }
+    }
+
+    if (!stop_execution && topSortedFirstPlaylistIndex == 0 && topSortedLastPlaylistIndex == totalVideos - 1) {
         alert("The playlist is sorted! Please disable this script so you don't run it again later by accident.")
         stop_execution = true
     }
 
-    let firstBottomChunkPlaylistIndex = totalVideos - 1;
-    let firstBottomChunkVideoID = "";
-    let firstBottomChunkSortIndex = 0;
-    let lastBottomSortedVideoSortIndex = 0;
     if (!stop_execution) {
-        let lastVideoElement = videoList[videoList.length - 1];
-        firstBottomChunkVideoID = getVideoId(lastVideoElement);
-        firstBottomChunkSortIndex = getSortIndexOfVideoIdInPlaylist(firstBottomChunkVideoID, videoIds, lastVideoElement)
-        lastBottomSortedVideoSortIndex = firstBottomChunkSortIndex;
-        if (firstBottomChunkSortIndex == -1) {
-            stop_execution = true
-        }
-    }
 
-    let chunkSize = 100;
-    let nextChunkSortIndexStart = 0;
-    if (!stop_execution) {
-        for (let playlistVideoIndex = firstBottomChunkPlaylistIndex - 1, sortVideoIndexBottom = firstBottomChunkSortIndex - 1;
-             (playlistVideoIndex < totalVideos) && (sortVideoIndexBottom >= 0);
-             playlistVideoIndex--, sortVideoIndexBottom--) 
+        let firstSortIndexes = [];
+        let lastSortIndexes = [];
+        let sortIndexDistances = [];
+        let matchingSortIndexes = getSortIndexesOfVideoElement(videoList[videoList.length - 1], videoIds);
+        for (let i = 0; i < matchingSortIndexes.length; i++) {
+            firstSortIndexes[i] = matchingSortIndexes[i];
+            lastSortIndexes[i] = matchingSortIndexes[i];
+            sortIndexDistances[i] = 0;
+            for (let playlistIndex = totalVideos - 2, sortIndex = matchingSortIndexes[i] - 1;
+                (playlistIndex < totalVideos) && (sortIndex >= 0);
+                playlistIndex--, sortIndex--) 
+            {
+                let videoID = getVideoId(videoList[playlistIndex]);
+                if (videoID != videoIds[sortIndex]) {
+                    break;
+                }
+                firstSortIndexes[i] = sortIndex
+                sortIndexDistances[i]++;
+            }
+        }
+        let longestSequence = sortIndexDistances.reduce((a, b) => Math.max(a, b));
+        let longestSequenceIndex = sortIndexDistances.indexOf(longestSequence);
+        let firstBottomChunkSortIndex = firstSortIndexes[longestSequenceIndex];
+        let lastBottomSortedVideoSortIndex = lastSortIndexes[longestSequenceIndex];
+
+        let nextChunkSortIndexStart = 0;
+        if (topSortedLastSortIndex > 0) {
+            nextChunkSortIndexStart = topSortedLastSortIndex + 1;
+        }
+
+        if (nextChunkSortIndexStart == firstBottomChunkSortIndex) 
         {
-            let videoID = getVideoId(videoList[playlistVideoIndex]);
-            if (videoID != videoIds[sortVideoIndexBottom]) {
-                break;
-            }
-            firstBottomChunkPlaylistIndex = playlistVideoIndex;
-            firstBottomChunkSortIndex = sortVideoIndexBottom
-        }
-
-        if (topSortedLastPlaylistIndex > topSortedLastPlaylistIndex) {
-            let videoId = getVideoId(topSortedLastVideoElement);
-            nextChunkSortIndexStart = getSortIndexOfVideoIdInPlaylist(videoId, videoIds, topSortedLastVideoElement) + 1;
-            if (nextChunkSortIndexStart == -1) {
-                stop_execution = true
-            }
-        }
-
-        if (nextChunkSortIndexStart == firstBottomChunkSortIndex) {
             nextChunkSortIndexStart = lastBottomSortedVideoSortIndex + 1; 
         }
-    }
 
-    let tempSortIndexMin = 999999;
-    let tempSortMap = new Map();
-    if (!stop_execution) {
+        let chunkSize = 100;
+        let sortAreaSortIndexMin = videoIds.length;
+        let sortAreaSortIndexMap = new Map();
         for (let playlistIndex = 0; playlistIndex < Math.min(totalVideos, chunkSize); playlistIndex++) {
-            let videoElement = videoList[playlistIndex];
-            let videoID = getVideoId(videoElement);
-            let sortIndex = getSortIndexOfVideoIdInPlaylist(videoID, videoIds, videoElement)
-            if (sortIndex == -1) {
-                stop_execution = true;
-                break;
-            }
-            if (sortIndex >= nextChunkSortIndexStart) {
-                tempSortMap.set(sortIndex, videoElement)
-                tempSortIndexMin = Math.min(sortIndex, tempSortIndexMin);
+            let matchingSortIndexes = getSortIndexesOfVideoElement(videoList[playlistIndex], videoIds);
+            for (let sortIndex of matchingSortIndexes) {
+                if (sortIndex >= nextChunkSortIndexStart && (sortIndex <= nextChunkSortIndexStart + 100)) {
+                    let videoElements = [];
+                    if (sortAreaSortIndexMap.has(sortIndex)) {
+                        videoElements = sortAreaSortIndexMap.get(sortIndex);
+                    }
+                    videoElements.push(videoList[playlistIndex]);
+                    sortAreaSortIndexMap.set(sortIndex, videoElements);
+                    sortAreaSortIndexMin = Math.min(sortIndex, sortAreaSortIndexMin);
+                }
             }
         }
-    }
 
-    if (!stop_execution) {
-
-        let tempSortIndexMax = tempSortIndexMin;
-        for (let sortIndex = tempSortIndexMin + 1; sortIndex < Math.min(videoIds.length, tempSortIndexMin + chunkSize); sortIndex++) {
-            if (!(tempSortMap.has(sortIndex))) {
+        let sortAreaSortIndexMax = sortAreaSortIndexMin;
+        for (let sortIndex = sortAreaSortIndexMin + 1;
+             sortIndex < Math.min(videoIds.length, sortAreaSortIndexMin + chunkSize);
+             sortIndex++)
+        {
+            if (!(sortAreaSortIndexMap.has(sortIndex))) {
                 break;
             }
-            tempSortIndexMax = sortIndex;
+            sortAreaSortIndexMax = sortIndex;
         }
-        let lastTempSortAreaPlaylistIndex = tempSortMap.get(tempSortIndexMin, tempSortIndexMax);
 
-        if (tempSortIndexMin == nextChunkSortIndexStart) {
+        if (sortAreaSortIndexMin == nextChunkSortIndexStart && (sortAreaSortIndexMax - sortAreaSortIndexMin) >= 25) {
             await msfytoggle("none")
-            let videoIdsToSort = videoIds.slice(tempSortIndexMin, tempSortIndexMax + 1) 
-            if (tempSortIndexMin == tempSortIndexMax) {
-                videoIdsToSort.push(videoIds[tempSortIndexMin])
+            let videoIdsToSort = videoIds.slice(sortAreaSortIndexMin, sortAreaSortIndexMax + 1) 
+            if (sortAreaSortIndexMin == sortAreaSortIndexMax) {
+                videoIdsToSort.push(videoIds[sortAreaSortIndexMin])
             }
             await sortPlaylist(videoIdsToSort);
             await msfytoggle("block")
@@ -408,7 +454,7 @@ async function chunk_and_sort(videoIds) {
     
             while (totalVideos != playlistVideos.querySelectorAll('ytd-playlist-video-renderer').length) {
                 document.scrollingElement.scrollTop = document.scrollingElement.scrollHeight;
-                await sleep(2000)
+                await sleep(250)
             }
     
             for (let playlistIndex = 0; playlistIndex < videoIdsToSort.length + 10; playlistIndex++) {
@@ -419,6 +465,7 @@ async function chunk_and_sort(videoIds) {
                 }
             }
 
+            //TODO: (Ahmayk) can we move this earlier so we see the videos being clicked on?
             await msfytoggle("block");
             await sleep(500);
             while (!document.querySelector('[id^="msfy-action-move-to-bottom"]')) {
@@ -427,13 +474,29 @@ async function chunk_and_sort(videoIds) {
             }
             document.querySelector('[id^="msfy-action-move-to-bottom"]').dispatchEvent(new Event('tap'))
         } else {
-            for (let playlistIndex = 0; playlistIndex < totalVideos; playlistIndex++) {
-                let videoElement = videoList[playlistIndex];
-                let videoID = getVideoId(videoElement);
-                let sortIndex = getSortIndexOfVideoIdInPlaylist(videoID, videoIds, videoElement)
-                if ((sortIndex >= nextChunkSortIndexStart) && (sortIndex <= nextChunkSortIndexStart + chunkSize)) {
+            let playlsitIndexMap = new Map();
+            for (let sortIndex = nextChunkSortIndexStart;
+                sortIndex < nextChunkSortIndexStart + chunkSize;
+                sortIndex++
+            ) {
+                let videoElement = null;
+                let chosenPlaylistIndex = 0;
+                for (let playlistIndex = 0; playlistIndex < videoList.length; playlistIndex++) {
+                    if (!playlsitIndexMap.has(playlistIndex) 
+                        && getVideoId(videoList[playlistIndex]) == videoIds[sortIndex]) 
+                    {
+                        videoElement = videoList[playlistIndex];
+                        playlsitIndexMap.set(playlistIndex, true);
+                        chosenPlaylistIndex = playlistIndex;
+                        break;
+                    }
+                }
+                if (videoElement) {
                     videoElement.querySelector(".msfy-video-checkbox").dispatchEvent(new Event('click'));
+                    playlsitIndexMap.set(chosenPlaylistIndex, true);
                     await sleep(10);
+                } else {
+                    alert(`OH NOES, couldn't find video id ${videoIds[sortIndex]}`);
                 }
             }
 
