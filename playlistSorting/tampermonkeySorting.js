@@ -71,13 +71,6 @@ async function msfyMoveVideos(msfyButton, videoElements, totalVideoCount) {
                 }
             }
         }
-        let firstVideoIdNotSelected = "";
-        for (let videoElement of videoList) {
-            if (!elementIndexMap.has(videoElement)) {
-                firstVideoIdNotSelected = getVideoId(videoElement); 
-                break;
-            }
-        }
         document.scrollingElement.scrollTop = 0; 
         if (!document.querySelector('[id^="msfy-bar-"]')) {
             document.querySelector('[id^="msfy-toggle-bar-button-"]').querySelector('yt-icon-button').dispatchEvent(new Event('tap'));
@@ -109,12 +102,11 @@ async function msfyMoveVideos(msfyButton, videoElements, totalVideoCount) {
                 }
             }
             if (msfyButton == MSFY_BUTTON.BOTTOM) {
-                //NOTE: (Ahmayk) This isn't perfect, but should work fine in most cases
-                //Could break too soon if there are multiple of a video in just the right spot
-                //but that's so rare anyway not likely to happen
-                if (getVideoId(videoList[0]) == firstVideoIdNotSelected) {
-                    isMoved = false
-                }
+                //NOTE: (Ahmayk) YouTube does a terrible job reporting this back to us
+                //so just YOLO it lol. We only do this right before a page refresh anyway
+                //if it doesn't work we'll just try again next time
+                sleep(3000);
+                isMoved = true 
             }
             if (isMoved) {
                 console.log(`Videos were moved!`)
@@ -147,6 +139,47 @@ function getSortIndexesOfVideoElement(videoElement, videoIds) {
             result.push(i);
         }
     }
+    return result;
+}
+
+function alertIfPlaylistSorted(topSortedStats, totalVideoCount) {
+    let result = false;
+    if (topSortedStats.firstPlaylistIndex == 0 
+        && topSortedStats.lastPlaylistIndex == totalVideoCount - 1) {
+        alert("The playlist is sorted! Please disable this script so you don't run it again later by accident.")
+        result = true;
+    }
+    return result;
+}
+
+function getTopSortedStats(videoList, videoIds) {
+    let firstVideoElements = document.querySelector('ytd-item-section-renderer').querySelectorAll(`ytd-playlist-video-renderer:has([href*="/watch?v=${videoIds[0]}"])`);
+    let firstPlaylistIndexes = [];
+    let lastPlaylistIndexes = [];
+    let lastSortIndexes = [];
+    for (let i = 0; i < firstVideoElements.length; i++) {
+        firstPlaylistIndexes[i] = Array.prototype.indexOf.call(videoList, firstVideoElements[i]);
+        lastPlaylistIndexes[i] = firstPlaylistIndexes[i];
+        lastSortIndexes[i] = 0;
+        for (let playlistIndex = firstPlaylistIndexes[i] + 1, sortIndex = 1;
+            (playlistIndex < videoList.length) && (sortIndex < videoIds.length);
+            playlistIndex++, sortIndex++) 
+        {
+            let videoItem = videoList[playlistIndex].querySelector(`[href*="/watch?v=${videoIds[sortIndex]}"]`);
+            if (!videoItem) {
+                break;
+            }
+            lastPlaylistIndexes[i] = playlistIndex;
+            lastSortIndexes[i] = sortIndex;
+        }
+    }
+    let longestSortIndex = lastSortIndexes.reduce((a, b) => Math.max(a, b));
+    let longestArrayIndex = lastSortIndexes.indexOf(longestSortIndex);
+
+    let result = {};
+    result.firstPlaylistIndex = firstPlaylistIndexes[longestArrayIndex];
+    result.lastPlaylistIndex = lastPlaylistIndexes[longestArrayIndex];
+    result.lastSortIndex = lastSortIndexes[longestArrayIndex];
     return result;
 }
 
@@ -230,48 +263,19 @@ async function chunk_and_sort(videoIds) {
         }
     }
 
-    let topSortedFirstPlaylistIndex = 0;
-    let topSortedLastPlaylistIndex = 0;
-    let topSortedLastSortIndex = 0;
-
+    let topSortedStats = {};
     if (!stop_execution) {
-        let firstVideoElements = playlistVideos.querySelectorAll(`ytd-playlist-video-renderer:has([href*="/watch?v=${videoIds[0]}"])`);
-        if (firstVideoElements.length) {
-            let firstPlaylistIndexes = [];
-            let lastPlaylistIndexes = [];
-            let lastSortIndexes = [];
-            for (let i = 0; i < firstVideoElements.length; i++) {
-                firstPlaylistIndexes[i] = Array.prototype.indexOf.call(videoList, firstVideoElements[i]);
-                lastPlaylistIndexes[i] = firstPlaylistIndexes[i];
-                lastSortIndexes[i] = 0;
-                for (let playlistIndex = firstPlaylistIndexes[i] + 1, sortIndex = 1;
-                    (playlistIndex < totalVideoCount) && (sortIndex < videoIds.length);
-                    playlistIndex++, sortIndex++) 
-                {
-                    let videoItem = videoList[playlistIndex].querySelector(`[href*="/watch?v=${videoIds[sortIndex]}"]`);
-                    if (!videoItem) {
-                        break;
-                    }
-                    lastPlaylistIndexes[i] = playlistIndex;
-                    lastSortIndexes[i] = sortIndex;
-                }
-            }
-            let longestSortIndex = lastSortIndexes.reduce((a, b) => Math.max(a, b));
-            let longestArrayIndex = lastSortIndexes.indexOf(longestSortIndex);
-            topSortedFirstPlaylistIndex = firstPlaylistIndexes[longestArrayIndex];
-            topSortedLastPlaylistIndex = lastPlaylistIndexes[longestArrayIndex];
-            topSortedLastSortIndex = lastSortIndexes[longestArrayIndex];
-        } else {
-            alert(`ABORTING: First video in sort order not found in playlist: ${videoIds[0]}. Please generate a new script.`);
-            stop_execution = true
+        topSortedStats = getTopSortedStats(videoList, videoIds);
+        if (alertIfPlaylistSorted(topSortedStats, totalVideoCount)) {
+            stop_execution = true;
         }
     }
 
-    if (!stop_execution && topSortedFirstPlaylistIndex == 0 && topSortedLastPlaylistIndex == totalVideoCount - 1) {
-        alert("The playlist is sorted! Please disable this script so you don't run it again later by accident.")
-        stop_execution = true
-    }
-
+    let nextChunkSortIndexStart = 0;
+    let needsMoveToTop = false;
+    let nextSortingAreaElements = [];
+    let usedShortcut = false;
+    let sortIndexMax = 0;
     if (!stop_execution) {
 
         let firstSortIndexes = [];
@@ -299,9 +303,8 @@ async function chunk_and_sort(videoIds) {
         let firstBottomChunkSortIndex = firstSortIndexes[longestSequenceIndex];
         let lastBottomSortedVideoSortIndex = lastSortIndexes[longestSequenceIndex];
 
-        let nextChunkSortIndexStart = 0;
-        if (topSortedLastSortIndex > 0) {
-            nextChunkSortIndexStart = topSortedLastSortIndex + 1;
+        if (topSortedStats.lastSortIndex > 0) {
+            nextChunkSortIndexStart = topSortedStats.lastSortIndex + 1;
         }
 
         if (nextChunkSortIndexStart == firstBottomChunkSortIndex) 
@@ -309,10 +312,9 @@ async function chunk_and_sort(videoIds) {
             nextChunkSortIndexStart = lastBottomSortedVideoSortIndex + 1; 
         }
 
-        let nextSortingAreaElements = [];
         let playlsitIndexMap = new Map();
-        let needsMoveToTop = false;
-        let sortIndexMax = nextChunkSortIndexStart;;
+        let sortAreaFirstPlaylistIndex = 0;
+        sortIndexMax = nextChunkSortIndexStart;;
         for (let sortIndex = nextChunkSortIndexStart;
             sortIndex < nextChunkSortIndexStart + chunkSize;
             sortIndex++
@@ -329,10 +331,29 @@ async function chunk_and_sort(videoIds) {
                         needsMoveToTop = true;
                     }
                     sortIndexMax = Math.max(sortIndexMax, sortIndex);
+                    if (sortIndex == nextChunkSortIndexStart) {
+                        sortAreaFirstPlaylistIndex = playlistIndex;
+                    }
                     break;
                 }
             }
         }
+        let shortcutSectionVideoElements = [];
+        for (let i = 0; i < videoList.length; i++)
+        {
+            if (getVideoId(videoList[i + sortAreaFirstPlaylistIndex]) != videoIds[i + nextChunkSortIndexStart]) {
+                break;
+            } 
+            shortcutSectionVideoElements.push(videoList[i + nextChunkSortIndexStart])
+        }
+        if (shortcutSectionVideoElements.length > chunkSize) {
+            await msfyMoveVideos(MSFY_BUTTON.BOTTOM, shortcutSectionVideoElements, totalVideoCount);
+            usedShortcut = true;
+        }
+    }
+
+    if (!stop_execution && !usedShortcut) {
+
         if (needsMoveToTop) {
             await msfyMoveVideos(MSFY_BUTTON.TOP, nextSortingAreaElements, totalVideoCount);
         }
@@ -342,7 +363,7 @@ async function chunk_and_sort(videoIds) {
         while (currentSortIndex >= 0) {
             videoList = document.querySelector('ytd-item-section-renderer').querySelectorAll('ytd-playlist-video-renderer');
             let videoElements = [];
-            for (let i = chunkSize - 1; i >= 0; i--) {
+            for (let i = Math.min(totalVideoCount, chunkSize) - 1; i >= 0; i--) {
                 if (getVideoId(videoList[i]) == videoIdsToSort[currentSortIndex]) {
                     videoElements.push(videoList[i]);
                     currentSortIndex--;
@@ -379,8 +400,14 @@ async function chunk_and_sort(videoIds) {
         await msfyMoveVideos(MSFY_BUTTON.BOTTOM, videoElementsToMove, totalVideoCount);
     }
 
+    if (!stop_execution && totalVideoCount < 95) {
+        let newTopSortedStats = getTopSortedStats(videoList, videoIds);
+        if (alertIfPlaylistSorted(newTopSortedStats, totalVideoCount)) {
+            stop_execution = true;
+        }
+    }
+
     if (!stop_execution) {
-        await sleep(2000);
         location.reload();
         await sleep(9999999);
     }
