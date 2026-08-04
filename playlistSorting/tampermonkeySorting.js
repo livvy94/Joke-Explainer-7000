@@ -59,6 +59,7 @@ const MSFY_BUTTON = {
 
 async function msfyMoveVideos(msfyButton, videoElements, totalVideoCount) {
     if (videoElements.length && videoElements.length < totalVideoCount) {
+        console.log(`Moving ${videoElements.length} videos to the ${msfyButton}`)
         let videoList = document.querySelector('ytd-item-section-renderer').querySelectorAll('ytd-playlist-video-renderer');
         let elementIndexMap = new Map();
         let movingVideoIds = []; 
@@ -90,6 +91,7 @@ async function msfyMoveVideos(msfyButton, videoElements, totalVideoCount) {
         while (!button) {
             button = document.querySelector(`[id^="msfy-action-move-to-${msfyButton}"]`)
             if (!button) {
+                console.log(`Waiting for msfy button...`)
                 await sleep(50);
             }
         }
@@ -112,12 +114,13 @@ async function msfyMoveVideos(msfyButton, videoElements, totalVideoCount) {
                 //but that's so rare anyway not likely to happen
                 if (getVideoId(videoList[0]) == firstVideoIdNotSelected) {
                     isMoved = false
-                    break;
                 }
             }
             if (isMoved) {
+                console.log(`Videos were moved!`)
                 break;
             }
+            console.log(`Waiting for videos to appear moved...`)
             await sleep(50);
         }
     }
@@ -125,9 +128,6 @@ async function msfyMoveVideos(msfyButton, videoElements, totalVideoCount) {
 
 //NOTE: (Ahmayk) This is just under 100 videos, as this does not trigger YouTube to reload the playlist entires
 let chunkSize = 95;
-
-async function sortPlaylist(videoIds, totalVideoCount) {
-}
 
 function getVideoId(videoElement) {
     let result = ""
@@ -170,6 +170,8 @@ async function chunk_and_sort(videoIds) {
         stop_execution = true
     }
 
+    await sleep(2000);
+
     let playlistVideos = document.querySelector('ytd-item-section-renderer');
     let videoList = [] 
     if (!stop_execution) {
@@ -186,6 +188,7 @@ async function chunk_and_sort(videoIds) {
         }
     }
 
+    videoList = playlistVideos.querySelectorAll('ytd-playlist-video-renderer');
     if (!stop_execution) {
         let playlsitIndexMap = new Map();
         for (let sortIndex = 0; sortIndex < videoIds.length; sortIndex++) {
@@ -306,105 +309,78 @@ async function chunk_and_sort(videoIds) {
             nextChunkSortIndexStart = lastBottomSortedVideoSortIndex + 1; 
         }
 
-        let sortAreaSortIndexMin = videoIds.length;
-        let sortAreaSortIndexMap = new Map();
-        for (let playlistIndex = 0; playlistIndex < Math.min(totalVideoCount, chunkSize); playlistIndex++) {
-            let matchingSortIndexes = getSortIndexesOfVideoElement(videoList[playlistIndex], videoIds);
-            for (let sortIndex of matchingSortIndexes) {
-                if (sortIndex >= nextChunkSortIndexStart && (sortIndex <= nextChunkSortIndexStart + chunkSize)) {
-                    let videoElements = [];
-                    if (sortAreaSortIndexMap.has(sortIndex)) {
-                        videoElements = sortAreaSortIndexMap.get(sortIndex);
+        let nextSortingAreaElements = [];
+        let playlsitIndexMap = new Map();
+        let needsMoveToTop = false;
+        let sortIndexMax = nextChunkSortIndexStart;;
+        for (let sortIndex = nextChunkSortIndexStart;
+            sortIndex < nextChunkSortIndexStart + chunkSize;
+            sortIndex++
+        ) {
+            let videoElement = null;
+            let chosenPlaylistIndex = 0;
+            for (let playlistIndex = 0; playlistIndex < videoList.length; playlistIndex++) {
+                if (!playlsitIndexMap.has(playlistIndex) 
+                    && getVideoId(videoList[playlistIndex]) == videoIds[sortIndex]) 
+                {
+                    nextSortingAreaElements.push(videoList[playlistIndex]);
+                    playlsitIndexMap.set(playlistIndex, true);
+                    if (playlistIndex > 95) {
+                        needsMoveToTop = true;
                     }
-                    videoElements.push(videoList[playlistIndex]);
-                    sortAreaSortIndexMap.set(sortIndex, videoElements);
-                    sortAreaSortIndexMin = Math.min(sortIndex, sortAreaSortIndexMin);
+                    sortIndexMax = Math.max(sortIndexMax, sortIndex);
+                    break;
                 }
             }
         }
-
-        let sortAreaSortIndexMax = sortAreaSortIndexMin;
-        for (let sortIndex = sortAreaSortIndexMin + 1;
-             sortIndex < Math.min(videoIds.length, sortAreaSortIndexMin + chunkSize);
-             sortIndex++)
-        {
-            if (!(sortAreaSortIndexMap.has(sortIndex))) {
-                break;
-            }
-            sortAreaSortIndexMax = sortIndex;
+        if (needsMoveToTop) {
+            await msfyMoveVideos(MSFY_BUTTON.TOP, nextSortingAreaElements, totalVideoCount);
         }
 
-        if (sortAreaSortIndexMin == nextChunkSortIndexStart && (sortAreaSortIndexMax - sortAreaSortIndexMin) >= (chunkSize * 0.25)) {
-            let videoIdsToSort = videoIds.slice(sortAreaSortIndexMin, sortAreaSortIndexMax + 1) 
-            let currentSortIndex = videoIdsToSort.length - 1;
-            while (currentSortIndex >= 0) {
-                let videoList = document.querySelector('ytd-item-section-renderer').querySelectorAll('ytd-playlist-video-renderer');
-                let videoElements = [];
-                for (let i = chunkSize - 1; i >= 0; i--) {
-                    if (getVideoId(videoList[i]) == videoIdsToSort[currentSortIndex]) {
-                        videoElements.push(videoList[i]);
-                        currentSortIndex--;
-                        if (currentSortIndex < 0) {
-                            break;
-                        }
-                    }
-                }
-
-                if (videoElements.length) {
-                    let isInOrder = true;
-                    for (let i = 0; i < videoElements.length; i++) {
-                        if (videoList[i] != videoElements[i]) {
-                            isInOrder = false;
-                            break;
-                        }
-                    }
-                    if (!isInOrder) {
-                        await msfyMoveVideos(MSFY_BUTTON.TOP, videoElements, totalVideoCount);
-                    }
-                } else {
-                    alert(`Video not found during sorting: ${videoIdsToSort[currentSortIndex]}`);
-                }
-            }
-
-            let videoElementsToMove = [];
-            for (let playlistIndex = 0; playlistIndex < videoIdsToSort.length; playlistIndex++) {
-                let videoID = getVideoId(videoList[playlistIndex]);
-                if (videoIdsToSort.includes(videoID)) {
-                    videoElementsToMove.push(videoList[playlistIndex]);
-                }
-            }
-            await msfyMoveVideos(MSFY_BUTTON.BOTTOM, videoElementsToMove, totalVideoCount);
-        } else {
-            let videoElementsToMove = [];
-            let playlsitIndexMap = new Map();
-            for (let sortIndex = nextChunkSortIndexStart;
-                sortIndex < nextChunkSortIndexStart + chunkSize;
-                sortIndex++
-            ) {
-                let videoElement = null;
-                let chosenPlaylistIndex = 0;
-                for (let playlistIndex = 0; playlistIndex < videoList.length; playlistIndex++) {
-                    if (!playlsitIndexMap.has(playlistIndex) 
-                        && getVideoId(videoList[playlistIndex]) == videoIds[sortIndex]) 
-                    {
-                        videoElement = videoList[playlistIndex];
-                        playlsitIndexMap.set(playlistIndex, true);
-                        chosenPlaylistIndex = playlistIndex;
+        let videoIdsToSort = videoIds.slice(nextChunkSortIndexStart, sortIndexMax + 1) 
+        let currentSortIndex = videoIdsToSort.length - 1;
+        while (currentSortIndex >= 0) {
+            videoList = document.querySelector('ytd-item-section-renderer').querySelectorAll('ytd-playlist-video-renderer');
+            let videoElements = [];
+            for (let i = chunkSize - 1; i >= 0; i--) {
+                if (getVideoId(videoList[i]) == videoIdsToSort[currentSortIndex]) {
+                    videoElements.push(videoList[i]);
+                    currentSortIndex--;
+                    if (currentSortIndex < 0) {
                         break;
                     }
                 }
-                if (videoElement) {
-                    videoElementsToMove.push(videoElement);
-                    playlsitIndexMap.set(chosenPlaylistIndex, true);
-                } else {
-                    alert(`OH NOES, couldn't find video id ${videoIds[sortIndex]}`);
-                }
             }
-            await msfyMoveVideos(MSFY_BUTTON.TOP, videoElementsToMove, totalVideoCount);
+
+            if (videoElements.length) {
+                let isInOrder = true;
+                for (let i = 0; i < videoElements.length; i++) {
+                    if (videoList[i] != videoElements[i]) {
+                        isInOrder = false;
+                        break;
+                    }
+                }
+                if (!isInOrder) {
+                    await msfyMoveVideos(MSFY_BUTTON.TOP, videoElements, totalVideoCount);
+                }
+            } else {
+                alert(`Video not found during sorting: ${videoIdsToSort[currentSortIndex]}`);
+            }
         }
+
+        videoList = document.querySelector('ytd-item-section-renderer').querySelectorAll('ytd-playlist-video-renderer');
+        let videoElementsToMove = [];
+        for (let playlistIndex = 0; playlistIndex < videoIdsToSort.length; playlistIndex++) {
+            let videoID = getVideoId(videoList[playlistIndex]);
+            if (videoIdsToSort.includes(videoID)) {
+                videoElementsToMove.push(videoList[playlistIndex]);
+            }
+        }
+        await msfyMoveVideos(MSFY_BUTTON.BOTTOM, videoElementsToMove, totalVideoCount);
     }
 
     if (!stop_execution) {
+        await sleep(2000);
         location.reload();
         await sleep(9999999);
     }
