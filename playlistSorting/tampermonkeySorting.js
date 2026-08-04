@@ -70,6 +70,13 @@ async function msfyMoveVideos(msfyButton, videoElements, totalVideoCount) {
                 }
             }
         }
+        let firstVideoIdNotSelected = "";
+        for (let videoElement of videoList) {
+            if (!elementIndexMap.has(videoElement)) {
+                firstVideoIdNotSelected = getVideoId(videoElement); 
+                break;
+            }
+        }
         document.scrollingElement.scrollTop = 0; 
         if (!document.querySelector('[id^="msfy-bar-"]')) {
             document.querySelector('[id^="msfy-toggle-bar-button-"]').querySelector('yt-icon-button').dispatchEvent(new Event('tap'));
@@ -88,7 +95,8 @@ async function msfyMoveVideos(msfyButton, videoElements, totalVideoCount) {
         }
         button.dispatchEvent(new Event('tap'))
         while (true) {
-            videoList = document.querySelector('ytd-item-section-renderer').querySelectorAll('ytd-playlist-video-renderer');
+            let playlistVideos = document.querySelector('ytd-item-section-renderer');
+            videoList = playlistVideos.querySelectorAll('ytd-playlist-video-renderer');
             let isMoved = true;
             if (msfyButton == MSFY_BUTTON.TOP) {
                 for (let i = 0; i < movingVideoIds.length; i++) {
@@ -99,11 +107,12 @@ async function msfyMoveVideos(msfyButton, videoElements, totalVideoCount) {
                 }
             }
             if (msfyButton == MSFY_BUTTON.BOTTOM) {
-                for (let i = movingVideoIds.length - 1; i >= 0; i--) {
-                    if (getVideoId(videoList[i]) != movingVideoIds[i]) {
-                        isMoved = false
-                        break;
-                    }
+                //NOTE: (Ahmayk) This isn't perfect, but should work fine in most cases
+                //Could break too soon if there are multiple of a video in just the right spot
+                //but that's so rare anyway not likely to happen
+                if (getVideoId(videoList[0]) == firstVideoIdNotSelected) {
+                    isMoved = false
+                    break;
                 }
             }
             if (isMoved) {
@@ -168,9 +177,8 @@ async function chunk_and_sort(videoIds) {
             document.scrollingElement.scrollTop = document.scrollingElement.scrollHeight;
             //TODO: (Ahmayk) do we need this?
             let spinnerIcon = document.querySelector('tp-yt-paper-spinner[active]');
-            await sleep(250);
+            await sleep(100);
         }
-
         videoList = playlistVideos.querySelectorAll('ytd-playlist-video-renderer');
         if (!videoList.length) {
             alert("ABORTING: No videos found in playlist! YouTube may have changed its layout. This code probably needs to be updated!")
@@ -194,6 +202,7 @@ async function chunk_and_sort(videoIds) {
             if (!videoElement) {
                 alert(`ABORTING: Failed to find video in playlist with id: ${videoIds[sortIndex]}. Please generate a new script.`);
                 stop_execution = true
+                break;
             }
         }
     }
