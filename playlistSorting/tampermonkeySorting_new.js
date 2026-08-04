@@ -110,8 +110,18 @@ const MSFY_BUTTON = {
 };
 
 async function enableMsfyAndMoveVideos(msfyButton, videoElements, totalVideoCount) {
-    if (videoElements.length < totalVideoCount) {
-        let topVideoId = getVideoId(videoElements[0]);
+    if (videoElements.length && videoElements.length < totalVideoCount) {
+        let videoList = document.querySelector('ytd-item-section-renderer').querySelectorAll('ytd-playlist-video-renderer');
+        let elementIndexMap = new Map();
+        let movingVideoIds = []; 
+        for (let videoElement of videoList) {
+            for (let i = 0; i < videoElements.length; i++) {
+                if (!elementIndexMap.has(videoElements[i]) && videoElement == videoElements[i]) {
+                    elementIndexMap.set(videoElements[i], true);
+                    movingVideoIds.push(getVideoId(videoElements[i]));
+                }
+            }
+        }
         document.scrollingElement.scrollTop = 0; 
         if (!document.querySelector('[id^="msfy-bar-"]')) {
             document.querySelector('[id^="msfy-toggle-bar-button-"]').querySelector('yt-icon-button').dispatchEvent(new Event('tap'));
@@ -130,12 +140,25 @@ async function enableMsfyAndMoveVideos(msfyButton, videoElements, totalVideoCoun
         }
         button.dispatchEvent(new Event('tap'))
         while (true) {
-            let playlistVideos = document.querySelector('ytd-item-section-renderer');
-            let videoList = playlistVideos.querySelectorAll('ytd-playlist-video-renderer');
-            if (msfyButton == MSFY_BUTTON.TOP && getVideoId(videoList[0]) == topVideoId) {
-                break;
+            videoList = document.querySelector('ytd-item-section-renderer').querySelectorAll('ytd-playlist-video-renderer');
+            let isMoved = true;
+            if (msfyButton == MSFY_BUTTON.TOP) {
+                for (let i = 0; i < movingVideoIds.length; i++) {
+                    if (getVideoId(videoList[i]) != movingVideoIds[i]) {
+                        isMoved = false
+                        break;
+                    }
+                }
             }
-            if (msfyButton == MSFY_BUTTON.BOTTOM && getVideoId(videoList[0]) != topVideoId) {
+            if (msfyButton == MSFY_BUTTON.BOTTOM) {
+                for (let i = movingVideoIds.length - 1; i >= 0; i--) {
+                    if (getVideoId(videoList[i]) != movingVideoIds[i]) {
+                        isMoved = false
+                        break;
+                    }
+                }
+            }
+            if (isMoved) {
                 break;
             }
             await sleep(50);
@@ -146,29 +169,39 @@ async function enableMsfyAndMoveVideos(msfyButton, videoElements, totalVideoCoun
 let chunkSize = 95;
 
 async function sortPlaylist(videoIds, totalVideoCount) {
-    for (let playlistIndex = 0; playlistIndex < videoIds.length; playlistIndex++) {
+    let sortIndex = videoIds.length - 1;
+
+    while (sortIndex >= 0) {
 
         let errorString = ""
-        let playlistVideos = document.querySelector('ytd-item-section-renderer');
-        let videoList = playlistVideos.querySelectorAll('ytd-playlist-video-renderer');
-        let videoElement = null;
-        let videoSortIndex = videoIds.length - 1 - playlistIndex;
+        let videoList = document.querySelector('ytd-item-section-renderer').querySelectorAll('ytd-playlist-video-renderer');
+        let videoElements = [];
         for (let i = chunkSize - 1; i >= 0; i--) {
-            if (getVideoId(videoList[i]) == videoIds[videoSortIndex]) {
-                videoElement = videoList[i];
-                break;
+            if (getVideoId(videoList[i]) == videoIds[sortIndex]) {
+                videoElements.push(videoList[i]);
+                sortIndex--;
+                if (sortIndex < 0) {
+                    break;
+                }
             }
         }
 
-        if (!videoElement) {
-            errorString = `Video not found: ${videoIds[videoSortIndex]}`;
-            alert(errorString)
+        if (!videoElements.length) {
+            errorString = `Video not found: ${videoIds[sortIndex]}`;
+            alert(errorString);
         }
 
         if (!errorString.length) {
-            let videoItemPlaylistIndex = Array.prototype.indexOf.call(videoList, videoElement);
-            if (videoItemPlaylistIndex != 0) {
-                await enableMsfyAndMoveVideos(MSFY_BUTTON.TOP, [videoElement], totalVideoCount);
+
+            let isInOrder = true;
+            for (let i = 0; i < videoElements.length; i++) {
+                if (videoList[i] != videoElements[i]) {
+                    isInOrder = false;
+                    break;
+                }
+            }
+            if (!isInOrder) {
+                await enableMsfyAndMoveVideos(MSFY_BUTTON.TOP, videoElements, totalVideoCount);
             }
         }
 
