@@ -12,27 +12,20 @@
 
 /*
 
-----INSTRUCTIONS FOR USE-----
-1. Download the Tampermonkey extention for your browser.
-2. Copy and paste this text into a new script file within the extension
-3. Go to the playlist page and it will start doing it's thing! Keep your mouse away from the page.
-4. When it's done, check that it worked as expected, and disable the script 
-   so you won't accidentally run it again in the future. 
+----INSTRUCTIONS FOR BACKROOM USE FOR SORTING PLAYLISTS-----
+1. Download the Tampermonkey extention for your browser. This injects this script into your browser.
+2. Download the browser extension: "Plugin Multiselect for YouTube". This allows for much faster sorting.
+3. Copy and paste this script into a new script file within the Tampermonkey extension.
+4. Go to the playlist page and the script will start doing it's thing!
+5. When it's done, it will tell you (given that you don't have popups disabled for YouTube).
+   Check that it worked as expected, then disable the script so you won't accidentally run it again later. 
 
-Less than 100 videos: Will finish in a few minutes.
-More than 100 videos: Will take hours, perhaps all night if the playlist is very long (500+).
-
-If the playlist has +100 videos, the page will need to refresh after moving most videos 
-after it gets past 100 (it sorts from top to bottom).
-This is required because otherwise the page would quickly leak memory and become unusable.
-
-It's finished when it stops moving for a while and nothing is loading.
-You can open the web console to see it printing debug messages while it works if you want to see more information.
+Less than 100 videos: 10-30 seconds.
+More than 100 videos: 1-10 minutes depending on size. The page will refresh occasionally (prevents a memory leak).
 
 TIPS:
-- Don't hover your mouse cursor over the page while it's working. This messes with the simulated mouse drag. 
-- Keep the tab open. If you're walking away from the computer, you'll probably need to turn off your screensaver, 
-  otherwise it may stop running.
+- Keep the tab open while it works.
+- If you're walking away from your computer, you may need to turn off your screensaver, otherwise it may stop running.
 
 */
 
@@ -444,13 +437,17 @@ async function chunk_and_sort(videoIds) {
 #META_VIDEO_IDS
  
 const runCallback = () => {
-    const element = document.querySelector('ytd-item-section-renderer');
-    const msfy = document.querySelector('[id^="msfy-toggle-bar-button-"]');
-    if (element && msfy) {
-        chunk_and_sort(videoIds)
-        return true;
+    let result = false;
+    let element = document.querySelector('ytd-item-section-renderer')
+    if (element) {
+        if (document.querySelector('[id^="msfy-toggle-bar-button-"]')) {
+            chunk_and_sort(videoIds);
+            result = true;
+        } else {
+            alert("\"Plugin Multiselect for YouTube\" not detected. This browser extension is required! Please add it and enable it to sort this playlist.");
+        }
     }
-    return false;
+    return result;
 };
 runCallback()
 const observer = new MutationObserver(() => {
