@@ -247,8 +247,10 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
                                 matched_track_sheet_entry = track_sheet_entry
 
                     elif track_sheet_entry.track_name == playlist_video.title: 
+                        matched_video = MatchedVideo(track_sheet_entry.track_name, "", "", playlist_video)
                         matched_track_sheet_entry = track_sheet_entry
                     elif len(track_sheet_entry.track_name_alt) and track_sheet_entry.track_name_alt == playlist_video.title: 
+                        matched_video = MatchedVideo(track_sheet_entry.track_name_alt, "", "", playlist_video)
                         matched_track_sheet_entry = track_sheet_entry
 
                 if len(matched_track_sheet_entry.track_name) and matched_video:
