@@ -105,7 +105,7 @@ async function msfyMoveVideos(msfyButton, videoElements, totalVideoCount) {
                 //NOTE: (Ahmayk) YouTube does a terrible job reporting this back to us
                 //so just YOLO it lol. We only do this right before a page refresh anyway
                 //if it doesn't work we'll just try again next time
-                sleep(3000);
+                await sleep(2000);
                 isMoved = true 
             }
             if (isMoved) {
@@ -209,37 +209,27 @@ async function chunk_and_sort(videoIds) {
     let videoList = [] 
     if (!stop_execution) {
         while (totalVideoCount != playlistVideos.querySelectorAll('ytd-playlist-video-renderer').length) {
-            document.scrollingElement.scrollTop = document.scrollingElement.scrollHeight;
-            //TODO: (Ahmayk) do we need this?
-            let spinnerIcon = document.querySelector('tp-yt-paper-spinner[active]');
-            await sleep(100);
+            let scrollingElement = document.scrollingElement;
+            let scrollHeightBeforeScroll = scrollingElement.scrollHeight;
+            scrollingElement.scrollTop = scrollingElement.scrollHeight
+            await sleep(500);
+            //NOTE: (Ahmayk) We have to do some extra bullshit in the case that not 
+            //all videos that are expected to load load
+            while (true) {
+                let spinnerIcon = document.querySelector('tp-yt-paper-spinner[active]');
+                if (!spinnerIcon) {
+                    break;
+                }
+                await sleep(200);
+            }
+            if (scrollingElement.scrollHeight == scrollHeightBeforeScroll) {
+                break;
+            }
         }
         videoList = playlistVideos.querySelectorAll('ytd-playlist-video-renderer');
         if (!videoList.length) {
             alert("ABORTING: No videos found in playlist! YouTube may have changed its layout. This code probably needs to be updated!")
             stop_execution = true
-        }
-    }
-
-    videoList = playlistVideos.querySelectorAll('ytd-playlist-video-renderer');
-    if (!stop_execution) {
-        let playlsitIndexMap = new Map();
-        for (let sortIndex = 0; sortIndex < videoIds.length; sortIndex++) {
-            let videoElement = null;
-            for (let playlistIndex = 0; playlistIndex < videoList.length; playlistIndex++) {
-                if (!playlsitIndexMap.has(playlistIndex) 
-                    && getVideoId(videoList[playlistIndex]) == videoIds[sortIndex]) 
-                {
-                    videoElement = videoList[playlistIndex];
-                    playlsitIndexMap.set(playlistIndex, true);
-                    break;
-                }
-            }
-            if (!videoElement) {
-                alert(`ABORTING: Failed to find video in playlist with id: ${videoIds[sortIndex]}. Please generate a new script.`);
-                stop_execution = true
-                break;
-            }
         }
     }
 
@@ -257,9 +247,47 @@ async function chunk_and_sort(videoIds) {
             }
         }
         if (unrecognizedVideos.length) {
-            let titles = unrecognizedVideos.map(v => getVideoTitle(v).join("\n- "))
+            let titles = unrecognizedVideos.map(v => getVideoTitle(v)).join("\n- ")
             alert(`ABORTING: Unrecognized video in playlist. \n- ${titles}\n\nPlease generate a new script.`)
             stop_execution = true
+        }
+    }
+
+    videoList = playlistVideos.querySelectorAll('ytd-playlist-video-renderer');
+    if (!stop_execution) {
+        let missingVideoIds = [];
+        let playlsitIndexMap = new Map();
+        for (let sortIndex = 0; sortIndex < videoIds.length; sortIndex++) {
+            let videoElement = null;
+            for (let playlistIndex = 0; playlistIndex < videoList.length; playlistIndex++) {
+                if (!playlsitIndexMap.has(playlistIndex) 
+                    && getVideoId(videoList[playlistIndex]) == videoIds[sortIndex]) 
+                {
+                    videoElement = videoList[playlistIndex];
+                    playlsitIndexMap.set(playlistIndex, true);
+                    break;
+                }
+            }
+            if (!videoElement) {
+                missingVideoIds.push(videoIds[sortIndex]);
+            }
+        }
+        if (missingVideoIds.length) {
+            //NOTE: (Ahmayk) Videos that are blocked on copyright appear as public videos through the API
+            //but do not appear in the playlist i assume cause they're blocked. (The video is "Unavaliable")
+            //We detect this when the video count youtube says we have does not match the number of videos in the playlist
+            if ((totalVideoCount != videoList.length)
+                && (totalVideoCount - videoList.length) == missingVideoIds.length) {
+                //NOTE: (Ahmayk) assume that missing videos are blocked videos and erase them from sight
+                totalVideoCount -= missingVideoIds.length;
+                for (let videoId of missingVideoIds) {
+                    videoIds = videoIds.filter(v => v != videoId);
+                }
+            } else {
+                let ids = "\n- " + missingVideoIds.join("\n- ");
+                alert(`ABORTING: Failed to find videos in playlist with these ids: ${ids}\nPlease generate a new script.`);
+                stop_execution = true
+            }
         }
     }
 
