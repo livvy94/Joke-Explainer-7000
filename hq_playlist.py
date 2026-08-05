@@ -85,7 +85,7 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
     class TrackSheetEntry(NamedTuple):
         track_name: str
         game_name_alt: str
-        track_name_alt: str
+        track_name_alts_string: str
 
     class ManualInsertEntry(NamedTuple):
         videos: list[PlaylistVideo]
@@ -104,12 +104,12 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
             if len(row):
                 track_and_mixname = row[0] 
                 game_name_alt = "" 
-                track_name_alt = ""
+                track_name_alts_string = "" 
                 if len(row) >= 2:
                     game_name_alt = row[1]
                 if len(row) >= 3:
-                    track_name_alt = row[2]
-                track_sheet_entries.append(TrackSheetEntry(track_and_mixname, game_name_alt, track_name_alt))
+                    track_name_alts_string = row[2]
+                track_sheet_entries.append(TrackSheetEntry(track_and_mixname, game_name_alt, track_name_alts_string))
 
         playlist_videos_to_sort: list[PlaylistVideo] = []
         playlist_videos_to_sort.extend(playlist_videos)
@@ -223,6 +223,7 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
             else:
                 matched_video: MatchedVideo | None = None
                 matched_track_sheet_entry = TrackSheetEntry("", "", "") 
+                matched_track_name_alt = ""
 
                 for track_sheet_entry in track_sheet_entries:
                     game_name = sheet_name
@@ -237,21 +238,25 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
                                 matched_video = new_matched_video
                                 matched_track_sheet_entry = track_sheet_entry
 
-                        if ( 
-                            len(track_sheet_entry.track_name_alt)
-                            and (len(track_sheet_entry.track_name_alt) > len(matched_track_sheet_entry.track_name_alt)) 
-                        ):
-                            new_matched_video = video_matches(track_sheet_entry.track_name_alt, playlist_video, game_name_string_with_dash)
-                            if (new_matched_video):
-                                matched_video = new_matched_video
-                                matched_track_sheet_entry = track_sheet_entry
+                        if len(track_sheet_entry.track_name_alts_string):
+                            for track_name_alt in track_sheet_entry.track_name_alts_string.split("\n"):
+                                if (len(track_name_alt) > len(matched_track_name_alt)):
+                                    new_matched_video = video_matches(track_name_alt, playlist_video, game_name_string_with_dash)
+                                    if (new_matched_video):
+                                        matched_video = new_matched_video
+                                        matched_track_sheet_entry = track_sheet_entry
+                                        matched_track_name_alt = track_name_alt
 
                     elif track_sheet_entry.track_name == playlist_video.title: 
                         matched_video = MatchedVideo(track_sheet_entry.track_name, "", "", playlist_video)
                         matched_track_sheet_entry = track_sheet_entry
-                    elif len(track_sheet_entry.track_name_alt) and track_sheet_entry.track_name_alt == playlist_video.title: 
-                        matched_video = MatchedVideo(track_sheet_entry.track_name_alt, "", "", playlist_video)
-                        matched_track_sheet_entry = track_sheet_entry
+
+                    elif len(track_sheet_entry.track_name_alts_string):
+                        for track_name_alt in track_sheet_entry.track_name_alts_string.split("\n"):
+                            if track_name_alt == playlist_video.title: 
+                                matched_video = MatchedVideo(track_name_alt, "", "", playlist_video)
+                                matched_track_sheet_entry = track_sheet_entry
+                                matched_track_name_alt = track_name_alt
 
                 if len(matched_track_sheet_entry.track_name) and matched_video:
                     if matched_track_sheet_entry not in sort_dict:
@@ -629,9 +634,10 @@ def parse_format_sheet(playlist_id: str, youtube_playlist_title: str, spreadshee
     cell_rows[1].extend(cell_bulk_create(texts, Cell(font_size=14, background_color=ColorRGBFloat(1, 0.898, 0.6), wrap_strategy=WRAP_STRATEGY.WRAP)))
 
     texts = [
-        "List track names HERE without their mixnames to define the ordering of the OST. Capitalization matters! Color does not.",
+        "List track names HERE without their mixnames to define the ordering of the OST. Capitalization matters! Color does not. Exact video titles without a game name can also be placed here (ie Fusion Collabs or Announcements).",
         "If a track belongs to an alternate game release (Ex: Sonic Mania Plus, Mario Kart 8 Deluxe) list the game name here.",
-        "If a track has an alternate spelling, list it here. A video with this track name will be sorted alongside the primary track name (the first column)."
+        "If a track has an alternate spelling, list it here. A video with this track name will be sorted alongside the primary track name (the first column). Split multiple alternate tracks by newlines (CTRL-Enter)"
+        
     ]
     cell_rows[2].extend(cell_bulk_create(texts, Cell(background_color=ColorRGBFloat(0.952, 0.952, 0.952), wrap_strategy=WRAP_STRATEGY.WRAP)))
     texts = [
