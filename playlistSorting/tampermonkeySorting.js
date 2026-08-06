@@ -13,19 +13,21 @@
 /*
 
 ----INSTRUCTIONS FOR BACKROOM USE FOR SORTING PLAYLISTS-----
-1. Download the Tampermonkey extention for your browser. This injects this script into your browser.
-2. Download the browser extension: "Plugin Multiselect for YouTube". This allows for much faster sorting.
-3. Copy and paste this script into a new script file within the Tampermonkey extension.
+1. Download the browser extension: "Tampermonkey". It injects this script into your browser.
+2. Download the browser extension: "Plugin Multiselect for YouTube". It allows for much faster sorting.
+3. Copy and paste this text into a new script file within the Tampermonkey extension.
 4. Go to the playlist page and the script will start doing it's thing!
-5. When it's done, it will tell you (given that you don't have popups disabled for YouTube).
+5. A poppup will appear when it's done (given that you don't have popups disabled for YouTube).
    Check that it worked as expected, then disable the script so you won't accidentally run it again later. 
 
 Less than 100 videos: 10-30 seconds.
 More than 100 videos: 1-10 minutes depending on size. The page will refresh occasionally (prevents a memory leak).
 
-TIPS:
+NOTES:
 - Keep the tab open while it works.
+- If the page doesn't immedatley start moving around, the script probably isnt' on. Check that it's turned on, and refresh. 
 - If you're walking away from your computer, you may need to turn off your screensaver, otherwise it may stop running.
+- The script in rare cases can get stuck. If it's not done anything for 60 seconds then refresh the page to get it going again.
 
 */
 
@@ -78,7 +80,7 @@ async function msfyMoveVideos(msfyButton, videoElements, totalVideoCount) {
             button = document.querySelector(`[id^="msfy-action-move-to-${msfyButton}"]`)
             if (!button) {
                 console.log(`Waiting for msfy button...`)
-                await sleep(50);
+                await sleep(100);
             }
         }
         button.dispatchEvent(new Event('tap'))
@@ -98,7 +100,7 @@ async function msfyMoveVideos(msfyButton, videoElements, totalVideoCount) {
                 //NOTE: (Ahmayk) YouTube does a terrible job reporting this back to us
                 //so just YOLO it lol. We only do this right before a page refresh anyway
                 //if it doesn't work we'll just try again next time
-                await sleep(2000);
+                await sleep(3000);
                 isMoved = true 
             }
             if (isMoved) {
@@ -186,7 +188,7 @@ async function chunk_and_sort(videoIds) {
     if (matchingElement) {
         totalVideoCount = Number(matchingElement.textContent.split(' ')[0]);
     }
-    if (totalVideoCount == null)  {
+    if (totalVideoCount == null) {
         alert("ABORTING: Failed to find Total number of Videos. YouTube may have changed it's layout. This code probably need to be updated!")
         stop_execution = true
     }
@@ -197,6 +199,35 @@ async function chunk_and_sort(videoIds) {
     }
 
     await sleep(2000);
+
+    if (!stop_execution) {
+        let menuButtons = document.querySelectorAll(`.ytPageHeaderViewModelScrollContainer .ytFlexibleActionsViewModelActionIconOnlyButton`)
+        if (menuButtons.length == 4) {
+            let menuButton = menuButtons[3].querySelector('button');
+            if (menuButton) {
+                menuButton.dispatchEvent(new MouseEvent('click'))
+                let buttons = [];
+                while (!buttons.length) {
+                    buttons = document.querySelectorAll(`.ytListItemViewModelHost`)
+                    if (!buttons.length) {
+                        await sleep(50);
+                    }
+                }
+                if (buttons.length == 6) {
+                    buttons[1].dispatchEvent(new MouseEvent('click'))
+                    await sleep(1000);
+                } else {
+                    menuButton.dispatchEvent(new MouseEvent('click'))
+                }
+            } else {
+                alert ("No more info button?")
+                stop_execution = true
+            }
+        } else {
+            alert("No menu buttons")
+            stop_execution = true
+        }
+    }
 
     let playlistVideos = document.querySelector('ytd-item-section-renderer');
     let videoList = [] 
@@ -266,9 +297,11 @@ async function chunk_and_sort(videoIds) {
             }
         }
         if (missingVideoIds.length) {
-            //NOTE: (Ahmayk) Videos that are blocked on copyright appear as public videos through the API
-            //but do not appear in the playlist i assume cause they're blocked. (The video is "Unavaliable")
-            //We detect this when the video count youtube says we have does not match the number of videos in the playlist
+            //NOTE: (Ahmayk) Videos that are blocked on copyright, and possible deleted videos, will be in the total count 
+            //but may not appear in the playlist
+            //These will appear if we find a "Show unavaliable videos" button, but sometimes it isn't there? Idk
+            //In the case we can't view them we detect this when the video count youtube says we have does not match the number of videos in the playlist
+            //And we just pretend they don't exist
             if ((totalVideoCount != videoList.length)
                 && (totalVideoCount - videoList.length) == missingVideoIds.length) {
                 //NOTE: (Ahmayk) assume that missing videos are blocked videos and erase them from sight
@@ -442,10 +475,10 @@ const runCallback = () => {
     if (element) {
         if (document.querySelector('[id^="msfy-toggle-bar-button-"]')) {
             chunk_and_sort(videoIds);
-            result = true;
         } else {
             alert("\"Plugin Multiselect for YouTube\" not detected. This browser extension is required! Please add it and enable it to sort this playlist.");
         }
+        result = true;
     }
     return result;
 };
