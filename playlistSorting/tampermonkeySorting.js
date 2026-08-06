@@ -236,7 +236,7 @@ async function chunk_and_sort(videoIds) {
             let scrollingElement = document.scrollingElement;
             let scrollHeightBeforeScroll = scrollingElement.scrollHeight;
             scrollingElement.scrollTop = scrollingElement.scrollHeight
-            await sleep(500);
+            await sleep(1000);
             //NOTE: (Ahmayk) We have to do some extra bullshit in the case that not 
             //all videos that are expected to load load
             while (true) {
@@ -297,23 +297,9 @@ async function chunk_and_sort(videoIds) {
             }
         }
         if (missingVideoIds.length) {
-            //NOTE: (Ahmayk) Videos that are blocked on copyright, and possible deleted videos, will be in the total count 
-            //but may not appear in the playlist
-            //These will appear if we find a "Show unavaliable videos" button, but sometimes it isn't there? Idk
-            //In the case we can't view them we detect this when the video count youtube says we have does not match the number of videos in the playlist
-            //And we just pretend they don't exist
-            if ((totalVideoCount != videoList.length)
-                && (totalVideoCount - videoList.length) == missingVideoIds.length) {
-                //NOTE: (Ahmayk) assume that missing videos are blocked videos and erase them from sight
-                totalVideoCount -= missingVideoIds.length;
-                for (let videoId of missingVideoIds) {
-                    videoIds = videoIds.filter(v => v != videoId);
-                }
-            } else {
-                let ids = "\n- " + missingVideoIds.join("\n- ");
-                alert(`ABORTING: Failed to find videos in playlist with these ids: ${ids}\nPlease generate a new script.`);
-                stop_execution = true
-            }
+            let ids = "\n- " + missingVideoIds.join("\n- ");
+            alert(`ABORTING: Failed to find videos in playlist with these ids: ${ids}\nPlease generate a new script.`);
+            stop_execution = true
         }
     }
 
