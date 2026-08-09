@@ -66,7 +66,7 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
     qoc_checks_dict: dict[QoCCheckType, QoCCheck] = {} 
     qoced_url = "" 
     for url in urls:
-        qoc_checks_dict = await run_blocking(performQoC, url)
+        qoc_checks_dict = await performQoC(url)
         if QoCCheckType.LINK in qoc_checks_dict and qoc_checks_dict[QoCCheckType.LINK].result != CheckResultType.ERROR:
             qoced_url = url
             break

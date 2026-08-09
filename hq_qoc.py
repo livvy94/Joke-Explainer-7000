@@ -17,7 +17,7 @@ from typing import NamedTuple, List, Tuple
 
 from hq_strings import slugify
 from hq_react import *
-from hq_discord import FloatAndErrors
+from hq_discord import FloatAndErrors, run_blocking
 
 #=======================================#
 #           TYPES AND CONSTANTS         #
@@ -166,7 +166,7 @@ class DownloadRipDesc(NamedTuple):
     open_file: bool = False
     convert_to_wav: bool = False
 
-def downloadRip(url: str, desc: DownloadRipDesc) -> DownloadedRip:
+async def downloadRip(url: str, desc: DownloadRipDesc) -> DownloadedRip:
     error_strings = []
 
     """
@@ -223,7 +223,7 @@ def downloadRip(url: str, desc: DownloadRipDesc) -> DownloadedRip:
         # https://stackoverflow.com/questions/33174804/python-requests-getting-connection-aborted-badstatusline-error
         headers = { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36' }
         try:
-            response = session.get(parsed_url, stream=True, headers=headers)
+            response = await run_blocking(session.get, parsed_url, stream=True, headers=headers)
         # https://stackoverflow.com/questions/16511337/correct-way-to-try-except-using-python-requests-module
         except requests.exceptions.Timeout as e:
             error_strings.append('Request timed out. {}'.format(e))
@@ -231,11 +231,11 @@ def downloadRip(url: str, desc: DownloadRipDesc) -> DownloadedRip:
             error_strings.append('Bad URL. {}'.format(e))
         except requests.exceptions.ConnectionError as e:
             error_strings.append('Connection error. {}'.format(e))
-        except requests.exceptions.RequestException as e: # Other errors
+        except Exception as e:
             error_strings.append('Unknown URL error. {}'.format(e))
 
-        if not response:
-            error_strings.append('Internal URL error.')
+    if not len(error_strings) and not response:
+        error_strings.append('Internal URL error (No response).')
 
     filename = parsed_url.split('/')[-1]
     if not len(error_strings) and response:
@@ -263,7 +263,7 @@ def downloadRip(url: str, desc: DownloadRipDesc) -> DownloadedRip:
         if filename.endswith(".zip"):
             error_strings.append(f"Rip is compressed in a `.zip` file. I'm not touching that.")
 
-    if not len(error_strings) :
+    if not len(error_strings) and response:
         if not os.path.exists(DOWNLOAD_DIR):
             os.mkdir(DOWNLOAD_DIR)
 
@@ -275,11 +275,11 @@ def downloadRip(url: str, desc: DownloadRipDesc) -> DownloadedRip:
         CHUNK_SIZE = 1024 * 32
         try:
             with open(filepath, "wb") as f:
-                for chunk in response.iter_content(CHUNK_SIZE):
+                for chunk in await run_blocking(response.iter_content, CHUNK_SIZE):
                     if chunk:  # filter out keep-alive new chunks
                         f.write(chunk)
         except Exception as e:
-            error_strings.append(f"Failed to open file: {str(e)}")
+            error_strings.append(f"Failed to download file: {str(e)}")
 
     file = None
     if desc.open_file and len(filepath) and not len(error_strings):
@@ -659,14 +659,14 @@ def checkResolution(filepath: str) -> QoCCheck:
 #                Utility                #
 #=======================================#
 
-def getFileMetadataMutagen(url: str) -> Tuple[int, str]:
+async def getFileMetadataMutagen(url: str) -> Tuple[int, str]:
     """
     Returns the metadata of file at given URL via mutagen's `pprint()` function.
     """
     status = 0
     msg = ""
 
-    downloaded_rip = downloadRip(url, DownloadRipDesc(open_file=True))
+    downloaded_rip = await downloadRip(url, DownloadRipDesc(open_file=True))
     if downloaded_rip.file != None:
         msg = downloaded_rip.file.pprint()
     else:
@@ -682,14 +682,14 @@ def getFileMetadataMutagen(url: str) -> Tuple[int, str]:
     return (status, msg)
     
 
-def getFileMetadataFfprobe(url: str) -> Tuple[int, str]:
+async def getFileMetadataFfprobe(url: str) -> Tuple[int, str]:
     """
     Returns the metadata of file at given URL via ffprobe.
     """
     status = 0
     msg = ""
 
-    downloaded_rip = downloadRip(url, DownloadRipDesc())
+    downloaded_rip = await downloadRip(url, DownloadRipDesc())
     if len(downloaded_rip.filepath):
         probeOutput = ffprobeUrl(downloaded_rip.filepath)
         try:
@@ -735,10 +735,10 @@ def getFileMetadataFfprobe(url: str) -> Tuple[int, str]:
     return (status, msg)
 
 
-def getAudioLengthInSecondsFFprobe(url: str) -> FloatAndErrors: 
+async def getAudioLengthInSecondsFFprobe(url: str) -> FloatAndErrors: 
     duration = 0.0
 
-    downloaded_rip = downloadRip(url, DownloadRipDesc())
+    downloaded_rip = await downloadRip(url, DownloadRipDesc())
     error_strings = downloaded_rip.error_strings
 
     if len(downloaded_rip.filepath):
@@ -755,16 +755,12 @@ def getAudioLengthInSecondsFFprobe(url: str) -> FloatAndErrors:
     return FloatAndErrors(duration, error_strings) 
 
 
-#=======================================#
-#            Main Function              #
-#=======================================#
-
-def performQoC(url: str) -> dict[QoCCheckType, QoCCheck]: 
+async def performQoC(url: str) -> dict[QoCCheckType, QoCCheck]: 
     """
     Performs QoC on the given URL.
     """
     
-    downloaded_rip = downloadRip(url, DownloadRipDesc(open_file = True))
+    downloaded_rip = await downloadRip(url, DownloadRipDesc(open_file = True))
 
     result: dict[QoCCheckType, QoCCheck] = {}
     if downloaded_rip.file != None:
@@ -820,23 +816,3 @@ Commented this out to work on it later
 #         raise QoCException('\n'.join(errors))
     
 #     return (bitrateCheck and clippingCheck, '- {}\n- {}'.format(bitrateMsg, clippingMsg))
-
-
-#=======================================#
-#           Script Testing              #
-#=======================================#
-import sys
-
-if __name__ == '__main__':
-    if '-d' in sys.argv:
-        print('DEBUG MODE ENABLED')
-        DEBUG_MODE = True
-    
-    url = input('Paste the path of the audio you want to check: ')
-    # code, msg = performQoC(url)
-    perform_qoc_result = performQoC(url)
-
-    # TODO: (Ahmayk) Reimplement
-    
-    for _, check in perform_qoc_result.items():
-        print(check.msg)

@@ -49,7 +49,7 @@ async def get_rip_url_length(url: str, desc: GetRipUrlLengthDesc) -> FloatAndErr
         JE_DATABASE[JEDatabaseKey.RIP_LENGTH] = {}
 
     if desc.force_download or (url not in JE_DATABASE[JEDatabaseKey.RIP_LENGTH]):
-        floatAndErrors = await run_blocking(getAudioLengthInSecondsFFprobe, url)
+        floatAndErrors = await getAudioLengthInSecondsFFprobe(url)
         if not len(floatAndErrors.error_strings):
             duration = floatAndErrors.result
         else:
