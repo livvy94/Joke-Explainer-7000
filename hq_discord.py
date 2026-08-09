@@ -66,6 +66,11 @@ class AuditLogEntriesAndErrors(NamedTuple):
     audit_log_entires: List[discord.AuditLogEntry] 
     error_strings: List[str]
 
+#NOTE: (Ahmayk) JSON is untyped boooo
+class JSONAndErrors(NamedTuple):
+    json: dict[typing.Any, dict]
+    error_strings: list[str]
+
 #===============================================#
 #                Discord API Calls              #
 #===============================================#

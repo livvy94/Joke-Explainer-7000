@@ -1,7 +1,6 @@
 import os
 from pathlib import Path
 from inspect import getsourcefile
-from typing import Tuple
 import requests
 from email.message import EmailMessage
 import re
@@ -14,7 +13,7 @@ from enum import Enum, auto
 from typing import NamedTuple, Tuple
 
 from hq_strings import slugify
-from hq_discord import FloatAndErrors, run_blocking
+from hq_discord import FloatAndErrors, JSONAndErrors, run_blocking
 
 DOWNLOAD_DIR = Path(os.path.abspath(getsourcefile(lambda:0))).parent / 'audioDownloads'
 
@@ -42,23 +41,10 @@ class QoCCheckType(Enum):
 
 
 #=======================================#
-#          EXCEPTION HANDLING           #
-#=======================================#
-
-# https://stackoverflow.com/a/26938914
-class QoCException(Exception):
-    def __init__(self, message, *args):
-        self.message = message # without this you may get DeprecationWarning
-  
-        # allow users initialize misc. arguments as any other builtin Error
-        super(QoCException, self).__init__(message, *args) 
-
-
-#=======================================#
 #           FFMPEG / FFPROBE            #
 #=======================================#
 
-def ffmpegExists():
+def ffmpegExists() -> bool:
     try:
         subprocess.run(['ffmpeg', '-version'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return True
@@ -66,10 +52,8 @@ def ffmpegExists():
         return False
 
 
-def ffprobeUrl(validUrl: str):
-    """
-    Retrives file metadata from URL using ffprobe.
-    """
+def ffprobeFilepath(filepath: str) -> JSONAndErrors: 
+    error_strings: list[str] = []
     try:
         probeOutput = subprocess.check_output([
             'ffprobe',
@@ -79,12 +63,15 @@ def ffprobeUrl(validUrl: str):
             '-show_format',
             '-show_streams',
             # '-of', 'default=noprint_wrappers=1:nokey=1',
-            '-i', validUrl,
+            '-i', filepath,
         ])
     except FileNotFoundError:
-        raise QoCException("ERROR: ffprobe failed to run (make sure the command 'ffprobe' can run).")
+        error_strings.append("ERROR: ffprobe failed to run (make sure the command 'ffprobe' can run).")
+    except Exception as e:
+        error_strings.append(f"ERROR: ffprobe failed: {e}")
     
-    return json.loads(probeOutput)
+    return JSONAndErrors(json.loads(probeOutput), error_strings)
+
 
 def ffprobeGetLengthInSeconds(validUrl: str) -> FloatAndErrors:
     probeOutput: bytes = b""
@@ -287,21 +274,26 @@ def checkBitrateFromFile(file: FileType) -> QoCCheck:
 
 
 def checkResolution(filepath: str) -> QoCCheck: 
-    probeOutput = ffprobeUrl(filepath)
-    height = None
-    for stream in probeOutput['streams']:
-        try:
-            height = stream['height']
-        except KeyError:
-            continue
-    
-    if height is None:
-        return QoCCheck(CheckResultType.PASS, "No video streams detected.")  
-    else:
-        if height < 1080:
-            return QoCCheck(CheckResultType.FAIL, f"The video file height is {height}. Please re-render at 1080p, unless intentional.")  
+    result = QoCCheck()
+
+    jsonAndErrors = ffprobeFilepath(filepath)
+    if not len(jsonAndErrors.error_strings):
+        height = None
+        for stream in jsonAndErrors.json['streams']:
+            if 'height' in stream:
+                height = stream['height']
+        
+        if height is None:
+            result = QoCCheck(CheckResultType.PASS, "No video streams detected.")  
         else:
-            return QoCCheck(CheckResultType.PASS, f"The video file height is {height}.")  
+            if height < 1080:
+                result = QoCCheck(CheckResultType.FAIL, f"The video file height is {height}. Please re-render at 1080p, unless intentional.")  
+            else:
+                result = QoCCheck(CheckResultType.PASS, f"The video file height is {height}.")  
+    else:
+        result = QoCCheck(CheckResultType.ERROR, "\n".join(jsonAndErrors.error_strings))
+
+    return result 
 
 
 async def getFileMetadataMutagen(url: str) -> Tuple[int, str]:
@@ -336,7 +328,7 @@ async def getFileMetadataFfprobe(url: str) -> Tuple[int, str]:
 
     downloaded_rip = await downloadRip(url, DownloadRipDesc())
     if len(downloaded_rip.filepath):
-        probeOutput = ffprobeUrl(downloaded_rip.filepath)
+        probeOutput = ffprobeFilepath(downloaded_rip.filepath)
         try:
             probeOutput['format']['filename'] = "[REDACTED]"
         except KeyError:

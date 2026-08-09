@@ -3,12 +3,8 @@ import requests
 from datetime import datetime
 from dateutil import parser
 from typing import NamedTuple, Any
-from hq_discord import run_blocking 
+from hq_discord import run_blocking, JSONAndErrors
 
-#NOTE: (Ahmayk) JSON is untyped boooo
-class JSONAndErrors(NamedTuple):
-    json: Any
-    error_strings: list[str]
 
 async def youtube_api_call(url, params) -> JSONAndErrors:
     json = {} 
