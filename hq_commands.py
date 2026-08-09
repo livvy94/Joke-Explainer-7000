@@ -1951,76 +1951,7 @@ async def limbo(args: list[str], command_context: CommandContext):
     else:
         await send_and_if_errors("No limbo rips!", "Errors during parsing limbo rips", error_strings, command_context.channel)
 
-
-
-# ============ Basic QoC commands ============== #
-
-##TODO: (Ahmayk) vet command UX needs to be refactored it's confusing as hell 
-
-@command(
-    command_type=CommandType.ANALYZE,
-    brief='Vet all QoC rips for issues',
-    aliases=['vet_all']
-)
-async def vet(args: list[str], command_context: CommandContext):
-    prefix = get_config("prefix")
-    if len(args):
-        return await send(f"WARNING: ``{prefix}vet`` takes no argument. Did you mean to use ``{prefix}vet_msg`` or ``{prefix}vet_url``?", command_context.channel)
-    
-    if command_context.message_reference:
-        return await send(f"WARNING: ``{prefix}vet`` takes no argument (nor replies). Did you mean to use ``{prefix}vet_msg`` or ``{prefix}vet_url``?", command_context.channel)
-    
-    await vet_from(args, command_context)
-
-
-@command(
-    command_type=CommandType.ANALYZE,
-    format='[message link]',
-    brief='Vet rips from any channel starting from message link',
-    desc='Find rips in pinned messages with bitrate/clipping issues and show their details, only counting messages not older than linked message'
-)
-async def vet_from(args: list[str], command_context: CommandContext):
-
-    from_msg = None
-    if len(args):
-        from_msg = args[0]
-
-    vet_all_pins = from_msg is None
-    if not vet_all_pins and from_msg:
-        _, _, from_message, status = await parse_message_link(from_msg)
-        if from_message is None:
-            await send(status, command_context.channel)
-            return
-        from_timestamp = from_message.created_at
-
-    channel_and_errors = await get_qoc_channel(command_context.channel)
-    if len(channel_and_errors.error_strings):
-        return await send_if_errors("No vetting today.", channel_and_errors.error_strings, command_context.channel)
-    if not channel_and_errors.channel:
-        return await send("ERROR: Channel not found.", command_context.channel)
-
-    if not ffmpegExists():
-        return await send("WARNING: ffmpeg command not found on the bot's server. Please contact the developers.", command_context.channel)
-
-    async with command_context.channel.typing():
-        rips_and_errors = await get_rips_fast(channel_and_errors.channel, GetRipsDesc())
-        error_strings = rips_and_errors.error_strings 
-
-        for rip in rips_and_errors.rips:
-            if not vet_all_pins and rip.created_at < from_timestamp:
-                continue
-
-            vet_desc = VetRipDesc(rip=rip)
-            vet_report = await vet_rip_or_url(rip.text, vet_desc, command_context.channel.guild)
-            error_strings.extend(vet_report.error_strings)
-            await send(vet_report.string, command_context.channel)
-
-        if len(rips_and_errors.rips) == 0:
-            await send_and_if_errors("No pinned rips found to QoC.", "There were errors though.", error_strings, command_context.channel)
-        else:
-            txt = "Finished QoC-ing. Please note that these are only automated detections - you should verify the issues in Audacity and react manually." 
-            await send_and_if_errors(txt, "Errors during vetting:", error_strings, command_context.channel)
-
+##TODO: (Ahmayk) generic !vet command that auto-detects discord message vs url link input
 
 @command(
     command_type=CommandType.ANALYZE,
