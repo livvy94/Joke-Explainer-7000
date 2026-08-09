@@ -567,8 +567,6 @@ def format_rip(rip: Rip, durationString: str, guild: discord.Guild, make_smol: b
     author = author.replace('*', '').replace('_', '')
     link = format_message_link(guild.id, rip.channel_id, rip.message_id)
 
-
-
     title_body = f'**[{rip_title}]({link})**'
 
     info_body = ""

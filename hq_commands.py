@@ -1997,14 +1997,16 @@ async def vet_url(args: list[str], command_context: CommandContext):
 
 @command(
     command_type=CommandType.ANALYZE,
-    format='<message url/reply>',
-    brief='Count # of dupes on YouTube and rip queues',
-    aliases=['dupe', 'dupes']
+    format='<message url/reply> [all]',
+    brief='List dupes of a rip on YouTube and rip queues',
+    aliases=['dupe', 'count_dupe', 'count_dupes', 'countdupe', 'countdupes']
 )
-async def count_dupe(args: list[str], command_context: CommandContext):
+async def dupes(args: list[str], command_context: CommandContext):
 
     if not len(args) and not command_context.message_reference:
         return await send("Error: Please reply to a message or provide a link to message. I'll count how many of that rip are in rip queues and on the YouTube channel.", command_context.channel)
+
+    list_all = len(args) > 1
 
     async with command_context.channel.typing():
         messageAndErrors = await get_message_from_referece_or_args(command_context.message_reference, args)
@@ -2035,35 +2037,57 @@ async def count_dupe(args: list[str], command_context: CommandContext):
         ):
             error_strings.append(f"Playlist is not from {YOUTUBE_CHANNEL_NAME} (found playlist from {youtube_playlist.channel_name})")
         
-        return_message = ""
-        if not len(error_strings) and len(videos) > 0:
-            channel_dupe_count = 0
-            description = get_rip_description(message.content)
-            for video in videos:
-                video_desc = video.title + '\n' + video.desc.replace('\r', '').split('\n\n')[0]
-                if isDupe(description, video_desc):
-                    channel_dupe_count += 1
+        if not len(error_strings):
+            if len(videos) > 0:
+                description = get_rip_description(message.content)
+                dupe_videos: list[PlaylistVideo] = []
+                for video in videos:
+                    video_desc = video.title + '\n' + video.desc.replace('\r', '').split('\n\n')[0]
+                    if isDupe(description, video_desc):
+                        dupe_videos.append(video)
 
-            queue_dupe_count = 0
-            queue_channels = get_channel_ids_of_types(['QUEUE'])
-            for queue_channel_id in queue_channels:
-                channel_and_errors = await discord_find_channel(queue_channel_id)
-                error_strings.extend(channel_and_errors.error_strings)
-                if channel_and_errors.channel:
-                    rips_and_errors = await get_rips_fast(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
-                    error_strings.extend(rips_and_errors.error_strings)
-                    for rip in rips_and_errors.rips:
-                        if rip.message_id != message.id and isDupe(description, get_rip_description(rip.text)):
-                            queue_dupe_count += 1
+                dupe_desc = ""
+                dupe_videos.sort(key=lambda v: v.date)
+                dupe_videos_display: list[PlaylistVideo] = []
+                dupe_videos_display.extend(dupe_videos)
+                cutoff = 20
+                index_offset = 0 
+                if not list_all and len(dupe_videos) > cutoff:
+                    index_offset = len(dupe_videos) - cutoff
+                    dupe_videos_display = dupe_videos[len(dupe_videos)-cutoff:]
+                    dupe_desc += f'*Showing latest {cutoff} dupes of {len(dupe_videos)}*\n'
 
-            rip_title = get_rip_title(message.content)
-            # https://codegolf.stackexchange.com/questions/4707/outputting-ordinal-numbers-1st-2nd-3rd#answer-4712 how
-            ordinal = lambda n: "%d%s" % (n,"tsnrhtdd"[(n//10%10!=1)*(n%10<4)*n%10::4])
-            return_message = f"**Rip**: **{rip_title}**\nFound {channel_dupe_count + queue_dupe_count} rips of the same track ({channel_dupe_count} on the channel, {queue_dupe_count} in queues). This is the {ordinal(channel_dupe_count + queue_dupe_count + 1)} rip of this track." 
-        else:
-            return_message = "Playlist is empty."
+                for i in range(len(dupe_videos_display)):
+                    date_string = dupe_videos_display[i].date.strftime("%Y %b %d") 
+                    title_string = f'[{dupe_videos_display[i].title}](https://www.youtube.com/watch?v={dupe_videos_display[i].video_id})'
+                    dupe_desc += f'{i + index_offset + 1}. `{date_string}` {title_string}\n'
 
-        await send_and_if_errors(return_message, "Errors during processing dupes.", error_strings, command_context.channel)
+                ##NEXT: display these too
+                dupe_queue_rips = []
+                queue_channels = get_channel_ids_of_types(['QUEUE'])
+                for queue_channel_id in queue_channels:
+                    channel_and_errors = await discord_find_channel(queue_channel_id)
+                    error_strings.extend(channel_and_errors.error_strings)
+                    if channel_and_errors.channel:
+                        rips_and_errors = await get_rips_fast(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
+                        error_strings.extend(rips_and_errors.error_strings)
+                        for rip in rips_and_errors.rips:
+                            if rip.message_id != message.id and isDupe(description, get_rip_description(rip.text)):
+                                dupe_queue_rips.append(rip)
+
+                # https://codegolf.stackexchange.com/questions/4707/outputting-ordinal-numbers-1st-2nd-3rd#answer-4712 how
+                ordinal = lambda n: "%d%s" % (n,"tsnrhtdd"[(n//10%10!=1)*(n%10<4)*n%10::4])
+                ordinal_string = ordinal(len(dupe_videos) + len(dupe_queue_rips) + 1)
+
+                rip_title = get_rip_title(message.content)
+                dupe_title = f"## **[{rip_title}]({message.jump_url})**\n**{ordinal_string} rip** of this track ({len(dupe_videos)} rips on channel, {len(dupe_queue_rips)} rips in queues)"
+
+                await send_embed(f"{dupe_title}\n{dupe_desc}", command_context.channel, EmbedDesc())
+
+            else:
+                await send("Playlist has no videos.", command_context.channel)
+
+        await send_if_errors("Errors during processing dupes.", error_strings, command_context.channel)
 
 
 @command(
