@@ -18,7 +18,6 @@ UNPIN_START_STRING = "-# :pushpin::x:"
 class VetRipDesc(NamedTuple):
     rip: Rip | None = None
     message: Message | None = None
-    use_youtube_api: bool = False
     past_rip_message_content: str = ""
     full_feedback: bool = False
     is_new_pinned_message: bool = False
@@ -106,7 +105,7 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
         if not is_unusual_metadata and len(description) > 0:
             playlistId = extract_playlist_id('\n'.join(rip_message_text.splitlines()[1:])) # ignore author line
             metadata_checks = await checkMetadata(description, YOUTUBE_CHANNEL_NAME, playlistId, \
-                                                 YOUTUBE_API_KEY, desc.use_youtube_api, advancedCheck)
+                                                 YOUTUBE_API_KEY, advancedCheck)
 
         message_id = 0
         vetted_message_link = ""

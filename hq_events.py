@@ -246,7 +246,7 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
                             specialists_text = search_specialists(message.content, qoc_sheet_data, message.channel.guild)
                             await send_embed(f'{source_text}\n\n{specialists_text}', channel, EmbedDesc(title="Sources"))
 
-                        vet_desc = VetRipDesc(message=message, use_youtube_api=True, is_new_pinned_message=True)
+                        vet_desc = VetRipDesc(message=message, is_new_pinned_message=True)
                         vet_report_and_errors = await vet_rip_or_url(rip.text, vet_desc, channel.guild)
                         error_strings.extend(vet_report_and_errors.error_strings)
 
@@ -378,8 +378,7 @@ async def on_raw_message_edit(payload: discord.RawMessageUpdateEvent):
         if channel_is_types(payload.message.channel, ['QOC']) and payload.message.pinned:
             async with payload.message.channel.typing():
                 try:
-                    desc = VetRipDesc(message=payload.message, use_youtube_api=True, \
-                                    past_rip_message_content=old_text)
+                    desc = VetRipDesc(message=payload.message, past_rip_message_content=old_text)
                     vet_report = await vet_rip_or_url(payload.message.content, desc, payload.message.guild)
                     await send_if_errors("Errors while vetting:", vet_report.error_strings, payload.message.channel)
                 except Exception as error:

@@ -1959,7 +1959,7 @@ async def limbo(args: list[str], command_context: CommandContext):
 
 @command(
     command_type=CommandType.ANALYZE,
-    brief='Vet all QoC rips for issues (No YouTube API)',
+    brief='Vet all QoC rips for issues',
     aliases=['vet_all']
 )
 async def vet(args: list[str], command_context: CommandContext):
@@ -1976,7 +1976,7 @@ async def vet(args: list[str], command_context: CommandContext):
 @command(
     command_type=CommandType.ANALYZE,
     format='[message link]',
-    brief='Vet rips from any channel starting from message link (No YouTube API)',
+    brief='Vet rips from any channel starting from message link',
     desc='Find rips in pinned messages with bitrate/clipping issues and show their details, only counting messages not older than linked message'
 )
 async def vet_from(args: list[str], command_context: CommandContext):
@@ -2038,7 +2038,7 @@ async def vet_msg(args: list[str], command_context: CommandContext):
         if len(messageAndErrors.error_strings):
             return await send_if_errors("Errors during grabbing message", messageAndErrors.error_strings, command_context.channel)
 
-        vet_desc = VetRipDesc(message=messageAndErrors.message, use_youtube_api=True, full_feedback=True)
+        vet_desc = VetRipDesc(message=messageAndErrors.message, full_feedback=True)
         vet_report = await vet_rip_or_url(messageAndErrors.message.content, vet_desc, messageAndErrors.message.guild)
         await send_and_if_errors(vet_report.string, "Errors during vetting:", vet_report.error_strings, command_context.channel)
 
