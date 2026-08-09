@@ -5,7 +5,7 @@ from datetime import datetime, timezone, timedelta
 
 from bot_secrets import YOUTUBE_API_KEY, YOUTUBE_CHANNEL_NAME, PLAYLISTS_SPREADSHEET_ID
 from hq_qoc import ffmpegExists, getFileMetadataMutagen, getFileMetadataFfprobe 
-from hq_metadata import countDupe, isDupe
+from hq_metadata import isDupe
 from hq_source import search_rip_sources 
 
 from hq_types import *
@@ -2014,31 +2014,56 @@ async def count_dupe(args: list[str], command_context: CommandContext):
         if not message:
             return await send("Message not found! (and no error? Something went wrong)", command_context.channel)
 
-        playlistId = extract_playlist_id('\n'.join(message.content.splitlines()[1:])) # ignore author line
-        description = get_rip_description(message.content)
-        rip_title = get_rip_title(message.content)
+        youtube_playlist = YouTubePlaylist()
+        videos: list[PlaylistVideo] = []
+        error_strings: list[str] = []
+        playlist_id = extract_playlist_id('\n'.join(message.content.splitlines()[1:])) # ignore author line
+        if len(playlist_id) > 0:
+            youtube_playlist = await get_playlist_details(playlist_id, YOUTUBE_API_KEY)
+            error_strings.extend(youtube_playlist.error_strings)
 
-        p, msg = await countDupe(description, YOUTUBE_CHANNEL_NAME, playlistId, YOUTUBE_API_KEY)
-        if len(msg) > 0:
-            await send(msg, command_context.channel)
+        if not len(error_strings):
+            playlist_videos_and_errors = await get_playlist_videos(playlist_id, YOUTUBE_API_KEY)
+            videos = playlist_videos_and_errors.videos
+            error_strings.extend(playlist_videos_and_errors.error_strings)
 
-        error_strings = []
+        if (
+            not len(error_strings)
+            and len(YOUTUBE_CHANNEL_NAME)
+            and len(youtube_playlist.channel_name) 
+            and YOUTUBE_CHANNEL_NAME!= youtube_playlist.channel_name
+        ):
+            error_strings.append(f"Playlist is not from {YOUTUBE_CHANNEL_NAME} (found playlist from {youtube_playlist.channel_name})")
+        
+        return_message = ""
+        if not len(error_strings) and len(videos) > 0:
+            channel_dupe_count = 0
+            description = get_rip_description(message.content)
+            for video in videos:
+                video_desc = video.title + '\n' + video.desc.replace('\r', '').split('\n\n')[0]
+                if isDupe(description, video_desc):
+                    channel_dupe_count += 1
 
-        q = 0
-        queue_channels = get_channel_ids_of_types(['QUEUE'])
-        for queue_channel_id in queue_channels:
-            channel_and_errors = await discord_find_channel(queue_channel_id)
-            error_strings.extend(channel_and_errors.error_strings)
-            if channel_and_errors.channel:
-                rips_and_errors = await get_rips_fast(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
-                error_strings.extend(rips_and_errors.error_strings)
-                q += sum([isDupe(description, get_rip_description(r.text)) for r in rips_and_errors.rips if r.message_id != message.id])
+            queue_dupe_count = 0
+            queue_channels = get_channel_ids_of_types(['QUEUE'])
+            for queue_channel_id in queue_channels:
+                channel_and_errors = await discord_find_channel(queue_channel_id)
+                error_strings.extend(channel_and_errors.error_strings)
+                if channel_and_errors.channel:
+                    rips_and_errors = await get_rips_fast(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
+                    error_strings.extend(rips_and_errors.error_strings)
+                    for rip in rips_and_errors.rips:
+                        if rip.message_id != message.id and isDupe(description, get_rip_description(rip.text)):
+                            queue_dupe_count += 1
 
-        # https://codegolf.stackexchange.com/questions/4707/outputting-ordinal-numbers-1st-2nd-3rd#answer-4712 how
-        ordinal = lambda n: "%d%s" % (n,"tsnrhtdd"[(n//10%10!=1)*(n%10<4)*n%10::4])
+            rip_title = get_rip_title(message.content)
+            # https://codegolf.stackexchange.com/questions/4707/outputting-ordinal-numbers-1st-2nd-3rd#answer-4712 how
+            ordinal = lambda n: "%d%s" % (n,"tsnrhtdd"[(n//10%10!=1)*(n%10<4)*n%10::4])
+            return_message = f"**Rip**: **{rip_title}**\nFound {channel_dupe_count + queue_dupe_count} rips of the same track ({channel_dupe_count} on the channel, {queue_dupe_count} in queues). This is the {ordinal(channel_dupe_count + queue_dupe_count + 1)} rip of this track." 
+        else:
+            return_message = "Playlist is empty."
 
-        txt = f"**Rip**: **{rip_title}**\nFound {p + q} rips of the same track ({p} on the channel, {q} in queues). This is the {ordinal(p + q + 1)} rip of this track." 
-        await send_and_if_errors(txt, "Errors during processing dupes.", error_strings, command_context.channel)
+        await send_and_if_errors(return_message, "Errors during processing dupes.", error_strings, command_context.channel)
 
 
 @command(

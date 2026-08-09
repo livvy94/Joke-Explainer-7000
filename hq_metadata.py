@@ -259,31 +259,3 @@ def isDupe(desc1: str, desc2: str, desc2_is_main: bool = False) -> bool:
             return track1_base == track2
         return track1_base == track2_base or track1_base == track2
 
-
-async def countDupe(description: str, channel_name: str, playlist_id: str, api_key: str) -> Tuple[int, str]:
-    """
-    Check the playlist and count the number of dupes.
-    """
-    youtube_playlist = YouTubePlaylist()
-    videos: list[PlaylistVideo] = []
-    error_msg = ""
-    if len(playlist_id) > 0:
-
-        youtube_playlist = await get_playlist_details(playlist_id, api_key)
-        error_msg = "\n".join(youtube_playlist.error_strings)
-
-        playlist_videos_and_errors = await get_playlist_videos(playlist_id, api_key)
-        videos = playlist_videos_and_errors.videos
-        error_msg = "\n".join(playlist_videos_and_errors.error_strings)
-    else:
-        error_msg = "Playlist not found"
-
-    if not len(error_msg) and len(channel_name) and len(youtube_playlist.channel_name) and channel_name != youtube_playlist.channel_name:
-        error_msg = "Playlist is not from {} (found playlist from {})".format(channel_name, youtube_playlist.channel_name)
-    
-    if not len(error_msg) and len(videos) == 0:
-        error_msg = "Playlist is empty."
-
-    total = sum([isDupe(description, video.title + '\n' + video.desc.replace('\r', '').split('\n\n')[0]) for video in videos])
-
-    return total, error_msg
