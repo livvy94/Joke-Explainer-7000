@@ -242,18 +242,19 @@ async def discord_get_user_react_data(react_list: List[ReactType], message: Mess
 
 def reaction_name_to_emoji_string(name: str, guild: Guild | None) -> str:
     result = "" 
-    if guild:
-        for emoji in guild.emojis:
-            if emoji.name == name:
-                result = str(emoji)
-                break
-    if not len(result):
-        for react_info in REACT_INFOS.values():
-            if name in react_info.custom_names:
-                name = react_info.default_names[0]
-                break
-    if not len(result):
-        result = name
+    if len(name):
+        if guild:
+            for emoji in guild.emojis:
+                if emoji.name == name:
+                    result = str(emoji)
+                    break
+        if not len(result):
+            for react_info in REACT_INFOS.values():
+                if name in react_info.custom_names:
+                    name = react_info.default_names[0]
+                    break
+        if not len(result):
+            result = name
 
     return result
 

@@ -905,10 +905,7 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
     if not len(channel_ids):
         channel_ids = get_channel_ids_of_types(desc.channel_types)
 
-    result = ""
     error_strings = []
-    total_count = 0
-    valid_count = 0
 
     selected_rip_message_ids = [] 
     if (
@@ -929,13 +926,12 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
                                                     desc.parsed_random_input.random_count,
                                                     desc.parsed_random_input.parsed_search_input, 
                                                     search_by_author)
-
+    total_count = 0
+    filtered_rips: list[Rip] = []
     for channel_id in channel_ids:
         channel_and_errors = await discord_find_channel(channel_id)
         error_strings.extend(channel_and_errors.error_strings)
         if channel_and_errors.channel:
-
-            result += f'<#{channel_id}>:\n'
 
             rips_and_errors = await get_rips(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
             error_strings.extend(rips_and_errors.error_strings)
@@ -988,54 +984,22 @@ async def send_suborqueue_rips(desc: SendSubOrQueueDesc, command_context: Comman
                         assert "Unimplemented SubOrQueueRipFilterType"
 
                 if is_valid:
+                    filtered_rips.append(rip)
 
-                    string_and_errors = await get_formatted_rip_length(rip.text, False, False, channel_and_errors.channel.guild)  
-                    error_strings.extend(string_and_errors.error_strings)
-                    if len(string_and_errors.string):
-                        result += f"`{string_and_errors.string}` "
-                    else:
-                        result += '`??:??` '
+    display_rect_name = "" 
+    if desc.suborqueue_rip_filter_type == SubOrQueueRipFilterType.SEARCH_REACTION:
+        display_rect_name = desc.react_name
+    string_and_errors = await format_suborqueue_rips(filtered_rips, channel_ids, display_rect_name, command_context.channel.guild)
+    error_strings.extend(string_and_errors.error_strings)
 
-                    shown_react_types = [
-                        ReactType.ALERT,
-                        ReactType.STOP,
-                        ReactType.JINGLE,
-                        ReactType.QOC,
-                        ReactType.THUMBNAIL,
-                        ReactType.CHECK,
-                        ReactType.METADATA,
-                        ReactType.EMAILSENT,
-                        ReactType.SENDBACK,
-                        ReactType.CALENDAR,
-                    ]
-
-                    input_react_type = react_name_to_react_type(desc.react_name) 
-                    if (
-                        desc.suborqueue_rip_filter_type == SubOrQueueRipFilterType.SEARCH_REACTION
-                        and input_react_type not in shown_react_types
-                    ):
-                        emoji = reaction_name_to_emoji_string(desc.react_name, channel_and_errors.channel.guild)
-                        result += f"{emoji} "
-
-                    for react_type in shown_react_types:
-                        if rip_has_react([react_type], rip):
-                            react = react_type_to_react(react_type, channel_and_errors.channel.guild)
-                            result += f"{react.string} "
-
-                    rip_link = format_message_link(channel_and_errors.channel.guild.id, rip.channel_id, rip.message_id)
-                    result += f'**[{rip_title}]({rip_link})**\n'
-                    valid_count += 1
-
-            result += '------------------------------\n'
-
-    if valid_count == 0:
+    if len(filtered_rips)== 0:
         not_found_message = "No rips found."
         if len(desc.not_found_message):
             not_found_message = desc.not_found_message
         await send_and_if_errors(not_found_message, "Errors during getting rips:", error_strings, command_context.channel)
     else:
-        footer = f'{valid_count} of {total_count} Rips'
-        await send_embed(result, command_context.channel, EmbedDesc(expires=True, footer=footer))
+        footer = f'{len(filtered_rips)} of {total_count} Rips'
+        await send_embed(string_and_errors.string, command_context.channel, EmbedDesc(expires=True, footer=footer))
         await send_if_errors("Errors during getting rips:", error_strings, command_context.channel)
 
 
@@ -1998,7 +1962,7 @@ async def vet_url(args: list[str], command_context: CommandContext):
 @command(
     command_type=CommandType.ANALYZE,
     format='<message url/reply> [all]',
-    brief='List dupes of a rip on YouTube and rip queues',
+    brief='List dupes of a rip on YouTube and in rip queues',
     aliases=['dupe', 'count_dupe', 'count_dupes', 'countdupe', 'countdupes']
 )
 async def dupes(args: list[str], command_context: CommandContext):
@@ -2051,19 +2015,21 @@ async def dupes(args: list[str], command_context: CommandContext):
                 dupe_videos_display: list[PlaylistVideo] = []
                 dupe_videos_display.extend(dupe_videos)
                 cutoff = 20
-                index_offset = 0 
+                channel_index_offset = 0 
                 if not list_all and len(dupe_videos) > cutoff:
-                    index_offset = len(dupe_videos) - cutoff
+                    channel_index_offset = len(dupe_videos) - cutoff
                     dupe_videos_display = dupe_videos[len(dupe_videos)-cutoff:]
                     dupe_desc += f'*Showing latest {cutoff} dupes of {len(dupe_videos)}*\n'
 
                 for i in range(len(dupe_videos_display)):
                     date_string = dupe_videos_display[i].date.strftime("%Y %b %d") 
                     title_string = f'[{dupe_videos_display[i].title}](https://www.youtube.com/watch?v={dupe_videos_display[i].video_id})'
-                    dupe_desc += f'{i + index_offset + 1}. `{date_string}` {title_string}\n'
+                    if i > 0 and dupe_videos_display[i - 1].date.year != dupe_videos_display[i].date.year:
+                        dupe_desc += '------------------------------\n'
+                    dupe_desc += f'{i + channel_index_offset + 1}. `{date_string}` {title_string}\n'
 
-                ##NEXT: display these too
-                dupe_queue_rips = []
+                matching_queue_rips = []
+                matching_queue_rips_includes_message = False
                 queue_channels = get_channel_ids_of_types(['QUEUE'])
                 for queue_channel_id in queue_channels:
                     channel_and_errors = await discord_find_channel(queue_channel_id)
@@ -2072,15 +2038,32 @@ async def dupes(args: list[str], command_context: CommandContext):
                         rips_and_errors = await get_rips_fast(channel_and_errors.channel, GetRipsDesc(typing_channel=command_context.channel))
                         error_strings.extend(rips_and_errors.error_strings)
                         for rip in rips_and_errors.rips:
-                            if rip.message_id != message.id and isDupe(description, get_rip_description(rip.text)):
-                                dupe_queue_rips.append(rip)
+                            if isDupe(description, get_rip_description(rip.text)):
+                                matching_queue_rips.append(rip)
+                                if (rip.message_id == message.id):
+                                    matching_queue_rips_includes_message = True
+
+                matching_queue_rips.sort(key=lambda r: r.created_at)
+                matching_queue_rips_display = []
+                matching_queue_rips_display.extend(matching_queue_rips)
+                if not list_all and len(matching_queue_rips) > cutoff:
+                    matching_queue_rips_display = matching_queue_rips[len(matching_queue_rips)-cutoff:]
+                    dupe_desc += f'\n*Showing latest {cutoff} dupes of {len(matching_queue_rips)}*'
+                if len(matching_queue_rips):
+                    string_and_errors = await format_suborqueue_rips(matching_queue_rips_display, queue_channels, "", message.guild)
+                    error_strings.extend(string_and_errors.error_strings)
+                    if len(string_and_errors.string):
+                        dupe_desc += f'\n{string_and_errors.string}'
 
                 # https://codegolf.stackexchange.com/questions/4707/outputting-ordinal-numbers-1st-2nd-3rd#answer-4712 how
                 ordinal = lambda n: "%d%s" % (n,"tsnrhtdd"[(n//10%10!=1)*(n%10<4)*n%10::4])
-                ordinal_string = ordinal(len(dupe_videos) + len(dupe_queue_rips) + 1)
+                numbered_dupe = len(dupe_videos) + len(matching_queue_rips) + 1
+                if matching_queue_rips_includes_message:
+                    numbered_dupe -= 1
+                ordinal_string = ordinal(numbered_dupe)
 
                 rip_title = get_rip_title(message.content)
-                dupe_title = f"## **[{rip_title}]({message.jump_url})**\n**{ordinal_string} rip** of this track ({len(dupe_videos)} rips on channel, {len(dupe_queue_rips)} rips in queues)"
+                dupe_title = f"## **[{rip_title}]({message.jump_url})**\n**{ordinal_string} rip** of this track ({len(dupe_videos)} rips on channel, {len(matching_queue_rips)} rips in queues)"
 
                 await send_embed(f"{dupe_title}\n{dupe_desc}", command_context.channel, EmbedDesc())
 

@@ -587,6 +587,59 @@ def format_rip(rip: Rip, durationString: str, guild: discord.Guild, make_smol: b
         return f'{title_body}\n{info_body}\n'
 
 
+async def format_suborqueue_rips(rips: list[Rip], channel_id_order: list[int], included_react_name: str, guild: Guild) -> StringAndErrors:
+    text = ""
+    error_strings = []
+
+    rip_dict: dict[int, list[Rip]] = {}
+    for rip in rips:
+        if rip.channel_id not in rip_dict:
+            rip_dict[rip.channel_id] = []
+        rip_dict[rip.channel_id].append(rip)
+
+    display_emoji = reaction_name_to_emoji_string(included_react_name, guild)
+
+    for channel_id in channel_id_order:
+        if channel_id in rip_dict:
+            text += f'<#{channel_id}>:\n'
+            for rip in rip_dict[channel_id]:
+                string_and_errors = await get_formatted_rip_length(rip.text, False, False, guild)  
+                error_strings.extend(string_and_errors.error_strings)
+                if len(string_and_errors.string):
+                    text += f"`{string_and_errors.string}` "
+                else:
+                    text += '`??:??` '
+
+                shown_react_types = [
+                    ReactType.ALERT,
+                    ReactType.STOP,
+                    ReactType.JINGLE,
+                    ReactType.QOC,
+                    ReactType.THUMBNAIL,
+                    ReactType.CHECK,
+                    ReactType.METADATA,
+                    ReactType.EMAILSENT,
+                    ReactType.SENDBACK,
+                    ReactType.CALENDAR,
+                ]
+
+                display_react_type = react_name_to_react_type(included_react_name)
+                if display_react_type not in shown_react_types:
+                    text += f"{display_emoji} "
+
+                for react_type in shown_react_types:
+                    if rip_has_react([react_type], rip):
+                        react = react_type_to_react(react_type, guild)
+                        text += f"{react.string} "
+
+                rip_title = get_rip_title(rip.text)
+                rip_link = format_message_link(guild.id, rip.channel_id, rip.message_id)
+                text += f'**[{rip_title}]({rip_link})**\n'
+
+            text += '------------------------------\n'
+
+    return StringAndErrors(text, error_strings)
+
 async def sort_rips_by_duration(rips: list[Rip]) -> list[str]:
 
     class RipAndDuration(NamedTuple):
