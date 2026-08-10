@@ -212,7 +212,6 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
         intro_warnings.append(":warning: **Rip link not Auto-QoCed**")
 
     bitrate_react = react_type_to_react(ReactType.BITRATE, guild)
-    clipping_react = react_type_to_react(ReactType.CLIPPING, guild)
     metadata_react = react_type_to_react(ReactType.METADATA, guild)
     fix_react = react_type_to_react(ReactType.FIX, guild)
     regular_check_react = react_type_to_react(ReactType.REGULAR_CHECK, guild)
@@ -226,8 +225,6 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
             verdict_react_strings.append(fix_react.string)
             if qoc_check_type == QoCCheckType.BITRATE:
                 verdict_react_strings.append(bitrate_react.string)
-            if qoc_check_type == QoCCheckType.CLIPPING:
-                verdict_react_strings.append(clipping_react.string)
 
         if qoc_check.result == CheckResultType.ERROR and DEFAULT_ERROR not in verdict_react_strings:
             verdict_react_strings.append(DEFAULT_ERROR)
