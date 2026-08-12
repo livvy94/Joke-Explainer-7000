@@ -408,7 +408,7 @@ async def get_qoc_channel(channel: TextChannel | Thread) -> ChannelAndErrors:
     if channel_is_types(channel, ['PROXY_QOC']):
         return await get_default_config_channel_of_type("QOC")
     else:
-        return ChannelAndErrors(None, []) 
+        return ChannelAndErrors(channel, []) 
 
 
 #TODO: (Ahmayk) simplify 
