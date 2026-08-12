@@ -1946,19 +1946,19 @@ async def dupes(args: list[str], command_context: CommandContext):
             error_strings.append(f"Playlist is not from {YOUTUBE_CHANNEL_NAME} (found playlist from {youtube_playlist.channel_name})")
         
         if not len(error_strings):
+            dupe_desc = ""
+            description = get_rip_description(message.content)
+            dupe_videos: list[PlaylistVideo] = []
+            cutoff = 20
             if len(videos) > 0:
-                description = get_rip_description(message.content)
-                dupe_videos: list[PlaylistVideo] = []
                 for video in videos:
                     video_desc = video.title + '\n' + video.desc.replace('\r', '').split('\n\n')[0]
                     if isDupe(description, video_desc):
                         dupe_videos.append(video)
 
-                dupe_desc = ""
                 dupe_videos.sort(key=lambda v: v.date)
                 dupe_videos_display: list[PlaylistVideo] = []
                 dupe_videos_display.extend(dupe_videos)
-                cutoff = 20
                 channel_index_offset = 0 
                 if not list_all and len(dupe_videos) > cutoff:
                     channel_index_offset = len(dupe_videos) - cutoff
@@ -1972,42 +1972,39 @@ async def dupes(args: list[str], command_context: CommandContext):
                         dupe_desc += '------------------------------\n'
                     dupe_desc += f'{i + channel_index_offset + 1}. `{date_string}` {title_string}\n'
 
-                matching_queue_rips = []
-                matching_queue_rips_includes_message = False
-                rips_and_errors = await get_rips_fast_of_channel_types(['QUEUE'], None)
-                error_strings.extend(rips_and_errors.error_strings)
-                for rip in rips_and_errors.rips:
-                    if isDupe(description, get_rip_description(rip.text)):
-                        matching_queue_rips.append(rip)
-                        if (rip.message_id == message.id):
-                            matching_queue_rips_includes_message = True
+            matching_queue_rips = []
+            matching_queue_rips_includes_message = False
+            rips_and_errors = await get_rips_fast_of_channel_types(['QUEUE'], None)
+            error_strings.extend(rips_and_errors.error_strings)
+            for rip in rips_and_errors.rips:
+                if isDupe(description, get_rip_description(rip.text)):
+                    matching_queue_rips.append(rip)
+                    if (rip.message_id == message.id):
+                        matching_queue_rips_includes_message = True
 
-                matching_queue_rips.sort(key=lambda r: r.created_at)
-                matching_queue_rips_display = []
-                matching_queue_rips_display.extend(matching_queue_rips)
-                if not list_all and len(matching_queue_rips) > cutoff:
-                    matching_queue_rips_display = matching_queue_rips[len(matching_queue_rips)-cutoff:]
-                    dupe_desc += f'\n*Showing latest {cutoff} dupes of {len(matching_queue_rips)}*'
-                if len(matching_queue_rips):
-                    string_and_errors = await format_suborqueue_rips(matching_queue_rips_display, [], "", message.guild)
-                    error_strings.extend(string_and_errors.error_strings)
-                    if len(string_and_errors.string):
-                        dupe_desc += f'\n{string_and_errors.string}'
+            matching_queue_rips.sort(key=lambda r: r.created_at)
+            matching_queue_rips_display = []
+            matching_queue_rips_display.extend(matching_queue_rips)
+            if not list_all and len(matching_queue_rips) > cutoff:
+                matching_queue_rips_display = matching_queue_rips[len(matching_queue_rips)-cutoff:]
+                dupe_desc += f'\n*Showing latest {cutoff} dupes of {len(matching_queue_rips)}*'
+            if len(matching_queue_rips):
+                string_and_errors = await format_suborqueue_rips(matching_queue_rips_display, [], "", message.guild)
+                error_strings.extend(string_and_errors.error_strings)
+                if len(string_and_errors.string):
+                    dupe_desc += f'\n{string_and_errors.string}'
 
-                # https://codegolf.stackexchange.com/questions/4707/outputting-ordinal-numbers-1st-2nd-3rd#answer-4712 how
-                ordinal = lambda n: "%d%s" % (n,"tsnrhtdd"[(n//10%10!=1)*(n%10<4)*n%10::4])
-                numbered_dupe = len(dupe_videos) + len(matching_queue_rips) + 1
-                if matching_queue_rips_includes_message:
-                    numbered_dupe -= 1
-                ordinal_string = ordinal(numbered_dupe)
+            # https://codegolf.stackexchange.com/questions/4707/outputting-ordinal-numbers-1st-2nd-3rd#answer-4712 how
+            ordinal = lambda n: "%d%s" % (n,"tsnrhtdd"[(n//10%10!=1)*(n%10<4)*n%10::4])
+            numbered_dupe = len(dupe_videos) + len(matching_queue_rips) + 1
+            if matching_queue_rips_includes_message:
+                numbered_dupe -= 1
+            ordinal_string = ordinal(numbered_dupe)
 
-                rip_title = get_rip_title(message.content)
-                dupe_title = f"## **[{rip_title}]({message.jump_url})**\n**{ordinal_string} rip** of this track ({len(dupe_videos)} rips on channel, {len(matching_queue_rips)} rips in queues)"
+            rip_title = get_rip_title(message.content)
+            dupe_title = f"## **[{rip_title}]({message.jump_url})**\n**{ordinal_string} rip** of this track ({len(dupe_videos)} rips on channel, {len(matching_queue_rips)} rips in queues)"
 
-                await send_embed(f"{dupe_title}\n{dupe_desc}", command_context.channel, EmbedDesc())
-
-            else:
-                await send("Playlist has no videos.", command_context.channel)
+            await send_embed(f"{dupe_title}\n{dupe_desc}", command_context.channel, EmbedDesc())
 
         await send_if_errors("Errors during processing dupes.", error_strings, command_context.channel)
 
