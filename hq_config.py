@@ -19,21 +19,13 @@ CHANNEL_KEY = "channels"
 CATEGORY_KEY = "categories"
 LOG_CHANNEL_KEY = "log_channel"
 
-def get_channel_ids_all() -> List[str]:
-    result = []
+def channel_type_is_defined_in_config(type: str) -> bool: 
+    result = False 
     channels_json = get_config(CHANNEL_KEY)
     for channel in channels_json:
-        result.append(channel["id"])
-    return result
-
-def get_channel_ids_of_types(types: List[str]) -> List[int]:
-    result = []
-    channels_json = get_config(CHANNEL_KEY)
-    for channel in channels_json:
-        for type in types:
-            if type in channel["types"]: 
-                result.append(int(channel["id"]))
-                break
+        if type in channel["types"]: 
+            result = True
+            break
     return result
 
 def get_channel_config(id: int) -> ChannelConfig:

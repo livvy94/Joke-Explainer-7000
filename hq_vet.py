@@ -126,16 +126,16 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
             metadata_checks.append(QoCCheck(CheckResultType.FAIL, "Rip author is missing."))
 
         # TODO: (Ahmayk) All of this belongs in QoC code 
+        # NOTE: (Ahmayk later) Actually, no. This depends on discord channels
+        # and QoC code is intentionally not dependent on discord
         if not is_unusual_metadata:
             rips = []
-            channel_ids = get_channel_ids_of_types(['QUEUE', 'QOC'])
-            for channel_id in channel_ids:
-                channel_and_errors = await discord_find_channel(channel_id)
-                error_strings.extend(channel_and_errors.error_strings)
-                if channel_and_errors.channel:
-                    rips_and_errors = await get_rips_fast(channel_and_errors.channel, GetRipsDesc())
-                    rips = rips_and_errors.rips
-                    error_strings.extend(rips_and_errors.error_strings)
+            channels_and_errors = await get_channels_of_types(['QUEUE', 'QOC'], [])
+            error_strings.extend(channels_and_errors.error_strings)
+            for channel in channels_and_errors.channels:
+                rips_and_errors = await get_rips_fast(channel, GetRipsDesc())
+                rips = rips_and_errors.rips
+                error_strings.extend(rips_and_errors.error_strings)
 
             title = get_raw_rip_title(rip_message_text)
             for rip in rips:

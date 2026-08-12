@@ -356,6 +356,25 @@ async def get_rips_fast(channel: TextChannel | Thread, desc: GetRipsDesc) -> Rip
 
     return RipsAndErrors(rips, error_strings)
 
+async def get_rips_of_channel_types(channel_types: list[str], typing_channel: TextChannel | Thread | None) -> RipsAndErrors:
+    rips = []
+    channels_and_errors = await get_channels_of_types(channel_types, [])
+    error_strings = channels_and_errors.error_strings 
+    for channel in channels_and_errors.channels:
+        rips_and_errors  = await get_rips(channel, GetRipsDesc(typing_channel=typing_channel))
+        rips.extend(rips_and_errors.rips)
+        error_strings.extend(rips_and_errors.error_strings)
+    return RipsAndErrors(rips, error_strings) 
+
+async def get_rips_fast_of_channel_types(channel_types: list[str], typing_channel: TextChannel | Thread | None) -> RipsAndErrors:
+    rips = []
+    channels_and_errors = await get_channels_of_types(channel_types, [])
+    error_strings = channels_and_errors.error_strings 
+    for channel in channels_and_errors.channels:
+        rips_and_errors  = await get_rips_fast(channel, GetRipsDesc(typing_channel=typing_channel))
+        rips.extend(rips_and_errors.rips)
+        error_strings.extend(rips_and_errors.error_strings)
+    return RipsAndErrors(rips, error_strings) 
 
 def get_react_counts(rip: Rip) -> dict[React, int]:
     count_dict: dict[React, int] = {}
@@ -367,14 +386,12 @@ def get_react_counts(rip: Rip) -> dict[React, int]:
 
 async def validate_cache_all() -> StringAndErrors:
     return_string = ""
-    error_strings = []
-    for channel_id in get_channel_ids_of_types(['QOC', 'SUBS', 'SUBS_PIN', 'SUBS_THREAD', 'QUEUE']):
-        channel_and_errors = await discord_find_channel(channel_id)
-        error_strings.extend(channel_and_errors.error_strings)
-        if channel_and_errors.channel:
-            string_and_errors = await process_rip_channel(channel_and_errors.channel, True, None)
-            return_string = string_and_errors.string
-            error_strings = string_and_errors.error_strings
+    channels_and_errors = await get_channels_of_types(['QOC', 'SUBS', 'SUBS_PIN', 'SUBS_THREAD', 'QUEUE'], [])
+    error_strings = channels_and_errors.error_strings 
+    for channel in channels_and_errors.channels:
+        string_and_errors = await process_rip_channel(channel, True, None)
+        return_string = string_and_errors.string
+        error_strings = string_and_errors.error_strings
     return StringAndErrors(return_string, error_strings) 
 
 

@@ -7,8 +7,8 @@ from enum import StrEnum
 from datetime import datetime, timedelta, timezone
 
 from hq_strings import TitleType, score_title_similarity 
-from hq_config import get_config, get_channel_ids_of_types 
-from hq_discord import FloatAndErrors, StringAndErrors, MessagesAndErrors, run_blocking, discord_find_channel, discord_delete_messages, discord_get_channel_messages, discord_fetch_message
+from hq_config import get_config
+from hq_discord import FloatAndErrors, StringAndErrors, ChannelsAndErrors, MessagesAndErrors, get_channels_of_types, discord_find_channel, discord_delete_messages, discord_get_channel_messages, discord_fetch_message
 from hq_qoc import getAudioLengthInSecondsFFprobe 
 from hq_youtube import PlaylistVideo 
 
@@ -106,7 +106,10 @@ async def cleanup_sent_embeds_in_expire_database():
 
     expire_time_proxy_qoc = get_config('proxy_embed_seconds')
     expire_time_qoc = get_config('embed_seconds')
-    proxy_channel_ids = get_channel_ids_of_types(['PROXY_QOC'])
+    channel_and_errors = await get_channels_of_types(['PROXY_QOC'], [])
+    proxy_channel_ids = []
+    for channel in channel_and_errors.channels:
+        proxy_channel_ids.append(channel.id)
 
     sent_embeds_to_delete = []
     for sent_embed in JE_DATABASE[JEDatabaseKey.SENT_EMBED_TO_EXPIRE]:
@@ -153,17 +156,16 @@ async def refresh_thumbnail_cache() -> StringAndErrors:
     string = ""
     error_strings = []
 
-    channel_ids = get_channel_ids_of_types(['THUMBNAILS'])
-    if not len(channel_ids):
+    channels_and_errors = await get_channels_of_types(['THUMBNAILS'], [])
+    error_strings.extend(channels_and_errors.error_strings)
+
+    if not len(error_strings) and not len(channels_and_errors.channels):
         error_strings.append(f"Thumbnail channel not defined in bot config (contact bot maintainer).")
 
-    if not len(error_strings):
-        channel_and_errors = await discord_find_channel(channel_ids[0])
-        error_strings.extend(channel_and_errors.error_strings)
-
     messages_and_errors = MessagesAndErrors([], []) 
-    if not len(error_strings) and channel_and_errors.channel:
-        messages_and_errors = await discord_get_channel_messages(None, channel_and_errors.channel)
+    if not len(error_strings):
+        ##NOTE: (Ahmayk) only expect one thumbnail channel to be defined
+        messages_and_errors = await discord_get_channel_messages(None, channels_and_errors.channels[0])
         error_strings.extend(messages_and_errors.error_strings)
 
     if not len(error_strings):
@@ -204,19 +206,18 @@ async def search_thumbnail_cache(input_title: str) -> MessagesAndErrors:
     messages = []
     error_strings = []
 
-    channel_ids = get_channel_ids_of_types(['THUMBNAILS'])
-    if not len(channel_ids):
-        error_strings.append(f"Thumbnail channel not defined in bot config (contact bot maintainer).")
-
-    if not len(error_strings):
-        channel_and_errors = await discord_find_channel(channel_ids[0])
-        error_strings.extend(channel_and_errors.error_strings)
-
     if THUMBNAIL_DICT_KEY not in THUMBNAIL_DATABASE:
         error_strings.append("Thumbnail cache is empty. Cache must be filled before thumbnails can be searched.")
 
+    channels_and_errors = ChannelsAndErrors([], []) 
     if not len(error_strings):
+        channels_and_errors = await get_channels_of_types(['THUMBNAILS'], [])
+        error_strings.extend(channels_and_errors.error_strings)
 
+    if not len(error_strings) and not len(channels_and_errors.channels):
+        error_strings.append(f"Thumbnail channel not defined in bot config (contact bot maintainer).")
+
+    if not len(error_strings):
         class ScoredFrame(NamedTuple):
             score: float
             discord_id: int
@@ -243,7 +244,7 @@ async def search_thumbnail_cache(input_title: str) -> MessagesAndErrors:
 
         for scored in scored_frames:
             if scored.score > 0 and scored.score >= score_cutoff:
-                message_and_errors = await discord_fetch_message(scored.discord_id, channel_and_errors.channel)
+                message_and_errors = await discord_fetch_message(scored.discord_id, channels_and_errors.channels[0])
                 error_strings.extend(message_and_errors.error_strings)
                 if message_and_errors.message:
                     messages.append(message_and_errors.message)

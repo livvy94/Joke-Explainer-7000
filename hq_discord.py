@@ -400,21 +400,15 @@ def channel_is_types(channel: TextChannel | Thread, types: list[str]) -> bool:
     return result 
 
 
-def channel_is_type(channel: typing.Union[GuildChannel, Thread], type: str) -> bool:
+def channel_is_type(channel: TextChannel | Thread, type: str) -> bool:
     return channel_is_types(channel, [type])
 
 
 async def get_qoc_channel(channel: TextChannel | Thread) -> ChannelAndErrors:
-    qoc_channel: TextChannel | Thread | None = channel
-    error_strings: list[str] = []
     if channel_is_types(channel, ['PROXY_QOC']):
-        int_and_errors = await parse_channel_link("", ["QOC"])
-        error_strings.extend(int_and_errors.error_strings)
-        if not len(error_strings):
-            channel_and_errors = await discord_find_channel(int_and_errors.result)
-            error_strings.extend(channel_and_errors.error_strings)
-            qoc_channel = channel_and_errors.channel
-    return ChannelAndErrors(qoc_channel, error_strings) 
+        return await get_default_config_channel_of_type("QOC")
+    else:
+        return ChannelAndErrors(None, []) 
 
 
 #TODO: (Ahmayk) simplify 
@@ -443,35 +437,54 @@ async def parse_message_link(link: str):
 
     return server, channel, message_and_errors.message, status 
 
-
-async def parse_channel_link(link: str, channel_types: list[str]) -> IntAndErrors: 
+async def get_default_config_channel_of_type(channel_type: str) -> ChannelAndErrors:
+    channel = None
     error_strings = []
-
-    default_id = 0
-    channel_ids = get_channel_ids_all()
-    if len(channel_ids):
-        default_id = int(channel_ids[0])
+    channels_json = get_config(CHANNEL_KEY)
+    if len(channels_json):
+        channel_id = 0
+        for channel_json in channels_json:
+            if channel_type in channel_json["types"]: 
+                channel_id = int(channel_json["id"])
+                break
+        channel_and_errors = await discord_find_channel(channel_id)
+        channel = channel_and_errors.channel
+        error_strings.extend(channel_and_errors.error_strings)
     else:
         error_strings.append("No channels configured. Contact a bot maintainer.")
+    return ChannelAndErrors(channel, error_strings)
 
-    channel_id = default_id
 
-    if len(link) and not len(error_strings):
-        channel_id = 0 
+class ParseChannelLinkResult(NamedTuple):
+    channel: TextChannel | Thread | None
+    input_error: str
+    error_strings: list[str]
+
+async def parse_channel_link(link: str, valid_channel_types: list[str]) -> ParseChannelLinkResult: 
+    channel = None
+    input_error = ""
+    error_strings: list[str] = []
+
+    if len(link):
         args = link.split('/')
         if len(args) < 6:
-            error_strings.append("Invalid discord channel link.")
+            input_error = f"Invalid discord channel link: `{link}`"
 
-        if not len(error_strings):
+        if not len(input_error):
             channel_and_errors = await discord_find_channel(int(args[5]))
             error_strings.extend(channel_and_errors.error_strings)
+            if not len(channel_and_errors.error_strings):
+                if channel_and_errors.channel and channel_is_types(channel_and_errors.channel, valid_channel_types):
+                    channel = channel_and_errors.channel
+                elif channel_and_errors.channel:
+                    input_error = f"{channel_and_errors.channel.jump_url} is not a valid channel type (Expected: {valid_channel_types})."
 
-            if channel_and_errors.channel and channel_is_types(channel_and_errors.channel, channel_types):
-                channel_id = channel_and_errors.channel.id
-            elif channel_and_errors.channel:
-                error_strings.append(f"{channel_and_errors.channel.jump_url} is not valid type (Expected: {channel_types}).")
+    if not len(input_error) and not channel and len(valid_channel_types):
+        channel_and_errors = await get_default_config_channel_of_type(valid_channel_types[0])
+        channel = channel_and_errors.channel
+        error_strings.extend(channel_and_errors.error_strings)
 
-    return IntAndErrors(channel_id, error_strings)
+    return ParseChannelLinkResult(channel, input_error, error_strings)
 
 async def parse_channel_link_or_text(args: list[str]) -> StringAndErrors:
     text = " ".join(args)

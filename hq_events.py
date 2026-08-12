@@ -32,21 +32,15 @@ async def regular_checkup():
         if len(string_and_errors.string):
             await write_log(f'**Cache validation had issues:**\n{string_and_errors.string}')
         else:
-            #TODO: (Ahmayk) remove this once cache starts being trustworthy (hopefully this happens)
             today = datetime.now()
             print(f"{today.strftime('%m/%d/%y %I:%M %p')}  Cache revalidated. No issues found.")
     except Exception as error:
         await send_crash(f'ERROR on scheduled cache revalidation', error, None)
 
-    rips_all = []
-    for channel_id in get_channel_ids_of_types(['QOC', 'SUBS', 'SUBS_PIN', 'SUBS_THREAD', 'QUEUE']):
-        channel_and_errors = await discord_find_channel(channel_id)
-        if channel_and_errors.channel:
-            temp_rips_and_errors = await get_rips(channel_and_errors.channel, GetRipsDesc())
-            rips_all.extend(temp_rips_and_errors.rips)
+    rips_and_errors = await get_rips_of_channel_types(['QOC', 'SUBS', 'SUBS_PIN', 'SUBS_THREAD', 'QUEUE'])
 
     stored_urls = list(JE_DATABASE[JEDatabaseKey.RIP_LENGTH].keys())
-    for rip in rips_all:
+    for rip in rips_and_errors.rips:
         urls = extract_rip_link(rip.text)
         for url in urls:
             if url in stored_urls:
