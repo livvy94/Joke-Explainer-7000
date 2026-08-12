@@ -10,6 +10,11 @@ class ChannelConfig(NamedTuple):
     types: List[str]
     pinlimit_must_die_mode: bool
 
+class CategoryConfig(NamedTuple):
+    name: str
+    id: int
+    type: str
+
 CHANNEL_KEY = "channels"
 CATEGORY_KEY = "categories"
 LOG_CHANNEL_KEY = "log_channel"
@@ -31,7 +36,7 @@ def get_channel_ids_of_types(types: List[str]) -> List[int]:
                 break
     return result
 
-def get_channel_config(id: int):
+def get_channel_config(id: int) -> ChannelConfig:
     _channels = get_config(CHANNEL_KEY)
     for channel in _channels:
         if channel.get("id", -1) == id:
@@ -41,9 +46,18 @@ def get_channel_config(id: int):
                 channel.get("types", []),
                 channel.get("pinlimit_must_die_mode", False)
             )
-    # dummy value
     return ChannelConfig("`[Channel Not Found]`", id, [], False)
 
+def get_category_config(id: int) -> CategoryConfig:
+    _categories = get_config(CATEGORY_KEY)
+    for category in _categories:
+        if category.get("id", -1) == id:
+            return CategoryConfig(
+                category.get("name", "`[Missing Category Name]`"),
+                id,
+                category.get("type", "")
+            )
+    return CategoryConfig("`[Category Not Found]`", id, "")
 
 def add_channel(name: str, id: int, types: List[str]):
     configs = _read_config_file()

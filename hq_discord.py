@@ -1,7 +1,6 @@
-
 import discord
 from discord.abc import GuildChannel
-from discord import Message, Thread, TextChannel
+from discord import Message, Thread, TextChannel, CategoryChannel
 from datetime import datetime, timezone, timedelta
 
 from typing import NamedTuple, List
@@ -135,7 +134,7 @@ async def discord_get_text_channels_in_category(category_id) -> ChannelsAndError
     error_strings: List[str] = []
     try:
         category = bot.get_channel(category_id) 
-        if isinstance(category, discord.CategoryChannel):
+        if isinstance(category, CategoryChannel):
             for channel in category.channels:
                 ##NOTE: (Ahmayk) Only consider text channels, ignore voice and forum channels
                 if isinstance(channel, TextChannel):
@@ -383,19 +382,32 @@ async def discord_edit_message(message: Message, text: str) -> List[str]:
     return error_strings
 
 
+def channel_is_types(channel: TextChannel | Thread, types: list[str]) -> bool:
+    result = False
+    channel_config = get_channel_config(channel.id)
+    if len(channel_config.types):
+        for type in types: 
+            if type in channel_config.types:
+                result = True
+                break
+    else:
+        if hasattr(channel, "parent") and isinstance(channel.parent, TextChannel):
+            result = channel_is_types(channel.parent, types)
+        elif isinstance(channel.category, CategoryChannel):
+            category_config = get_category_config(channel.category.id)
+            if category_config.type in types: 
+                result = True
+    return result 
+
 
 def channel_is_type(channel: typing.Union[GuildChannel, Thread], type: str) -> bool:
-    return type in get_channel_config(channel.id).types or hasattr(channel, "parent") and channel_is_type(channel.parent, type)
-
-
-def channel_is_types(channel: typing.Union[GuildChannel, Thread], types: typing.List[str]) -> bool:
-    return any([t in get_channel_config(channel.id).types for t in types]) or hasattr(channel, "parent") and channel_is_types(channel.parent, types)
+    return channel_is_types(channel, [type])
 
 
 async def get_qoc_channel(channel: TextChannel | Thread) -> ChannelAndErrors:
     qoc_channel: TextChannel | Thread | None = channel
     error_strings: list[str] = []
-    if channel_is_type(channel, 'PROXY_QOC'):
+    if channel_is_types(channel, ['PROXY_QOC']):
         int_and_errors = await parse_channel_link("", ["QOC"])
         error_strings.extend(int_and_errors.error_strings)
         if not len(error_strings):
