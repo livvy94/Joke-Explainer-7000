@@ -591,15 +591,20 @@ async def format_suborqueue_rips(rips: list[Rip], channel_id_order: list[int], i
     text = ""
     error_strings = []
 
+    channel_id_order_display = []
+    channel_id_order_display.extend(channel_id_order)
+
     rip_dict: dict[int, list[Rip]] = {}
     for rip in rips:
         if rip.channel_id not in rip_dict:
             rip_dict[rip.channel_id] = []
+            if rip.channel_id not in channel_id_order_display:
+                channel_id_order_display.append(rip.channel_id)
         rip_dict[rip.channel_id].append(rip)
 
     display_emoji = reaction_name_to_emoji_string(included_react_name, guild)
 
-    for channel_id in channel_id_order:
+    for channel_id in channel_id_order_display:
         if channel_id in rip_dict:
             text += f'<#{channel_id}>:\n'
             for rip in rip_dict[channel_id]:
