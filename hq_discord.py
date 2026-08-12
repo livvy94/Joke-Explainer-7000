@@ -30,6 +30,10 @@ class ChannelAndErrors(NamedTuple):
     channel: TextChannel | Thread | None
     error_strings: List[str]
 
+class ChannelsAndErrors(NamedTuple):
+    channels: List[TextChannel | Thread]
+    error_strings: List[str]
+
 class MessageAndErrors(NamedTuple):
     message: Message | None 
     error_strings: List[str]
@@ -126,6 +130,25 @@ async def discord_find_channel(channel_id: int) -> ChannelAndErrors:
     return ChannelAndErrors(channel, error_strings) 
 
 
+async def discord_get_text_channels_in_category(category_id) -> ChannelsAndErrors:
+    channels: List[TextChannel] = []
+    error_strings: List[str] = []
+    try:
+        category = bot.get_channel(category_id) 
+        if isinstance(category, discord.CategoryChannel):
+            for channel in category.channels:
+                ##NOTE: (Ahmayk) Only consider text channels, ignore voice and forum channels
+                if isinstance(channel, TextChannel):
+                    channels.append(channel)
+        else:
+            msg = f'Category ID: {category_id} isn\'t a category!'
+            await write_log(msg)
+            error_strings.append(msg)
+    except Exception as error:
+        await log_exception(f'Discord API call failed to fetch category id {category_id}', error, error_strings, True)
+    return ChannelsAndErrors(channels, error_strings) 
+
+
 async def get_log_channel() -> TextChannel | Thread | None:
     channel_and_errors = await discord_find_channel(get_log_channel_id())
     if len(channel_and_errors.error_strings):
@@ -167,6 +190,51 @@ async def log_exception(txt: str, error: Exception, error_strings: List[str], fu
     if log_channel:
         await send(f'**{error_text}**\n```py\n{trace}\n```', log_channel)
     error_strings.append(error_text)
+
+
+async def get_channels_of_types(include_types: list[str], exclude_types: list[str]) -> ChannelsAndErrors: 
+
+    channel_ids = [] 
+    channels_json = get_config(CHANNEL_KEY)
+    for channel_json in channels_json:
+        is_match = False
+        for type in include_types:
+            if type in channel_json["types"]: 
+                is_match = True
+                break
+        for type in exclude_types:
+            if type in channel_json["types"]: 
+                is_match = False 
+                break
+        if is_match:
+            channel_ids.append(int(channel_json["id"]))
+
+    category_ids = []
+    json = get_config(CATEGORY_KEY)
+    for category_json in json:
+        for type in include_types:
+            if type == category_json["type"]: 
+                category_ids.append(int(category_json["id"]))
+                break
+
+    channels = []
+    error_strings = []
+    for channel_json in channel_ids:
+        channel_and_errors = await discord_find_channel(channel_json)
+        error_strings.extend(channel_and_errors.error_strings)
+        if channel_and_errors.channel:
+            channels.append(channel_and_errors.channel)
+
+    for category_id in category_ids:
+        channels_and_errors = await discord_get_text_channels_in_category(category_id)
+        error_strings.extend(channel_and_errors.error_strings)
+        for channel in channels_and_errors.channels:
+            if channel not in channels:
+                channels.append(channel)
+
+    return ChannelsAndErrors(channels, error_strings) 
+
+
 
 async def discord_fetch_message(message_id: int, channel: TextChannel | Thread) -> MessageAndErrors: 
     message = None

@@ -24,5 +24,12 @@
             "pinlimit_must_die_mode": false
         }
     ],
+    "categories": [
+        {
+            "name": "Queues",
+            "id": -1,
+            "type": "QUEUE",
+        }
+    ],
     "log_channel": -1
 }

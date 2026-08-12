@@ -2353,10 +2353,14 @@ async def reset_cache(args: list[str], command_context: CommandContext):
         if len(int_and_errors.error_strings):
             return await send_if_errors("No cache refresh today.", int_and_errors.error_strings, command_context.channel)
         if int_and_errors.result:
-            await send(f'Rebuilding cache for <#{int_and_errors.result}>. This will take a few minutes...', command_context.channel)
             async with command_context.channel.typing():
-                await write_log(f'`{prefix}rebuild_cache` run by {command_context.user.name} for <#{int_and_errors.result}> in {command_context.channel.jump_url}')
-                string_and_errors = await rebuild_cache_for_channel(int_and_errors.result)
+                channel_and_errors = await discord_find_channel(int_and_errors.result)
+                if len(channel_and_errors.error_strings):
+                    return await send_if_errors("No cache refresh today.", channel_and_errors.error_strings, command_context.channel)
+                if channel_and_errors.channel:
+                    await send(f'Rebuilding cache for <#{int_and_errors.result}>. This will take a few minutes...', command_context.channel)
+                    await write_log(f'`{prefix}rebuild_cache` run by {command_context.user.name} for <#{int_and_errors.result}> in {command_context.channel.jump_url}')
+                    string_and_errors = await rebuild_cache_for_channel(channel_and_errors.channel)
     else:
         await send(f'Rebuilding cache for all channels. This may take a few minutes...', command_context.channel)
         async with command_context.channel.typing():

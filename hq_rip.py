@@ -378,51 +378,45 @@ async def validate_cache_all() -> StringAndErrors:
     return StringAndErrors(return_string, error_strings) 
 
 
-async def rebuild_cache_for_channel(channel_id: int) -> StringAndErrors:
+async def rebuild_cache_for_channel(channel: TextChannel | Thread) -> StringAndErrors:
     return_message = ""
 
-    channel_and_errors = await discord_find_channel(channel_id)
-    channel = channel_and_errors.channel
-    error_strings = channel_and_errors.error_strings
-    if channel:
-        rips_and_errors = await get_rips(channel, GetRipsDesc(rebuild_cache=True))
-        error_strings.extend(rips_and_errors.error_strings)
+    rips_and_errors = await get_rips(channel, GetRipsDesc(rebuild_cache=True))
 
-        channel_type_string = '[Unknown type]'
-        if channel_is_types(channel, ['QOC']):
-            channel_type_string = 'qoc'
-        elif channel_is_types(channel, ['QUEUE']):
-            channel_type_string = 'queued'
-        elif channel_is_types(channel, ['SUBS', 'SUBS_THREAD', 'SUBS_PIN']):
-            channel_type_string = 'subbed'
-        return_message = f'Cached {len(rips_and_errors.rips)} {channel_type_string} rips in {channel.jump_url}.'
-        await write_log(return_message)
-    else:
-        error = f'Error caching channel: Failed to find channel: <#{channel_id}>'
-        await write_log(error)
-        error_strings.append(error)
+    channel_type_string = '[Unknown type]'
+    if channel_is_types(channel, ['QOC']):
+        channel_type_string = 'qoc'
+    elif channel_is_types(channel, ['QUEUE']):
+        channel_type_string = 'queued'
+    elif channel_is_types(channel, ['SUBS', 'SUBS_THREAD', 'SUBS_PIN']):
+        channel_type_string = 'subbed'
+    return_message = f'Cached {len(rips_and_errors.rips)} {channel_type_string} rips in {channel.jump_url}.'
+    await write_log(return_message)
 
-    return StringAndErrors(return_message, error_strings) 
+    return StringAndErrors(return_message, rips_and_errors.error_strings) 
 
-async def rebuild_cache() -> StringAndErrors:
 
+async def rebuild_cache_of_types(include_types: list[str], exclude_types: list[str]) -> StringAndErrors:
     return_message = ""
-    error_strings = []
-
-    channel_ids_qoc = get_channel_ids_of_types(['QOC'])
-    channel_ids_all = get_channel_ids_of_types(['QOC', 'SUBS', 'SUBS_PIN', 'SUBS_THREAD', 'QUEUE'])
-    for channel_id in channel_ids_all:
-        if channel_id not in channel_ids_qoc:
-            string_and_errors = await rebuild_cache_for_channel(channel_id)
-            return_message += f'\n{string_and_errors.string}'
-            error_strings.extend(string_and_errors.error_strings)
-
-    for channel_id in channel_ids_qoc:
-        string_and_errors = await rebuild_cache_for_channel(channel_id)
+    channels_and_errors = await get_channels_of_types(include_types, exclude_types)
+    error_strings = channels_and_errors.error_strings
+    for channel in channels_and_errors.channels:
+        string_and_errors = await rebuild_cache_for_channel(channel)
         return_message += f'\n{string_and_errors.string}'
         error_strings.extend(string_and_errors.error_strings)
-
     return StringAndErrors(return_message, error_strings) 
+
+
+async def rebuild_cache() -> StringAndErrors:
+    ##NOTE: (Ahmayk) we rebuild non-qoc channels first to put them in cache quicker 
+    ## because fetching them is very fast. QoC channels take longer because we fetch react user data
+    string_and_errors_1 = await rebuild_cache_of_types(['SUBS', 'SUBS_PIN', 'SUBS_THREAD', 'QUEUE'], ['QOC'])
+    string_and_errors_2 = await rebuild_cache_of_types(['QOC'], [])
+    string = f'{string_and_errors_1.string}\n{string_and_errors_2.string}'
+    error_strings = []
+    error_strings.extend(string_and_errors_1.error_strings)
+    error_strings.extend(string_and_errors_2.error_strings)
+    return StringAndErrors(string, error_strings)
 
 
 async def remove_rip_from_cache(message_id: int, channel_id: int):

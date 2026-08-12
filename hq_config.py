@@ -11,6 +11,7 @@ class ChannelConfig(NamedTuple):
     pinlimit_must_die_mode: bool
 
 CHANNEL_KEY = "channels"
+CATEGORY_KEY = "categories"
 LOG_CHANNEL_KEY = "log_channel"
 
 def get_channel_ids_all() -> List[str]:
