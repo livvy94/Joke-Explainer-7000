@@ -37,7 +37,7 @@ async def regular_checkup():
     except Exception as error:
         await send_crash(f'ERROR on scheduled cache revalidation', error, None)
 
-    rips_and_errors = await get_rips_of_channel_types(['QOC', 'SUBS', 'SUBS_PIN', 'SUBS_THREAD', 'QUEUE'])
+    rips_and_errors = await get_rips_of_channel_types(['QOC', 'SUBS', 'SUBS_PIN', 'SUBS_THREAD', 'QUEUE', 'INACTIVE_QUEUE'])
 
     stored_urls = list(JE_DATABASE[JEDatabaseKey.RIP_LENGTH].keys())
     for rip in rips_and_errors.rips:

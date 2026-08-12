@@ -1974,7 +1974,7 @@ async def dupes(args: list[str], command_context: CommandContext):
 
             matching_queue_rips = []
             matching_queue_rips_includes_message = False
-            rips_and_errors = await get_rips_fast_of_channel_types(['QUEUE'], None)
+            rips_and_errors = await get_rips_fast_of_channel_types(['QUEUE', 'INACTIVE_QUEUE'], None)
             error_strings.extend(rips_and_errors.error_strings)
             for rip in rips_and_errors.rips:
                 if isDupe(description, get_rip_description(rip.text)):

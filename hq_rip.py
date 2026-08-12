@@ -95,7 +95,7 @@ def get_channel_info(channel: TextChannel | Thread) -> ChannelInfo:
     if channel_is_types(channel, ['SUBS']):
         rip_fetch_type = RipFetchType.ALL_MESSAGES_NO_THREADS
 
-    elif channel_is_types(channel, ['QUEUE', 'SUBS_THREAD']):
+    elif channel_is_types(channel, ['QUEUE', 'INACTIVE_QUEUE', 'SUBS_THREAD']):
         rip_fetch_type = RipFetchType.ALL_MESSAGES_AND_THREADS
 
     is_cache_qoc = channel_is_types(channel, ['QOC'])
@@ -405,6 +405,8 @@ async def rebuild_cache_for_channel(channel: TextChannel | Thread) -> StringAndE
         channel_type_string = 'qoc'
     elif channel_is_types(channel, ['QUEUE']):
         channel_type_string = 'queued'
+    elif channel_is_types(channel, ['INACTIVE_QUEUE']):
+        channel_type_string = 'inactively queued'
     elif channel_is_types(channel, ['SUBS', 'SUBS_THREAD', 'SUBS_PIN']):
         channel_type_string = 'subbed'
     return_message = f'Cached {len(rips_and_errors.rips)} {channel_type_string} rips in {channel.jump_url}.'
@@ -427,7 +429,7 @@ async def rebuild_cache_of_types(include_types: list[str], exclude_types: list[s
 async def rebuild_cache() -> StringAndErrors:
     ##NOTE: (Ahmayk) we rebuild non-qoc channels first to put them in cache quicker 
     ## because fetching them is very fast. QoC channels take longer because we fetch react user data
-    string_and_errors_1 = await rebuild_cache_of_types(['SUBS', 'SUBS_PIN', 'SUBS_THREAD', 'QUEUE'], ['QOC'])
+    string_and_errors_1 = await rebuild_cache_of_types(['SUBS', 'SUBS_PIN', 'SUBS_THREAD', 'QUEUE', 'INACTIVE_QUEUE'], ['QOC'])
     string_and_errors_2 = await rebuild_cache_of_types(['QOC'], [])
     string = f'{string_and_errors_1.string}\n{string_and_errors_2.string}'
     error_strings = []

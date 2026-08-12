@@ -130,7 +130,7 @@ async def vet_rip_or_url(rip_text_or_url: str, desc: VetRipDesc, guild: discord.
         # and QoC code is intentionally not dependent on discord
         if not is_unusual_metadata:
             rips = []
-            channels_and_errors = await get_channels_of_types(['QUEUE', 'QOC'], [])
+            channels_and_errors = await get_channels_of_types(['QUEUE', 'QOC', 'INACTIVE_QUEUE'], [])
             error_strings.extend(channels_and_errors.error_strings)
             for channel in channels_and_errors.channels:
                 rips_and_errors = await get_rips_fast(channel, GetRipsDesc())
