@@ -407,7 +407,8 @@ def channel_is_type(channel: TextChannel | Thread, type: str) -> bool:
 async def get_qoc_channel(channel: TextChannel | Thread) -> ChannelAndErrors:
     if channel_is_types(channel, ['PROXY_QOC']):
         if type(channel) is Thread:
-            return ChannelAndErrors(channel.parent, [])
+            # threads are proxies of their parent channel, even if the parent is a proxy
+            return await get_qoc_channel(channel.parent)
         else:
             # TODO: this could be changed so that a proxy channel also contains the ID of the channel is proxies from.
             # however that will need a rewrite of the config structure kinda
