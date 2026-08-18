@@ -28,7 +28,7 @@
         {
             "name": "Queues",
             "id": -1,
-            "type": "QUEUE",
+            "type": "QUEUE"
         }
     ],
     "log_channel": -1

@@ -236,26 +236,8 @@ def isDupe(desc1: str, desc2: str, desc2_is_main: bool = False) -> bool:
     if len(desc1) == 0 or len(desc2) == 0:
         return False
     
-    D1, _ = desc_to_dict(desc1, 1)
-    D2, _ = desc_to_dict(desc2, 1)
-
-    if len(D1) == 0 or len(D2) == 0:
-        # Desc has nothing, check dupe based on title only
-        # Remove all instances of "(<anything>)" from titles,
-        # then check if they are equal
-        title1 = desc1.splitlines()[0]
-        title2 = desc2.splitlines()[0]
-        return re.sub(r'\s*\(.*?\)\s*', ' ', title1).rstrip() == (title2 if desc2_is_main else re.sub(r'\s*\(.*?\)\s*', ' ', title2).rstrip())
-    else:
-        # Check dupe based on the 'Music' key
-        # Assuming all mixnames are "(<anything>)" added at the end of the track name,
-        # then rsplit by the last ( should yield the main mix track name
-        track1 = get_music_from_desc(D1)
-        track2 = get_music_from_desc(D2)
-        # trying to account for track names with parentheses
-        track1_base = track1.rsplit(' (', 1)[0]
-        track2_base = track2.rsplit(' (', 1)[0]
-        if desc2_is_main:
-            return track1_base == track2
-        return track1_base == track2_base or track1_base == track2
-
+    # Remove all instances of "(<anything>)" from titles,
+    # then check if they are equal
+    title1 = desc1.splitlines()[0]
+    title2 = desc2.splitlines()[0]
+    return re.sub(r'\s*\(.*?\)\s*', ' ', title1).rstrip() == (title2 if desc2_is_main else re.sub(r'\s*\(.*?\)\s*', ' ', title2).rstrip())

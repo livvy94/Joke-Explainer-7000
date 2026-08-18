@@ -151,7 +151,7 @@ async def discord_get_text_channels_in_category(category_id) -> ChannelsAndError
 async def get_log_channel() -> TextChannel | Thread | None:
     channel_and_errors = await discord_find_channel(get_log_channel_id())
     if len(channel_and_errors.error_strings):
-        print(f"ERROR: Cound not post to log channel, channel not found. {"\n".join(channel_and_errors.error_strings)}")
+        print("ERROR: Cound not post to log channel, channel not found." + "\n".join(channel_and_errors.error_strings))
     return channel_and_errors.channel
 
 async def write_log(msg: str = "Placeholder message"):
