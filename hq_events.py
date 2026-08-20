@@ -211,7 +211,23 @@ async def on_guild_channel_pins_update(channel: typing.Union[GuildChannel, Threa
                     else:
 
                         if new_count > SOFT_PIN_LIMIT:
-                            await send(f":warning: **Warning: {new_count}/{SOFT_PIN_LIMIT}** rips pinned. Please handle other rips first :(", channel)
+                            msg = f":warning: **Warning: {new_count}/{SOFT_PIN_LIMIT}** rips pinned. Please handle other rips first :("
+                            special_msg_end = f"(**{new_count}/{SOFT_PIN_LIMIT}** rips pinned)" 
+                            if new_count >= SOFT_PIN_LIMIT * 1.5:
+                                msg = f":warning: **Warning: That's a lot of rips! {special_msg_end}**"
+                            if new_count >= SOFT_PIN_LIMIT * 2:
+                                msg = f"**Yum, I'm so full of rips {special_msg_end}**"
+                            if new_count >= SOFT_PIN_LIMIT * 2.5:
+                                msg = f"Good lord, what is happening in here? {special_msg_end}"
+                            if new_count >= SOFT_PIN_LIMIT * 3:
+                                msg = f"What have you done. {special_msg_end}"
+                            if new_count >= SOFT_PIN_LIMIT * 3.5:
+                                msg = f"Help me! {special_msg_end}"
+                            if new_count >= SOFT_PIN_LIMIT * 4:
+                                msg = f"Help. {special_msg_end}"
+                            if new_count >= SOFT_PIN_LIMIT * 4.5:
+                                msg = f"Help me. {special_msg_end}"
+                            await send(msg, channel)
                         elif new_count == SOFT_PIN_LIMIT:
                             if is_pinlimit_must_die:
                                 await send(f"-# Warning: **Pinlimit is reached!** Pinlimit must die is **on**, so if you pin another rip, *prepare to die!*\n-# Rip Count: {new_count}/{SOFT_PIN_LIMIT}", channel)
