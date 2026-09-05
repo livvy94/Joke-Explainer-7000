@@ -393,7 +393,7 @@ def channel_is_types(channel: TextChannel | Thread, types: list[str]) -> bool:
     else:
         if hasattr(channel, "parent") and isinstance(channel.parent, TextChannel):
             result = channel_is_types(channel.parent, types)
-        elif isinstance(channel.category, CategoryChannel):
+        elif hasattr(channel, "category") and isinstance(channel.category, CategoryChannel):
             category_config = get_category_config(channel.category.id)
             if category_config.type in types: 
                 result = True
