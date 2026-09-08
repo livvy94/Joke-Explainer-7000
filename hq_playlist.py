@@ -84,7 +84,7 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
 
     class TrackSheetEntry(NamedTuple):
         track_name: str
-        game_name_alt: str
+        game_name_alts_string: str
         track_name_alts_string: str
 
     class ManualInsertEntry(NamedTuple):
@@ -103,13 +103,13 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
         for row in batch_values_get_result.batches[0]:
             if len(row):
                 track_and_mixname = row[0] 
-                game_name_alt = "" 
+                game_name_alts_string = "" 
                 track_name_alts_string = "" 
                 if len(row) >= 2:
-                    game_name_alt = row[1]
+                    game_name_alts_string = row[1]
                 if len(row) >= 3:
                     track_name_alts_string = row[2]
-                track_sheet_entries.append(TrackSheetEntry(track_and_mixname, game_name_alt, track_name_alts_string))
+                track_sheet_entries.append(TrackSheetEntry(track_and_mixname, game_name_alts_string, track_name_alts_string))
 
         playlist_videos_to_sort: list[PlaylistVideo] = []
         playlist_videos_to_sort.extend(playlist_videos)
@@ -227,8 +227,10 @@ async def sort_playlist_videos(sheet_name: str, spreadsheet_tab_id: int, playlis
 
                 for track_sheet_entry in track_sheet_entries:
                     game_name = sheet_name
-                    if len(track_sheet_entry.game_name_alt):
-                        game_name = track_sheet_entry.game_name_alt
+                    if len(track_sheet_entry.game_name_alts_string):
+                        for game_name_alt in track_sheet_entry.game_name_alts_string.split("\n"):
+                            if playlist_video.title.endswith(f" - {game_name_alt}"):
+                                game_name = game_name_alt
                     game_name_string_with_dash = f" - {game_name}"
 
                     if playlist_video.title.endswith(game_name_string_with_dash):
