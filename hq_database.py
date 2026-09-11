@@ -289,15 +289,16 @@ class Reminder(NamedTuple):
     channel_id: int
     user_id: int
 
-async def add_reminder_to_database(reminder: Reminder):
+async def add_reminders_to_database(reminders: list[Reminder]):
     if JEDatabaseKey.REMINDER not in JE_DATABASE:
         JE_DATABASE[JEDatabaseKey.REMINDER] = {} 
 
     await JE_DATABASE_LOCK.acquire()
     try:
-        if reminder.channel_id not in JE_DATABASE[JEDatabaseKey.REMINDER]:
-            JE_DATABASE[JEDatabaseKey.REMINDER][reminder.channel_id] = []
-        JE_DATABASE[JEDatabaseKey.REMINDER][reminder.channel_id].append(reminder)
+        for reminder in reminders:
+            if reminder.channel_id not in JE_DATABASE[JEDatabaseKey.REMINDER]:
+                JE_DATABASE[JEDatabaseKey.REMINDER][reminder.channel_id] = []
+            JE_DATABASE[JEDatabaseKey.REMINDER][reminder.channel_id].append(reminder)
         JE_DATABASE.sync()
     finally:
         JE_DATABASE_LOCK.release()
