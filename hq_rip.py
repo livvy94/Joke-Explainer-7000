@@ -586,8 +586,8 @@ def format_rip(rip: Rip, durationString: str, guild: discord.Guild, make_smol: b
     if len(reacts):
         info_body += f'{reacts} '
 
-    utc = int(rip.created_at.replace(tzinfo=timezone.utc).timestamp())
-    info_body += f'{author} <t:{utc}:R>'
+    timestamp = datetime_to_relative_timestamp(rip.created_at)
+    info_body += f'{author} {timestamp}'
     if len(indicator) > 0:
         info_body += f' {indicator}'
 

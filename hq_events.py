@@ -74,12 +74,9 @@ async def post_reminders():
     for reminder in reminders_to_send:
         channel_and_errors = await discord_find_channel(reminder.channel_id)
         if channel_and_errors.channel:
-            user_string = "`[Unknown User]`"
-            user = bot.get_user(reminder.user_id)
-            if user:
-                user_string = user.global_name
-            utc = int(reminder.set_time.replace(tzinfo=timezone.utc).timestamp())
-            text = f'{reminder.text}\n-# Reminder by {user_string} set <t:{utc}:R>'
+            user_string = get_name_of_user(reminder.user_id) 
+            timestamp = datetime_to_relative_timestamp(reminder.set_time) 
+            text = f'{reminder.text}\n-# Reminder by {user_string} set {timestamp}'
             texts = split_long_message(text, 2000, True)
             for t in texts:
                 try:

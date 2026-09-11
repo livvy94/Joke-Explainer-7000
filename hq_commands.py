@@ -2525,12 +2525,36 @@ async def remind(args: list[str], command_context: CommandContext):
     textTruncated = truncate_string(textString, 40) 
     textTruncated = discord.utils.escape_mentions(textTruncated)
     textTruncated = textTruncated.replace(str(command_context.user.id), str(command_context.user.global_name))
-    utc = int(remind_time.replace(tzinfo=timezone.utc).timestamp())
-    return_message = f'Will send here <t:{utc}:R>: `{textTruncated}`'
+    timestamp = datetime_to_relative_timestamp(remind_time)
+    return_message = f'Will send here {timestamp}: `{textTruncated}`'
     try:
         await command_context.channel.send(return_message)
     except Exception as error:
         await log_exception(f"Failed to send message in {command_context.channel.jump_url}", error, [], True)
+
+@command(
+    command_type=CommandType.REMIND,
+    public=True,
+    desc="Shows set reminders for this channel"
+)
+async def reminders(args: list[str], command_context: CommandContext):
+
+    if (
+        command_context.channel.id not in JE_DATABASE[JEDatabaseKey.REMINDER]
+        or not len(JE_DATABASE[JEDatabaseKey.REMINDER][command_context.channel.id])
+    ):
+        prefix = get_config("prefix")
+        return await send(f"No reminders are set in this channel! Use {prefix} to set one.", command_context.channel)
+
+    desc = ""
+    for reminder in JE_DATABASE[JEDatabaseKey.REMINDER][command_context.channel.id]:
+        timestamp_remind = datetime_to_relative_timestamp(reminder.remind_time)
+        timestamp_set = datetime_to_relative_timestamp(reminder.set_time) 
+        message_truncated = truncate_string(reminder.text, 100)
+        user_string = get_name_of_user(reminder.user_id)
+        desc += f"\n\n{timestamp_remind}: {message_truncated}\n-# Reminder by {user_string} set {timestamp_set}"
+
+    await send_embed(desc, command_context.channel, EmbedDesc(title=f"Reminders for {command_context.channel.name}"))
 
 
 # While it might occur to folks in the future that a good command to write would be a rip feedback-sending command, something like that

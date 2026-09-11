@@ -461,6 +461,19 @@ async def get_default_config_channel_of_type(channel_type: str) -> ChannelAndErr
     return ChannelAndErrors(channel, error_strings)
 
 
+def datetime_to_relative_timestamp(time: datetime) -> str:
+    utc = int(time.replace(tzinfo=timezone.utc).timestamp())
+    return f'<t:{utc}:R>'
+
+
+def get_name_of_user(user_id: int) -> str:
+    result = "`[Unknown User]`"
+    user = bot.get_user(user_id)
+    if user:
+        result = str(user.global_name)
+    return result
+
+
 class ParseChannelLinkResult(NamedTuple):
     channel: TextChannel | Thread | None
     input_error: str
