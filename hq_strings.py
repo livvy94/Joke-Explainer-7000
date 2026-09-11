@@ -6,13 +6,9 @@ import re
 import string
 import unicodedata
 from difflib import SequenceMatcher
-import numpy 
 
-def split_long_message(a_message: str, character_limit) -> list[str]:  # avoid Discord's character limit
-    """
-    Split a long message to fit Discord's character limit.
-    Aug 6 2025: apparently embeds have a higher character limit?
-    """
+def split_long_message(a_message: str, character_limit: int, allow_pings = False) -> list[str]:  # avoid Discord's character limit
+
     result: List[str] = []
     #TODO: (Ahmayk) While unlikely, this could split things into a group that is bigger than 2000.
     #we're not accounting for that currently.
@@ -21,7 +17,8 @@ def split_long_message(a_message: str, character_limit) -> list[str]:  # avoid D
     is_in_regular_codeblock = False
     is_in_python_codeblock = False
     for i, line in enumerate(all_lines):
-        line = line.replace('@', '')  # no more pings lol
+        if not allow_pings:
+            line = line.replace('@', '')
 
         if "```py" in line:
             is_in_python_codeblock = True

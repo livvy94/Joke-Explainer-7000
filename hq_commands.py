@@ -2490,7 +2490,7 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
 @command(
     command_type=CommandType.REMIND,
     public=True,
-    format="[engish phrase of relative time] : [message]",
+    format="[engish time phrase] : [message]",
 )
 async def remind(args: list[str], command_context: CommandContext):
 
@@ -2503,17 +2503,32 @@ async def remind(args: list[str], command_context: CommandContext):
     inputSplit = input.split(':', 1)
     timeString = inputSplit[0].strip(" ")
     textString = inputSplit[1].strip(" ")
+
     remind_time = dateparser.parse(timeString, settings={'TIMEZONE': 'UTC', 'PREFER_DATES_FROM': 'future'})
     if remind_time is None:
         return await send(f'Intriguing. What time is **"{inputSplit[0]}"** supposed to be?', command_context.channel) 
+
+    if not len(textString):
+        return await send(f"Remind you of what now? Please put a message after the `:`", command_context.channel)
+
+    mention_ids = re.findall(r'@(everyone|here|[!&]?[0-9]{17,20})', textString)
+    for mention_id in mention_ids:
+        if mention_id != str(command_context.user.id):
+            return await send(f"You can only ping yourself with a reminder. If you want to ping others, someone must do it themselves after the reminder is sent.", command_context.channel)
 
     set_time = datetime.now(timezone.utc)
     reminder = Reminder(remind_time, set_time, textString, command_context.channel.id, command_context.user.id)
     await add_reminder_to_database(reminder)
     
     textTruncated = truncate_string(textString, 40) 
+    textTruncated = discord.utils.escape_mentions(textTruncated)
+    textTruncated = textTruncated.replace(str(command_context.user.id), str(command_context.user.global_name))
     utc = int(remind_time.replace(tzinfo=timezone.utc).timestamp())
-    return await send(f'Will post here <t:{utc}:R>: `{textTruncated}`', command_context.channel) 
+    return_message = f'Will send here <t:{utc}:R>: `{textTruncated}`'
+    try:
+        await command_context.channel.send(return_message)
+    except Exception as error:
+        await log_exception(f"Failed to send message in {command_context.channel.jump_url}", error, [], True)
 
 
 # While it might occur to folks in the future that a good command to write would be a rip feedback-sending command, something like that

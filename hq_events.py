@@ -64,7 +64,7 @@ async def cleanup_embeds_regularly():
 
 
 @tasks.loop(seconds=1)
-async def post_reminers():
+async def post_reminders():
     reminders_to_send = []
     for reminders_of_channel in JE_DATABASE[JEDatabaseKey.REMINDER].values():
         for reminder in reminders_of_channel:
@@ -80,7 +80,12 @@ async def post_reminers():
                 user_string = user.global_name
             utc = int(reminder.set_time.replace(tzinfo=timezone.utc).timestamp())
             text = f'{reminder.text}\n-# Reminder by {user_string} set <t:{utc}:R>'
-            await send(text, channel_and_errors.channel)
+            texts = split_long_message(text, 2000, True)
+            for t in texts:
+                try:
+                    await channel_and_errors.channel.send(t)
+                except Exception as error:
+                    await log_exception(f"Failed to send reminder in {channel_and_errors.channel.jump_url}", error, [])
 
     await remove_reminders(reminders_to_send)
 
@@ -97,7 +102,7 @@ async def on_ready():
     await write_log("Good morning! Connecting to Google Sheets API...")
 
     cleanup_embeds_regularly.start()
-    post_reminers.start()
+    post_reminders.start()
 
     #NOTE: (Ahmayk) fetch sheet data on init to initialize credentials info and make sure that works
     credentials_and_errors = await refresh_credentials()
