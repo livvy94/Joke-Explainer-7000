@@ -20,6 +20,7 @@ class JEDatabaseKey(StrEnum):
     RIP_LENGTH = "RIP_LENGTH" 
     SENT_EMBED_TO_EXPIRE = "SENT_EMBED_TO_EXPIRE" 
     PLAYLIST_VIDEOS = "PLAYLIST_VIDEOS"
+    REMINDER = "REMINDER"
 
 JE_DATABASE_LOCK = asyncio.Lock()
 THUMBNAIL_DATABASE_LOCK = asyncio.Lock()
@@ -280,3 +281,33 @@ async def cleanup_expired_playlist_video_cache():
     finally:
         PLAYLIST_VIDEO_CACHE_LOCK.release()
     
+
+class Reminder(NamedTuple):
+    remind_time: datetime
+    set_time: datetime
+    text: str
+    channel_id: int
+    user_id: int
+
+async def add_reminder_to_database(reminder: Reminder):
+    if JEDatabaseKey.REMINDER not in JE_DATABASE:
+        JE_DATABASE[JEDatabaseKey.REMINDER] = {} 
+
+    await JE_DATABASE_LOCK.acquire()
+    try:
+        if reminder.channel_id not in JE_DATABASE[JEDatabaseKey.REMINDER]:
+            JE_DATABASE[JEDatabaseKey.REMINDER][reminder.channel_id] = []
+        JE_DATABASE[JEDatabaseKey.REMINDER][reminder.channel_id].append(reminder)
+        JE_DATABASE.sync()
+    finally:
+        JE_DATABASE_LOCK.release()
+    
+async def remove_reminders(reminders: list[Reminder]):
+    if len(reminders):
+        await JE_DATABASE_LOCK.acquire()
+        try:
+            for reminder in reminders:
+                JE_DATABASE[JEDatabaseKey.REMINDER][reminder.channel_id].remove(reminder)
+            JE_DATABASE.sync()
+        finally:
+            JE_DATABASE_LOCK.release()

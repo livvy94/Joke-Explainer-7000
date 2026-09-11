@@ -28,6 +28,7 @@ from enum import Enum, auto
 import json
 import os
 import random
+import dateparser
 
 class CommandType(Enum):
     NULL = auto()
@@ -39,6 +40,7 @@ class CommandType(Enum):
     SOURCE = auto()
     UPLOAD_MISTAKES = auto()
     PLAYLIST = auto()
+    REMIND = auto()
     SECRET = auto()
     MANAGEMENT = auto()
 
@@ -54,6 +56,7 @@ COMMAND_TYPE_DATA[CommandType.ANALYZE] = CommandTypeData('analyze rip metadata o
 COMMAND_TYPE_DATA[CommandType.SOURCE] = CommandTypeData('search for rip sources from online VGM databases')
 COMMAND_TYPE_DATA[CommandType.UPLOAD_MISTAKES] = CommandTypeData('commands related to reported upload mistakes')
 COMMAND_TYPE_DATA[CommandType.PLAYLIST] = CommandTypeData('assists with sorting YouTube playlists')
+COMMAND_TYPE_DATA[CommandType.REMIND] = CommandTypeData('for scheduling reminders')
 COMMAND_TYPE_DATA[CommandType.MANAGEMENT] = CommandTypeData('manage or learn about the bot')
 
 class CommandContext(NamedTuple):
@@ -2484,6 +2487,35 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
     await start_interactive_playlist_gen(input_link, command_context.channel)
 
 
+@command(
+    command_type=CommandType.REMIND,
+    public=True,
+    format="[engish phrase of relative time] : [message]",
+)
+async def remind(args: list[str], command_context: CommandContext):
+
+    input = " ".join(args)
+
+    if ":" not in input:
+        prefix = get_config("prefix")
+        return await send(f"ERROR: Missing the `:` symbol. Insert an english phrase of a relative time (5 hours, sunday, tomorrow, April 1st), the `:` character, and a message. I'll post that message verbatim at that time in this channel. Example: `{prefix}remind 72 hours: qoc stingy's rip`", command_context.channel)
+
+    inputSplit = input.split(':', 1)
+    timeString = inputSplit[0].strip(" ")
+    textString = inputSplit[1].strip(" ")
+    remind_time = dateparser.parse(timeString, settings={'TIMEZONE': 'UTC', 'PREFER_DATES_FROM': 'future'})
+    if remind_time is None:
+        return await send(f'Intriguing. What time is **"{inputSplit[0]}"** supposed to be?', command_context.channel) 
+
+    set_time = datetime.now(timezone.utc)
+    reminder = Reminder(remind_time, set_time, textString, command_context.channel.id, command_context.user.id)
+    await add_reminder_to_database(reminder)
+    
+    textTruncated = truncate_string(textString, 40) 
+    utc = int(remind_time.replace(tzinfo=timezone.utc).timestamp())
+    return await send(f'Will post here <t:{utc}:R>: `{textTruncated}`', command_context.channel) 
+
+
 # While it might occur to folks in the future that a good command to write would be a rip feedback-sending command, something like that
 # would be way too impersonal imo.
 # NOTE: (Ahmayk) yeah no this should never happen
@@ -2517,6 +2549,7 @@ async def shutdown(args: list[str], command_context: CommandContext):
             await bot.close()
         else:
             await send("Incorrect password, please run the command again.", command_context.channel)
+
 
 @command(
     command_type=CommandType.SECRET,

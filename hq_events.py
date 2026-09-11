@@ -4,6 +4,7 @@ from discord import Message, Thread, TextChannel
 from discord.abc import GuildChannel
 from discord.ext import commands, tasks
 from datetime import datetime, timezone, timedelta, time
+import pytz
 
 import typing
 from typing import List
@@ -61,6 +62,30 @@ async def cleanup_embeds_regularly():
     except Exception as error:
         await send_crash(f'ERROR on scheduled embed cleanup', error, None)
 
+
+@tasks.loop(seconds=1)
+async def post_reminers():
+    reminders_to_send = []
+    for reminders_of_channel in JE_DATABASE[JEDatabaseKey.REMINDER].values():
+        for reminder in reminders_of_channel:
+            if datetime.now(timezone.utc) >= pytz.UTC.localize(reminder.remind_time):
+                reminders_to_send.append(reminder)
+
+    for reminder in reminders_to_send:
+        channel_and_errors = await discord_find_channel(reminder.channel_id)
+        if channel_and_errors.channel:
+            user_string = "`[Unknown User]`"
+            user = bot.get_user(reminder.user_id)
+            if user:
+                user_string = user.global_name
+            utc = int(reminder.set_time.replace(tzinfo=timezone.utc).timestamp())
+            text = f'{reminder.text}\n-# Reminder by {user_string} set <t:{utc}:R>'
+            await send(text, channel_and_errors.channel)
+
+    await remove_reminders(reminders_to_send)
+
+
+
 @bot.event
 async def on_ready():
     # this should ensure a check for config.json on start up. if the file doesnt exist, the bot should close with error.
@@ -72,6 +97,7 @@ async def on_ready():
     await write_log("Good morning! Connecting to Google Sheets API...")
 
     cleanup_embeds_regularly.start()
+    post_reminers.start()
 
     #NOTE: (Ahmayk) fetch sheet data on init to initialize credentials info and make sure that works
     credentials_and_errors = await refresh_credentials()

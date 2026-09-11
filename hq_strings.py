@@ -221,6 +221,11 @@ def emoji_to_react_name_if_emoji(s: str) -> str:
     return react_input
 
 
+def truncate_string(text: str, length: int) -> str:
+    result = text 
+    if len(text) > length:
+        result = text[:length] + "..."
+    return result
 
 class ParsedSearchInput(NamedTuple):
     search_keys: List[str]
