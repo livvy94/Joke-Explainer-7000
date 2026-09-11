@@ -48,6 +48,7 @@ class EmbedDesc(NamedTuple):
     title: str = ""
     footer: str = ""
     seperator: str = "\n"
+    external_pre_text: str = ""
 
 async def send_embed(text: str, channel: TextChannel | Thread, desc: EmbedDesc):
 
@@ -137,7 +138,7 @@ async def send_embed(text: str, channel: TextChannel | Thread, desc: EmbedDesc):
     sent_message_ids = []
     for embed_group in embed_groups:
         try:
-            message = await channel.send(embeds=embed_group)
+            message = await channel.send(content=desc.external_pre_text, embeds=embed_group)
             sent_message_ids.append(message.id)
         except Exception as error:
             error_strings: list[str] = []

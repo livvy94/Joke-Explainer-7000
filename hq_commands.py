@@ -2532,10 +2532,25 @@ async def remind(args: list[str], command_context: CommandContext):
     except Exception as error:
         await log_exception(f"Failed to send message in {command_context.channel.jump_url}", error, [], True)
 
+
+def format_reminders(reminders: list[Reminder], include_numbers: bool) -> str:
+    result = ""
+    for i, reminder in enumerate(reminders): 
+        timestamp_remind = datetime_to_relative_timestamp(reminder.remind_time)
+        timestamp_set = datetime_to_relative_timestamp(reminder.set_time) 
+        message_truncated = truncate_string(reminder.text, 100)
+        user_string = get_name_of_user(reminder.user_id)
+        digit = ""
+        if include_numbers:
+            digit = f'**{str(i + 1)}.** ' 
+        result += f"\n\n{digit}{timestamp_remind}: {message_truncated}\n-# Reminder by {user_string} set {timestamp_set}"
+    return result
+
+
 @command(
     command_type=CommandType.REMIND,
     public=True,
-    desc="Shows set reminders for this channel"
+    brief="Shows set reminders for this channel"
 )
 async def reminders(args: list[str], command_context: CommandContext):
 
@@ -2546,15 +2561,84 @@ async def reminders(args: list[str], command_context: CommandContext):
         prefix = get_config("prefix")
         return await send(f"No reminders are set in this channel! Use {prefix} to set one.", command_context.channel)
 
-    desc = ""
-    for reminder in JE_DATABASE[JEDatabaseKey.REMINDER][command_context.channel.id]:
-        timestamp_remind = datetime_to_relative_timestamp(reminder.remind_time)
-        timestamp_set = datetime_to_relative_timestamp(reminder.set_time) 
-        message_truncated = truncate_string(reminder.text, 100)
-        user_string = get_name_of_user(reminder.user_id)
-        desc += f"\n\n{timestamp_remind}: {message_truncated}\n-# Reminder by {user_string} set {timestamp_set}"
-
+    desc = format_reminders(JE_DATABASE[JEDatabaseKey.REMINDER][command_context.channel.id], False)
     await send_embed(desc, command_context.channel, EmbedDesc(title=f"Reminders for {command_context.channel.name}"))
+
+
+@command(
+    command_type=CommandType.REMIND,
+    public=True,
+    brief="Stops a reminder for this channel",
+    aliases=["stopreminder", "reminder_stop", "reminerstop"]
+)
+async def stop_reminder(args: list[str], command_context: CommandContext):
+
+    if (
+        command_context.channel.id not in JE_DATABASE[JEDatabaseKey.REMINDER]
+        or not len(JE_DATABASE[JEDatabaseKey.REMINDER][command_context.channel.id])
+    ):
+        prefix = get_config("prefix")
+        return await send(f"No reminders are set in this channel! Use {prefix} to set one.", command_context.channel)
+
+    reminders = JE_DATABASE[JEDatabaseKey.REMINDER][command_context.channel.id]
+    desc = format_reminders(reminders, True)
+
+    await send_embed(desc, command_context.channel, EmbedDesc(title=f":octagonal_sign: Choose a Reminder to Stop"))
+
+    valid_number_string = "1"
+    if len(reminders) > 1:
+        valid_number_string = f"1 - {len(reminders)}"
+
+    is_valid_input = False
+    instructions = f'Please enter the number(s) ({valid_number_string}) of a reminder to stop. Type `n` to cancel.'
+    prompt = instructions
+    selections: list[int] = [] 
+    while not is_valid_input:
+
+        await send(prompt, command_context.channel)
+
+        def check(message):
+            return message.author.id == command_context.user.id 
+
+        message = await bot.wait_for('message', check=check)
+
+        if message.content == 'n':
+            break
+
+        inputs = message.content.split(" ")
+
+        selections = []
+        input_errors = ""
+        for input in inputs:
+            if message.content.isdigit():
+                input_number = int(input)
+                if input_number < 1:
+                    input_errors += f'\n- {input_number}? Very funny. No.'
+                elif input_number > len(reminders):
+                    input_errors += f'\n- {input_number} is not in the list.'
+                else:
+                    selections.append(input_number)
+            else:
+                input_errors += f'\n- `{input}` isn\'t a number.'
+
+        if not len(input_errors):
+            is_valid_input = True
+        else:
+            prompt = f"{input_errors}\n{instructions}"
+
+    if not len(selections):
+        return await send(":thumbsup: Stopping stopped", command_context.channel)
+
+    reminders_to_remove = [] 
+    for selection in selections:
+        reminders_to_remove.append(reminders[selection])
+
+    await remove_reminders(reminders_to_remove)
+
+    desc = format_reminders(reminders_to_remove, False)
+
+    await send_embed(desc, command_context.channel, EmbedDesc(external_pre_text=f'Removed {len(reminders_to_remove)} reminders'))
+
 
 
 # While it might occur to folks in the future that a good command to write would be a rip feedback-sending command, something like that
