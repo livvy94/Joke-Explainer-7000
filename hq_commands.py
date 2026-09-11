@@ -2490,26 +2490,28 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
 @command(
     command_type=CommandType.REMIND,
     public=True,
-    format="[engish time phrase] : [message]",
+    format="[engish time phrase] '/' [message]",
 )
 async def remind(args: list[str], command_context: CommandContext):
 
     input = " ".join(args)
 
-    if ":" not in input:
+    if "/" not in input:
         prefix = get_config("prefix")
-        return await send(f"ERROR: Missing the `:` symbol. Insert an english phrase of a relative time (5 hours, sunday, tomorrow, April 1st), the `:` character, and a message. I'll post that message verbatim at that time in this channel. Example: `{prefix}remind 72 hours: qoc stingy's rip`", command_context.channel)
+        return await send(f"ERROR: Missing the `/` symbol. Send an english phrase of a time (5 hours, sunday, tomorrow, April 1st), the `/` character, and a message for me to send. I'll post the message in this channel verbatim at that time.\n-# Example: `{prefix}remind 72 hours / qoc stingy's rip`", command_context.channel)
 
-    inputSplit = input.split(':', 1)
+    inputSplit = input.split('/', 1)
     timeString = inputSplit[0].strip(" ")
     textString = inputSplit[1].strip(" ")
 
-    remind_time = dateparser.parse(timeString, settings={'TIMEZONE': 'UTC', 'PREFER_DATES_FROM': 'future'})
+    remind_time = dateparser.parse(timeString, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True, 'PREFER_DATES_FROM': 'future'})
     if remind_time is None:
         return await send(f'Intriguing. What time is **"{inputSplit[0]}"** supposed to be?', command_context.channel) 
 
+    remind_time = remind_time.astimezone(timezone.utc)
+
     if not len(textString):
-        return await send(f"Remind you of what now? Please put a message after the `:`", command_context.channel)
+        return await send(f"Remind you of what now? Please put a message after the `/`", command_context.channel)
 
     mention_ids = re.findall(r'@(everyone|here|[!&]?[0-9]{17,20})', textString)
     for mention_id in mention_ids:

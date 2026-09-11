@@ -68,7 +68,7 @@ async def post_reminders():
     reminders_to_send = []
     for reminders_of_channel in JE_DATABASE[JEDatabaseKey.REMINDER].values():
         for reminder in reminders_of_channel:
-            if datetime.now(timezone.utc) >= pytz.UTC.localize(reminder.remind_time):
+            if datetime.now(timezone.utc) >= reminder.remind_time:
                 reminders_to_send.append(reminder)
 
     for reminder in reminders_to_send:
