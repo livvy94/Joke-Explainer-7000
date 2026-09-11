@@ -10,3 +10,4 @@ google-auth-httplib2==0.2.0
 google-auth-oauthlib==1.2.2
 googleapis-common-protos==1.70.0
 curl-cffi==0.15.0
+dateparser==1.4.3
