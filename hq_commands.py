@@ -2588,7 +2588,7 @@ async def process_reminder_input(args: list[str], is_countdown: bool, command_co
     public=True,
     format="[engish time phrases seperated by commas] '/' [message]",
     brief="Schedules one or multiple reminders in that channel",
-    aliases=['reminder']
+    aliases=['reminder', "remind_je"]
 )
 async def remind(args: list[str], command_context: CommandContext):
     await process_reminder_input(args, False, command_context)
@@ -2598,7 +2598,7 @@ async def remind(args: list[str], command_context: CommandContext):
     command_type=CommandType.REMIND,
     public=True,
     format="[engish time phrase] '/' [message]",
-    brief="Schedules an increacingly frequent reminder in that channel",
+    brief="Schedules an increasingly frequent reminder in that channel",
 )
 async def countdown(args: list[str], command_context: CommandContext):
     await process_reminder_input(args, True, command_context)

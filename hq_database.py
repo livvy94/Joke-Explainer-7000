@@ -292,9 +292,6 @@ class Reminder(NamedTuple):
     next_countdown_delta: timedelta | None
 
 REMINDER_COUNTDOWN_LIST = [
-    timedelta(seconds=1),
-    timedelta(seconds=2),
-    timedelta(seconds=3),
     timedelta(hours=1),
     timedelta(hours=12),
     timedelta(hours=24),
