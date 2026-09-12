@@ -2487,6 +2487,57 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
     await start_interactive_playlist_gen(input_link, command_context.channel)
 
 
+class ReminderAndInputErrors(NamedTuple):
+    reminders: list[Reminder]
+    input_errors: list[str]
+
+def parse_reminder_input(args: list[str], user_id: int, channel_id: int) -> ReminderAndInputErrors:
+
+    reminders: list[Reminder] = []
+    input_errors: list[str] = []
+
+    input = " ".join(args)
+
+    if "/" not in input:
+        prefix = get_config("prefix")
+        input_errors.append(f"ERROR: Missing the `/` symbol. Send an english phrase of a time (5 hours, sunday, tomorrow, April 1st), the `/` character, and a message for me to send. I'll post that message in this channel verbatim at that time.\n-# Example: `{prefix}remind 72 hours / qoc stingy's rip`")
+
+    input_split = [] 
+    time_strings = []
+    text_string = "" 
+    if not len(input_errors):
+        input_split = input.split('/', 1)
+        time_strings = input_split[0].split(',')
+        text_string = input_split[1].strip(" ")
+
+        if not len(text_string):
+            input_errors.append(f"Remind you of what now? Please put a message after the `/`")
+
+        if not len(time_strings):
+            input_errors.append(f"Gotta give a time")
+
+        mention_ids = re.findall(r'@(everyone|here|[!&]?[0-9]{17,20})', text_string)
+        for mention_id in mention_ids:
+            if mention_id != str(user_id):
+                input_errors.append(f"You can only ping yourself with a reminder. If you want to ping others, someone must do it themselves after the reminder is sent.")
+
+    set_time = datetime.now(timezone.utc)
+
+    remind_times = []
+    if not len(input_errors):
+        for timeString in time_strings:
+            remind_time = dateparser.parse(timeString, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True, 'PREFER_DATES_FROM': 'future'})
+            if remind_time is None:
+                input_errors.append(f'Intriguing. What time is **"{input_split[0]}"** supposed to be?') 
+            else:
+                remind_times.append(remind_time)
+
+    for remind_time in remind_times:
+        reminders.append(Reminder(remind_time, set_time, text_string, channel_id, user_id, None))
+
+    return ReminderAndInputErrors(reminders, input_errors)
+
+
 @command(
     command_type=CommandType.REMIND,
     public=True,
@@ -2496,40 +2547,14 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
 )
 async def remind(args: list[str], command_context: CommandContext):
 
-    input = " ".join(args)
+    reminders_and_input_errors = parse_reminder_input(args, command_context.user.id, command_context.channel.id)
+    if len(reminders_and_input_errors.input_errors):
+        return await send_list_of_input_errors(reminders_and_input_errors.input_errors, command_context.channel)
+    reminders = reminders_and_input_errors.reminders
 
-    if "/" not in input:
-        prefix = get_config("prefix")
-        return await send(f"ERROR: Missing the `/` symbol. Send an english phrase of a time (5 hours, sunday, tomorrow, April 1st), the `/` character, and a message for me to send. I'll post the message in this channel verbatim at that time.\n-# Example: `{prefix}remind 72 hours / qoc stingy's rip`", command_context.channel)
-
-    input_split = input.split('/', 1)
-    time_strings = input_split[0].split(',')
-    text_string = input_split[1].strip(" ")
-
-    if not len(text_string):
-        return await send(f"Remind you of what now? Please put a message after the `/`", command_context.channel)
-
-    if not len(time_strings):
-        return await send(f"Gotta give a time", command_context.channel)
-
-    mention_ids = re.findall(r'@(everyone|here|[!&]?[0-9]{17,20})', text_string)
-    for mention_id in mention_ids:
-        if mention_id != str(command_context.user.id):
-            return await send(f"You can only ping yourself with a reminder. If you want to ping others, someone must do it themselves after the reminder is sent.", command_context.channel)
-
-    text_truncated = truncate_string(text_string, 40) 
+    text_truncated = truncate_string(reminders[0].text, 40) 
     text_truncated = discord.utils.escape_mentions(text_truncated)
     text_truncated = text_truncated.replace(str(command_context.user.id), str(command_context.user.global_name))
-
-    set_time = datetime.now(timezone.utc)
-
-    reminders: list[Reminder] = []
-    for timeString in time_strings:
-        remind_time = dateparser.parse(timeString, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True, 'PREFER_DATES_FROM': 'future'})
-        if remind_time is None:
-            return await send(f'Intriguing. What time is **"{input_split[0]}"** supposed to be?', command_context.channel) 
-        remind_time = remind_time.astimezone(timezone.utc)
-        reminders.append(Reminder(remind_time, set_time, text_string, command_context.channel.id, command_context.user.id))
 
     await add_reminders_to_database(reminders)
     

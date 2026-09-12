@@ -114,6 +114,12 @@ async def send_and_if_errors(txt: str, if_errors_txt: str, error_strings: List[s
     if len(txt) or len(error_text):
         await send(f'{txt}\n{error_text}', channel, delete_after)
 
+async def send_list_of_input_errors(input_errors: list[str], channel: TextChannel | Thread):
+    if len(input_errors) == 1:
+        await send(input_errors[0], channel)
+    elif len(input_errors):
+        list = "- " + "\n -".join(input_errors)
+        await send(list, channel)
 
 async def discord_find_channel(channel_id: int) -> ChannelAndErrors:
     channel = bot.get_channel(channel_id)
