@@ -2487,11 +2487,7 @@ async def playlistsheet(args: list[str], command_context: CommandContext):
     await start_interactive_playlist_gen(input_link, command_context.channel)
 
 
-class ReminderAndInputErrors(NamedTuple):
-    reminders: list[Reminder]
-    input_errors: list[str]
-
-def parse_reminder_input(args: list[str], user_id: int, channel_id: int) -> ReminderAndInputErrors:
+async def process_reminder_input(args: list[str], is_countdown: bool, command_context: CommandContext):
 
     reminders: list[Reminder] = []
     input_errors: list[str] = []
@@ -2510,6 +2506,9 @@ def parse_reminder_input(args: list[str], user_id: int, channel_id: int) -> Remi
         time_strings = input_split[0].split(',')
         text_string = input_split[1].strip(" ")
 
+        if is_countdown and len(time_strings) > 1:
+            input_errors.append(f"You can only input one time for a countdown reminder, not {len(time_strings)}")
+
         if not len(text_string):
             input_errors.append(f"Remind you of what now? Please put a message after the `/`")
 
@@ -2518,7 +2517,7 @@ def parse_reminder_input(args: list[str], user_id: int, channel_id: int) -> Remi
 
         mention_ids = re.findall(r'@(everyone|here|[!&]?[0-9]{17,20})', text_string)
         for mention_id in mention_ids:
-            if mention_id != str(user_id):
+            if mention_id != str(command_context.user.id):
                 input_errors.append(f"You can only ping yourself with a reminder. If you want to ping others, someone must do it themselves after the reminder is sent.")
 
     set_time = datetime.now(timezone.utc)
@@ -2528,14 +2527,60 @@ def parse_reminder_input(args: list[str], user_id: int, channel_id: int) -> Remi
         for timeString in time_strings:
             remind_time = dateparser.parse(timeString, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True, 'PREFER_DATES_FROM': 'future'})
             if remind_time is None:
-                input_errors.append(f'Intriguing. What time is **"{input_split[0]}"** supposed to be?') 
+                input_errors.append(f'Intriguing. What time is **"{input_split[0].strip(" ")}"** supposed to be?') 
             else:
                 remind_times.append(remind_time)
 
-    for remind_time in remind_times:
-        reminders.append(Reminder(remind_time, set_time, text_string, channel_id, user_id, None))
+    if len(input_errors):
+        return await send_list_of_input_errors(input_errors, command_context.channel)
 
-    return ReminderAndInputErrors(reminders, input_errors)
+    for remind_time in remind_times:
+
+        next_countdown_delta = None
+        if is_countdown:
+            set_delta = (remind_time - set_time) - (REMINDER_COUNTDOWN_LIST[0] * 0.5)
+            for i in range(len(REMINDER_COUNTDOWN_LIST) - 1, -1, -1):
+                if set_delta > REMINDER_COUNTDOWN_LIST[i]:
+                    next_countdown_delta = REMINDER_COUNTDOWN_LIST[i]
+                    break
+
+        reminders.append(Reminder(remind_time, set_time, text_string, command_context.channel.id, command_context.user.id, is_countdown, next_countdown_delta))
+
+    await add_reminders_to_database(reminders)
+
+    text_truncated = truncate_string(reminders[0].text, 40) 
+    text_truncated = discord.utils.escape_mentions(text_truncated)
+    text_truncated = text_truncated.replace(str(command_context.user.id), str(command_context.user.global_name))
+    
+    timestamp_remind = "" 
+    for i, reminder in enumerate(reminders): 
+        timestamp_remind += datetime_to_relative_timestamp(reminder.remind_time)
+        if i is not len(reminders) - 1:
+            timestamp_remind += ', '
+
+    return_message = f'Will send here {timestamp_remind}: `{text_truncated}`'
+    if is_countdown:
+        if reminders[0].next_countdown_delta:
+            countdown_timestamps_string = ""
+            countdown_index = 0
+            for i, delta in enumerate(REMINDER_COUNTDOWN_LIST):
+                if delta is reminders[0].next_countdown_delta:
+                    countdown_index = i 
+                    break
+            for i in range(countdown_index, -1, -1):
+                mid_time = reminders[0].remind_time - REMINDER_COUNTDOWN_LIST[i]
+                countdown_timestamps_string += datetime_to_relative_timestamp(mid_time)
+                countdown_timestamps_string += ', ' 
+            countdown_timestamps_string += timestamp_remind
+            return_message = f'Countdown started. The countdown ends {timestamp_remind}, sending here each time: `{text_truncated}`\n-# Reminders will be sent: {countdown_timestamps_string}'
+        else:
+            ##TODO: (Ahmayk) programatically determine minimum. Or just remember to change this text if it changes lol
+            return_message = f'Countdown started. But the given time is too soon countdown (Minimum is 1 hour). No reminders will be given other than at the final time {timestamp_remind}, sending here each time: `{text_truncated}`'
+
+    try:
+        await command_context.channel.send(return_message)
+    except Exception as error:
+        await log_exception(f"Failed to send message in {command_context.channel.jump_url}", error, [], True)
 
 
 @command(
@@ -2546,31 +2591,17 @@ def parse_reminder_input(args: list[str], user_id: int, channel_id: int) -> Remi
     aliases=['reminder']
 )
 async def remind(args: list[str], command_context: CommandContext):
+    await process_reminder_input(args, False, command_context)
 
-    reminders_and_input_errors = parse_reminder_input(args, command_context.user.id, command_context.channel.id)
-    if len(reminders_and_input_errors.input_errors):
-        return await send_list_of_input_errors(reminders_and_input_errors.input_errors, command_context.channel)
-    reminders = reminders_and_input_errors.reminders
 
-    text_truncated = truncate_string(reminders[0].text, 40) 
-    text_truncated = discord.utils.escape_mentions(text_truncated)
-    text_truncated = text_truncated.replace(str(command_context.user.id), str(command_context.user.global_name))
-
-    await add_reminders_to_database(reminders)
-    
-    time_return = "" 
-    for i, reminder in enumerate(reminders): 
-        timestamp = datetime_to_relative_timestamp(reminder.remind_time)
-        time_return += timestamp
-        if i is not len(reminders) - 1:
-            time_return += ', '
-
-    return_message = f'Will send here {time_return}: `{text_truncated}`'
-
-    try:
-        await command_context.channel.send(return_message)
-    except Exception as error:
-        await log_exception(f"Failed to send message in {command_context.channel.jump_url}", error, [], True)
+@command(
+    command_type=CommandType.REMIND,
+    public=True,
+    format="[engish time phrase] '/' [message]",
+    brief="Schedules an increacingly frequent reminder in that channel",
+)
+async def countdown(args: list[str], command_context: CommandContext):
+    await process_reminder_input(args, True, command_context)
 
 
 def format_reminders(reminders: list[Reminder], include_numbers: bool) -> str:
@@ -2610,7 +2641,7 @@ async def reminders(args: list[str], command_context: CommandContext):
     public=True,
     format="(insert number after prompt)",
     brief="Stops a reminder for this channel",
-    aliases=["stopreminder", "reminder_stop", "reminerstop"]
+    aliases=["stop_reminders", "stopreminder", "stopreminders" "reminder_stop", "reminderstop", "remindersstop"]
 )
 async def stop_reminder(args: list[str], command_context: CommandContext):
 
@@ -2636,6 +2667,8 @@ async def stop_reminder(args: list[str], command_context: CommandContext):
     selections: list[int] = [] 
     while not is_valid_input:
 
+        selections = []
+
         await send(prompt, command_context.channel)
 
         def check(message):
@@ -2646,12 +2679,11 @@ async def stop_reminder(args: list[str], command_context: CommandContext):
         if message.content == 'n':
             break
 
-        inputs = message.content.split(" ")
+        inputs = message.content.replace(",", " ").split()
 
-        selections = []
         input_errors = ""
         for input in inputs:
-            if message.content.isdigit():
+            if input.isdigit():
                 input_number = int(input)
                 if input_number < 1:
                     input_errors += f'\n- {input_number}? Very funny. No.'
@@ -2672,7 +2704,7 @@ async def stop_reminder(args: list[str], command_context: CommandContext):
 
     reminders_to_remove = [] 
     for selection in selections:
-        reminders_to_remove.append(reminders[selection])
+        reminders_to_remove.append(reminders[selection - 1])
 
     await remove_reminders(reminders_to_remove)
 

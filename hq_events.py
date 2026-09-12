@@ -64,28 +64,66 @@ async def cleanup_embeds_regularly():
 
 
 @tasks.loop(seconds=1)
-async def post_reminders():
-    reminders_to_send = []
-    for reminders_of_channel in JE_DATABASE[JEDatabaseKey.REMINDER].values():
-        for reminder in reminders_of_channel:
-            if datetime.now(timezone.utc) >= reminder.remind_time:
-                reminders_to_send.append(reminder)
+async def post_reminders() -> None:
 
-    for reminder in reminders_to_send:
-        channel_and_errors = await discord_find_channel(reminder.channel_id)
-        if channel_and_errors.channel:
-            user_string = get_name_of_user(reminder.user_id) 
-            timestamp = datetime_to_relative_timestamp(reminder.set_time) 
-            text = f'{reminder.text}\n-# Reminder by {user_string} set {timestamp}'
-            texts = split_long_message(text, 2000, True)
-            for t in texts:
-                try:
-                    await channel_and_errors.channel.send(t)
-                except Exception as error:
-                    await log_exception(f"Failed to send reminder in {channel_and_errors.channel.jump_url}", error, [])
+    try:
+        now = datetime.now(timezone.utc)
+        reminders_to_send: list[Reminder] = []
+        for reminders_of_channel in JE_DATABASE[JEDatabaseKey.REMINDER].values():
+            for reminder in reminders_of_channel:
+                if now >= reminder.remind_time:
+                    reminders_to_send.append(reminder)
+                elif (
+                    reminder.next_countdown_delta is not None
+                    and now >= reminder.remind_time - reminder.next_countdown_delta
+                ):
+                    reminders_to_send.append(reminder)
 
-    await remove_reminders(reminders_to_send)
+        new_countdowns: list[Reminder] = []
+        for reminder in reminders_to_send:
+            channel_and_errors = await discord_find_channel(reminder.channel_id)
+            if channel_and_errors.channel:
+                user_string = get_name_of_user(reminder.user_id) 
+                set_timestamp = datetime_to_relative_timestamp(reminder.set_time) 
 
+                subject_string = "Reminder"
+                if reminder.is_countdown:
+                    subject_string = "Countdown reminder"
+
+                text = f'{reminder.text}\n-# {subject_string} by {user_string} set {set_timestamp}'
+                if reminder.is_countdown:
+                    new_delta = None
+                    if now < reminder.remind_time: 
+                        set_delta = reminder.remind_time - now
+                        for i in range(len(REMINDER_COUNTDOWN_LIST) - 1, -1, -1):
+                            if set_delta > REMINDER_COUNTDOWN_LIST[i]:
+                                new_delta = REMINDER_COUNTDOWN_LIST[i]
+                                break
+                        reminder = reminder._replace(next_countdown_delta = new_delta)
+                        new_countdowns.append(reminder)
+
+                        if reminder.next_countdown_delta:
+                            next_reminder_time = reminder.remind_time - reminder.next_countdown_delta
+                            next_timestamp = datetime_to_relative_timestamp(next_reminder_time)
+                            text += f'\n-# Next reminder: {next_timestamp}'
+                        else:
+                            next_timestamp = datetime_to_relative_timestamp(reminder.remind_time)
+                            text += f'\n-# Final reminder: {next_timestamp}'
+                    else:
+                        text += f'\n-# Final reminder: now!'
+
+                texts = split_long_message(text, 2000, True)
+                for t in texts:
+                    try:
+                        await channel_and_errors.channel.send(t)
+                    except Exception as error:
+                        await log_exception(f"Failed to send reminder in {channel_and_errors.channel.jump_url}", error, [], True)
+
+        await add_reminders_to_database(new_countdowns)
+        await remove_reminders(reminders_to_send)
+
+    except Exception as error:
+        await log_exception(f"Error in post_reminders", error, [], False)
 
 
 @bot.event

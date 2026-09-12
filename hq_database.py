@@ -288,6 +288,21 @@ class Reminder(NamedTuple):
     text: str
     channel_id: int
     user_id: int
+    is_countdown: bool
+    next_countdown_delta: timedelta | None
+
+REMINDER_COUNTDOWN_LIST = [
+    timedelta(seconds=1),
+    timedelta(seconds=2),
+    timedelta(seconds=3),
+    timedelta(hours=1),
+    timedelta(hours=12),
+    timedelta(hours=24),
+    timedelta(hours=48),
+    timedelta(days=3),
+    timedelta(weeks=1),
+    timedelta(weeks=4),
+]
 
 async def add_reminders_to_database(reminders: list[Reminder]):
     if JEDatabaseKey.REMINDER not in JE_DATABASE:
