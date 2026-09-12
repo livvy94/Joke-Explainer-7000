@@ -67,6 +67,10 @@ async def cleanup_embeds_regularly():
 async def post_reminders() -> None:
 
     try:
+
+        if JEDatabaseKey.REMINDER not in JE_DATABASE:
+            JE_DATABASE[JEDatabaseKey.REMINDER] = {} 
+
         now = datetime.now(timezone.utc)
         reminders_to_send: list[Reminder] = []
         for reminders_of_channel in JE_DATABASE[JEDatabaseKey.REMINDER].values():
